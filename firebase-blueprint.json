@@ -1,0 +1,171 @@
+{
+  "entities": {
+    "Member": {
+      "title": "Member",
+      "description": "Registered association member record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique Member ID" },
+        "fullName": { "type": "string", "description": "Full name of the member" },
+        "generation": { "type": "number", "description": "Generation rank (3, 4, 5, 6)" },
+        "familyId": { "type": "string", "description": "Associated Family ID" },
+        "familyName": { "type": "string", "description": "Associated Family Name" },
+        "phone": { "type": "string", "description": "Primary phone number" },
+        "phoneNumber": { "type": "string", "description": "Alternate primary phone number field" },
+        "authUid": { "type": "string", "description": "Firebase Authentication UID" },
+        "telegram": { "type": "string", "description": "Telegram username" },
+        "telegramId": { "type": "string", "description": "Telegram numeric Chat/User ID" },
+        "loginToken": { "type": "string", "description": "Unique secure member login token" },
+        "isHead": { "type": "boolean", "description": "Whether member is family representative" },
+        "isMinor": { "type": "boolean", "description": "Whether member is under 18" },
+        "isSpouse": { "type": "boolean", "description": "Whether member is spouse" },
+        "joinedDate": { "type": "string", "description": "Date joined" },
+        "notes": { "type": "string", "description": "Administrative notes" }
+      },
+      "required": ["id", "fullName", "generation", "familyId", "familyName", "phone", "loginToken"]
+    },
+    "Contribution": {
+      "title": "Contribution",
+      "description": "Monthly, Generation, or Special financial contribution",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique Contribution ID" },
+        "memberId": { "type": "string", "description": "Reference to member ID" },
+        "memberName": { "type": "string", "description": "Full name of member" },
+        "familyId": { "type": "string", "description": "Family reference ID" },
+        "familyName": { "type": "string", "description": "Family name" },
+        "generation": { "type": "number", "description": "Generation rank" },
+        "type": { "type": "string", "description": "Contribution type (ወርሃዊ, ትውልድ, ልዩ)" },
+        "ethiopianMonth": { "type": "number", "description": "Ethiopian Month (1 to 13)" },
+        "ethiopianMonthName": { "type": "string", "description": "Ethiopian Month Name" },
+        "ethiopianYear": { "type": "number", "description": "Ethiopian Year (e.g. 2018)" },
+        "amount": { "type": "number", "description": "Target amount" },
+        "paidAmount": { "type": "number", "description": "Actual amount paid" },
+        "status": { "type": "string", "description": "Payment status (ተከፍሏል, ያልተከፈለ, ከፊል)" },
+        "paymentMethod": { "type": "string", "description": "Method of payment" },
+        "transactionRef": { "type": "string", "description": "Transaction reference or receipt code" },
+        "datePaid": { "type": "string", "description": "Payment timestamp" },
+        "recordedBy": { "type": "string", "description": "User or admin who recorded payment" },
+        "receiptNumber": { "type": "string", "description": "Receipt number" },
+        "notes": { "type": "string", "description": "Notes" },
+        "loginToken": { "type": "string", "description": "Member's login token" },
+        "payerId": { "type": "string", "description": "Logged-in user member ID making payment" },
+        "payerName": { "type": "string", "description": "Full name of the payer" },
+        "beneficiaryId": { "type": "string", "description": "Member ID of recipient beneficiary" },
+        "beneficiaryName": { "type": "string", "description": "Full name of recipient beneficiary" },
+        "isProxyPayment": { "type": "boolean", "description": "Whether this payment was made for someone else" },
+        "slipPhoto": { "type": "string", "description": "Receipt image or screenshot" }
+      },
+      "required": ["id", "memberId", "type", "ethiopianMonth", "ethiopianYear", "amount", "paidAmount", "status"]
+    },
+    "Family": {
+      "title": "Family",
+      "description": "Family branch within the association",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Family ID (e.g. FA001)" },
+        "familyName": { "type": "string", "description": "Family name" },
+        "headName": { "type": "string", "description": "Representative head name" },
+        "headMemberId": { "type": "string", "description": "Member ID of representative" },
+        "phone": { "type": "string", "description": "Phone number of head" },
+        "telegram": { "type": "string", "description": "Telegram username of head" },
+        "coHeadName": { "type": "string", "description": "Co-head name" },
+        "coHeadPhone": { "type": "string", "description": "Co-head phone" },
+        "generationRoot": { "type": "number", "description": "Root generation" }
+      },
+      "required": ["id", "familyName", "headName", "phone"]
+    },
+    "TelegramUser": {
+      "title": "TelegramUser",
+      "description": "Telegram user mapping to association member",
+      "type": "object",
+      "properties": {
+        "telegramId": { "type": "string", "description": "Telegram User ID" },
+        "memberId": { "type": "string", "description": "Associated Member ID" },
+        "loginToken": { "type": "string", "description": "Member login token" },
+        "firstName": { "type": "string", "description": "Telegram first name" },
+        "username": { "type": "string", "description": "Telegram username" },
+        "updatedAt": { "type": "string", "description": "Last update ISO timestamp" }
+      },
+      "required": ["telegramId", "loginToken", "updatedAt"]
+    },
+    "TelegramMessage": {
+      "title": "TelegramMessage",
+      "description": "Incoming message received from Telegram webhook",
+      "type": "object",
+      "properties": {
+        "chatId": { "type": "string", "description": "Telegram chat identifier" },
+        "fromId": { "type": "string", "description": "Telegram sender user identifier" },
+        "firstName": { "type": "string", "description": "First name of sender", "maxLength": 100 },
+        "text": { "type": "string", "description": "Message text or caption", "maxLength": 4096 },
+        "messageId": { "type": "number", "description": "Telegram message ID" },
+        "updateType": { "type": "string", "description": "Type of incoming update (message, callback_query)" },
+        "fileId": { "type": "string", "description": "Telegram file ID if photo is present", "maxLength": 256 },
+        "createdAt": { "type": "string", "description": "ISO timestamp of receipt" }
+      },
+      "required": ["chatId", "fromId", "createdAt"]
+    },
+    "Complaint": {
+      "title": "Complaint",
+      "description": "Complaints submitted by community members via Telegram",
+      "type": "object",
+      "properties": {
+        "chatId": { "type": "string", "description": "Telegram chat identifier" },
+        "fromId": { "type": "string", "description": "Telegram sender user identifier" },
+        "firstName": { "type": "string", "description": "First name of complainant", "maxLength": 100 },
+        "complaintText": { "type": "string", "description": "Full complaint description text", "maxLength": 4096 },
+        "status": { "type": "string", "description": "Review status (open, under_review, resolved)", "enum": ["open", "under_review", "resolved"] },
+        "createdAt": { "type": "string", "description": "ISO timestamp of complaint submission" }
+      },
+      "required": ["chatId", "fromId", "complaintText", "status", "createdAt"]
+    },
+    "Receipt": {
+      "title": "Receipt",
+      "description": "Receipt images uploaded by members for contribution proof",
+      "type": "object",
+      "properties": {
+        "chatId": { "type": "string", "description": "Telegram chat identifier" },
+        "fromId": { "type": "string", "description": "Telegram sender user identifier" },
+        "firstName": { "type": "string", "description": "First name of sender", "maxLength": 100 },
+        "fileId": { "type": "string", "description": "Telegram photo file ID", "maxLength": 256 },
+        "caption": { "type": "string", "description": "Optional caption or member details", "maxLength": 1000 },
+        "status": { "type": "string", "description": "Verification status (pending, approved, rejected)", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "string", "description": "ISO timestamp of upload" }
+      },
+      "required": ["chatId", "fromId", "fileId", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/members/{memberId}": {
+      "schema": "Member",
+      "description": "Member records with personal details and loginToken"
+    },
+    "/contributions/{contributionId}": {
+      "schema": "Contribution",
+      "description": "Monthly and generation payment records"
+    },
+    "/families/{familyId}": {
+      "schema": "Family",
+      "description": "Family registry"
+    },
+    "/settings/{settingsId}": {
+      "description": "Association settings, rates, and leadership"
+    },
+    "/telegramUsers/{userId}": {
+      "schema": "TelegramUser",
+      "description": "Telegram user mapping to member loginToken"
+    },
+    "/telegramMessages/{messageId}": {
+      "schema": "TelegramMessage",
+      "description": "Collection storing all incoming Telegram updates and messages"
+    },
+    "/complaints/{complaintId}": {
+      "schema": "Complaint",
+      "description": "Collection storing member complaints submitted through Telegram"
+    },
+    "/receipts/{receiptId}": {
+      "schema": "Receipt",
+      "description": "Collection storing payment receipt submissions from Telegram"
+    }
+  }
+}

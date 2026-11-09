@@ -1,0 +1,75 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Default deny all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Members collection
+    match /members/{memberId} {
+      allow read, write: if true;
+    }
+
+    // Contributions collection
+    match /contributions/{contributionId} {
+      allow read, write: if true;
+    }
+
+    // Families collection
+    match /families/{familyId} {
+      allow read, write: if true;
+    }
+
+    // Settings collection
+    match /settings/{settingsId} {
+      allow read, write: if true;
+    }
+
+    // Telegram Users mapping collection
+    match /telegramUsers/{userId} {
+      allow read, write: if true;
+    }
+
+    // Telegram webhook messages
+    match /telegramMessages/{messageId} {
+      allow read, write: if true;
+    }
+
+    // Member complaints submitted via Telegram
+    match /complaints/{complaintId} {
+      allow read, write: if true;
+    }
+
+    // Receipt submissions via Telegram
+    match /receipts/{receiptId} {
+      allow read, write: if true;
+    }
+
+    // Automated notification & summary email logs
+    match /notificationLogs/{logId} {
+      allow read, write: if true;
+    }
+
+    match /emailLogs/{logId} {
+      allow read, write: if true;
+    }
+  }
+}

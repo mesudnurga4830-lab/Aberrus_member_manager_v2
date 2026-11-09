@@ -1,0 +1,17 @@
+{
+  "name": "የአበሩስ አንድነት ማህበር (አሲያ መስኡድ አፕ)",
+  "short_name": "አሲያ መስኡድ አፕ",
+  "description": "የአበሩስ አንድነት ማህበር የአባላት አስተዳደር፣ ወርሃዊ እና የትውልድ መዋጮ መከታተያ፣ የቤተሰብ ዛፍ እና የክፍያ ማረጋገጫ ስርዓት",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#064e3b",
+  "icons": [
+    {
+      "src": "/abarrus_logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}
