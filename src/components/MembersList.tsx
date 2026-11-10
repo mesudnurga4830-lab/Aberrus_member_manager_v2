@@ -45,7 +45,7 @@ interface MembersListProps {
   onOpenBulkImport?: () => void;
   onOpenQR: (member: Member) => void;
   onRecordPayment: (memberId: string) => void;
-  onOpenAdminPaymentManager?: (memberId?: string, mode?: 'list' | 'add') => void;
+  onOpenPaymentManager?: (memberId?: string, mode?: 'list' | 'add') => void;
   onDeleteMember: (id: string) => void;
   onUpdateMember: (id: string, updates: Partial<Member>) => void;
   onToggleMonthlyStatus: (memberId: string, month: number, year: number, markPaid: boolean) => void;
@@ -101,7 +101,7 @@ export const MembersList: React.FC<MembersListProps> = ({
   onOpenBulkImport,
   onOpenQR,
   onRecordPayment,
-  onOpenAdminPaymentManager,
+  onOpenPaymentManager,
   onDeleteMember,
   onUpdateMember,
   onToggleMonthlyStatus,
@@ -235,6 +235,17 @@ export const MembersList: React.FC<MembersListProps> = ({
             >
               <FileSpreadsheet className="w-4 h-4" />
               <span>ፋይል አስመጣ (Bulk Import)</span>
+            </button>
+          )}
+          {onOpenPaymentManager && (
+            <button
+              type="button"
+              onClick={() => onOpenPaymentManager(undefined, 'list')}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-white font-bold text-xs transition-colors shadow-xs cursor-pointer"
+              title="የአባላት የክፍያዎች መዝገብ፣ ክፍያ መመዝገብ ወይም መሰረዝ"
+            >
+              <CreditCard className="w-4 h-4 text-[#FFD700]" />
+              <span>የክፍያዎች መዝገብ</span>
             </button>
           )}
           <button
@@ -792,22 +803,22 @@ export const MembersList: React.FC<MembersListProps> = ({
                             <Edit2 className="w-3 h-3" />
                             <span>አስተካክል</span>
                           </button>
-                          {onOpenAdminPaymentManager && (
+                          {onOpenPaymentManager && (
                             <button
-                              onClick={() => onOpenAdminPaymentManager(member.id, 'list')}
-                              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 font-bold text-[11px] transition-colors cursor-pointer"
-                              title="የዚህን አባል ክፍያዎች ይመልከቱ፣ ይሰርዙ ወይም ይመዝግቡ (Ledger)"
+                              onClick={() => onOpenPaymentManager(member.id, 'list')}
+                              className="px-2 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-950 font-bold text-[11px] transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                              title="የዚህን አባል ክፍያዎች ተመልከት፣ ሰርዝ ወይም አዲስ መዝግብ"
                             >
                               <CreditCard className="w-3 h-3 text-emerald-800" />
-                              <span>Ledger</span>
+                              <span>ክፍያዎች</span>
                             </button>
                           )}
                           <button
-                            onClick={() => onOpenAdminPaymentManager ? onOpenAdminPaymentManager(member.id, 'add') : onRecordPayment(member.id)}
+                            onClick={() => onRecordPayment(member.id)}
                             className="px-2 py-1 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-semibold text-[11px] transition-colors cursor-pointer"
                             title="ክፍያ መዝግብ"
                           >
-                            ክፍያ
+                            መዝግብ
                           </button>
                           <button
                             onClick={() => setMemberToDelete(member)}

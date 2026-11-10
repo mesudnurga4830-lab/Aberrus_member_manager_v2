@@ -42,12 +42,12 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
     ? members
     : members.filter((m) => m.familyId === familyFilter);
 
-  // 1. SEPARATE MONTHLY CONTRIBUTIONS (ወርሃዊ መዋጮ) FOR SELECTED MONTH
+  // 1. SEPARATE MONTHLY CONTRIBUTIONS (ወርሃዊ መዋጮ) FOR SELECTED MONTH (STRICT MONTH/YEAR)
   const monthlyContributions = contributions.filter(
     (c) =>
       c.type === 'ወርሃዊ' &&
-      Number(c.ethiopianMonth) === currentMonth &&
-      Number(c.ethiopianYear) === currentYear &&
+      Number(c.month ?? c.ethiopianMonth) === currentMonth &&
+      Number(c.year ?? c.ethiopianYear) === currentYear &&
       (familyFilter === 'all' || c.familyId === familyFilter)
   );
 
@@ -138,15 +138,14 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-bold text-neutral-700 whitespace-nowrap">
-              የክፍያ ወር (Contribution Month)፡
+            <span className="text-xs font-bold text-neutral-700 whitespace-nowrap bg-neutral-100 px-2.5 py-1.5 rounded-lg border border-neutral-200">
+              የክፍያ ወር (Contribution Month)፦
             </span>
             {/* Month Selector */}
             <select
               value={currentMonth}
               onChange={(e) => setCurrentMonth(Number(e.target.value))}
-              className="text-xs bg-white border border-neutral-300 rounded-lg px-2.5 py-1.5 font-bold text-neutral-800"
-              title="የክፍያ ወር (Contribution Month)"
+              className="text-xs bg-white border border-neutral-300 rounded-lg px-2.5 py-1.5 font-bold text-neutral-800 cursor-pointer"
             >
               {ETHIOPIAN_MONTHS.map((m) => (
                 <option key={m.number} value={m.number}>
@@ -159,7 +158,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
             <select
               value={currentYear}
               onChange={(e) => setCurrentYear(Number(e.target.value))}
-              className="text-xs bg-white border border-neutral-300 rounded-lg px-2.5 py-1.5 font-bold text-neutral-800 font-mono"
+              className="text-xs bg-white border border-neutral-300 rounded-lg px-2.5 py-1.5 font-bold text-neutral-800 font-mono cursor-pointer"
             >
               <option value={2018}>2018 ዓ.ም</option>
               <option value={2019}>2019 ዓ.ም</option>

@@ -44,6 +44,7 @@ import { LeadershipView } from './components/LeadershipView';
 import { DataCorrectionView } from './components/DataCorrectionView';
 import { TelegramDispatchModal } from './components/TelegramDispatchModal';
 import { BulkImportModal } from './components/BulkImportModal';
+import { AdminMemberPaymentManagerModal } from './components/AdminMemberPaymentManagerModal';
 import { getCurrentEthiopianDate, getEthiopianMonthName } from './utils/ethiopianCalendar';
 import {
   auth,
@@ -79,7 +80,6 @@ import {
 
 import { isThisDeviceAdminAuthorized, MASTER_ADMIN, verifyAndAuthorizeDevice } from './utils/adminAuth';
 import { AdminAuthModal } from './components/AdminAuthModal';
-import { AdminMemberPaymentManagerModal } from './components/AdminMemberPaymentManagerModal';
 
 export default function App() {
   const [members, setMembers] = useState<Member[]>(getMembers());
@@ -117,11 +117,15 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isPrintReportOpen, setIsPrintReportOpen] = useState(false);
   const [activeQRMember, setActiveQRMember] = useState<Member | null>(null);
+  const [isPaymentManagerOpen, setIsPaymentManagerOpen] = useState(false);
+  const [paymentManagerMemberId, setPaymentManagerMemberId] = useState<string | undefined>(undefined);
+  const [paymentManagerMode, setPaymentManagerMode] = useState<'list' | 'add'>('list');
 
-  // Admin Payment Manager Modal (Strict Ledger Management: View, Delete, Manual Add)
-  const [isAdminPaymentManagerOpen, setIsAdminPaymentManagerOpen] = useState(false);
-  const [adminPaymentManagerMemberId, setAdminPaymentManagerMemberId] = useState<string | undefined>(undefined);
-  const [adminPaymentManagerMode, setAdminPaymentManagerMode] = useState<'list' | 'add'>('list');
+  const handleOpenPaymentManager = (memberId?: string, mode: 'list' | 'add' = 'list') => {
+    setPaymentManagerMemberId(memberId);
+    setPaymentManagerMode(mode);
+    setIsPaymentManagerOpen(true);
+  };
 
   // Desktop Shortcut Prompt state
   const [showDesktopPrompt, setShowDesktopPrompt] = useState(false);
@@ -385,18 +389,6 @@ export default function App() {
     deleteContribution(id);
     setContributions(getContributions());
     await deleteContributionFromFirestore(id);
-  };
-
-  const handleOpenAdminPaymentManager = (memberId?: string, mode: 'list' | 'add' = 'list') => {
-    setAdminPaymentManagerMemberId(memberId);
-    setAdminPaymentManagerMode(mode);
-    setIsAdminPaymentManagerOpen(true);
-  };
-
-  const handleAddManualPayment = async (paymentData: Omit<Contribution, 'id'>) => {
-    const newCon = addContribution(paymentData);
-    setContributions(getContributions());
-    await saveContributionToFirestore(newCon);
   };
 
   const handleDeleteMember = async (id: string) => {
@@ -749,6 +741,7 @@ export default function App() {
                   setRecordPaymentMemberId(undefined);
                   setIsRecordPaymentOpen(true);
                 }}
+                onOpenPaymentManager={handleOpenPaymentManager}
                 onOpenAddMember={() => setIsAddMemberOpen(true)}
                 onOpenBulkImport={() => setIsBulkImportOpen(true)}
                 onOpenPrintReport={() => setIsPrintReportOpen(true)}
@@ -773,7 +766,6 @@ export default function App() {
                   setUserRole('family_head');
                   setCurrentTab('heads');
                 }}
-                onOpenAdminPaymentManager={handleOpenAdminPaymentManager}
               />
             )}
 
@@ -787,7 +779,7 @@ export default function App() {
                 onOpenBulkImport={() => setIsBulkImportOpen(true)}
                 onOpenQR={(m) => setActiveQRMember(m)}
                 onRecordPayment={(id) => handleOpenRecordPaymentForMember(id)}
-                onOpenAdminPaymentManager={handleOpenAdminPaymentManager}
+                onOpenPaymentManager={handleOpenPaymentManager}
                 onDeleteMember={handleDeleteMember}
                 onUpdateMember={async (id, updates) => {
                   const rawPhone = updates.phone || (updates as any).phoneNumber;
@@ -822,7 +814,7 @@ export default function App() {
                 settings={settings}
                 onOpenQR={(m) => setActiveQRMember(m)}
                 onRecordPayment={(id) => handleOpenRecordPaymentForMember(id)}
-                onOpenAdminPaymentManager={handleOpenAdminPaymentManager}
+                onOpenPaymentManager={handleOpenPaymentManager}
               />
             )}
 
@@ -836,7 +828,7 @@ export default function App() {
                   setRecordPaymentMemberId(undefined);
                   setIsRecordPaymentOpen(true);
                 }}
-                onOpenAdminPaymentManager={handleOpenAdminPaymentManager}
+                onOpenPaymentManager={handleOpenPaymentManager}
                 onUpdateStatus={handleUpdateContributionStatus}
                 onDeleteContribution={handleDeleteContribution}
                 onOpenPrintReport={() => setIsPrintReportOpen(true)}
@@ -850,6 +842,7 @@ export default function App() {
                 contributions={contributions}
                 settings={settings}
                 onRecordPayment={(id) => handleOpenRecordPaymentForMember(id)}
+                onOpenPaymentManager={handleOpenPaymentManager}
               />
             )}
 
@@ -1018,6 +1011,26 @@ export default function App() {
         />
       )}
 
+      {/* Admin Member Payment Manager Modal (Strict Ledger Management: View, Delete & Add) */}
+      {isPaymentManagerOpen && (
+        <AdminMemberPaymentManagerModal
+          isOpen={isPaymentManagerOpen}
+          onClose={() => setIsPaymentManagerOpen(false)}
+          members={members}
+          families={families}
+          contributions={contributions}
+          settings={settings}
+          initialMemberId={paymentManagerMemberId}
+          initialMode={paymentManagerMode}
+          onDeletePayment={async (contributionId: string) => {
+            await handleDeleteContribution(contributionId);
+          }}
+          onAddManualPayment={async (payment: Omit<Contribution, 'id'>) => {
+            await handleSavePayment(payment);
+          }}
+        />
+      )}
+
       {activeQRMember && (
         <QRCodeModal
           member={activeQRMember}
@@ -1047,22 +1060,6 @@ export default function App() {
         <ChangeAdminPinModal
           isOpen={isChangePinOpen}
           onClose={() => setIsChangePinOpen(false)}
-        />
-      )}
-
-      {/* Admin Member Payment Manager Modal (Ledger: View, Delete, Manual Add with status Paid) */}
-      {isAdminPaymentManagerOpen && (
-        <AdminMemberPaymentManagerModal
-          isOpen={isAdminPaymentManagerOpen}
-          onClose={() => setIsAdminPaymentManagerOpen(false)}
-          members={members}
-          families={families}
-          contributions={contributions}
-          settings={settings}
-          initialMemberId={adminPaymentManagerMemberId}
-          initialMode={adminPaymentManagerMode}
-          onDeletePayment={handleDeleteContribution}
-          onAddManualPayment={handleAddManualPayment}
         />
       )}
 

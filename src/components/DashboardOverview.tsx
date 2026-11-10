@@ -36,6 +36,7 @@ interface DashboardOverviewProps {
   contributions: Contribution[];
   settings: SettingsRates;
   onOpenRecordPayment: () => void;
+  onOpenPaymentManager?: (memberId?: string, mode?: 'list' | 'add') => void;
   onOpenAddMember: () => void;
   onOpenBulkImport?: () => void;
   onOpenPrintReport: () => void;
@@ -44,7 +45,6 @@ interface DashboardOverviewProps {
   onOpenChangePin?: () => void;
   onNavigateToMember?: (memberId: string) => void;
   onNavigateToFamily?: (familyId: string) => void;
-  onOpenAdminPaymentManager?: (memberId?: string, mode?: 'list' | 'add') => void;
 }
 
 export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
@@ -53,6 +53,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   contributions,
   settings,
   onOpenRecordPayment,
+  onOpenPaymentManager,
   onOpenAddMember,
   onOpenBulkImport,
   onOpenPrintReport,
@@ -61,47 +62,60 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   onOpenChangePin,
   onNavigateToMember,
   onNavigateToFamily,
-  onOpenAdminPaymentManager,
 }) => {
   const [searchQuery, setSearchQuery] = React.useState('');
   const currentDate = getCurrentEthiopianDate();
-  
-  // STRICT MONTHLY AGGREGATION LOGIC (CRITICAL):
-  // Filter and aggregate based STRICTLY on month (1-12) and year (e.g. 2018), NOT paidDate.
   const [selectedMonth, setSelectedMonth] = React.useState<number>(currentDate.month || 11);
   const [selectedYear, setSelectedYear] = React.useState<number>(currentDate.year || 2018);
   const selectedMonthName = getEthiopianMonthName(selectedMonth);
 
-  // Month contributions filtered strictly by month and year
-  const currentMonthContributions = contributions.filter((c) => {
-    const m = Number(c.month ?? c.ethiopianMonth ?? 0);
-    const y = Number(c.year ?? c.ethiopianYear ?? 0);
-    return m === selectedMonth && y === selectedYear;
+  // Requirement 2: STRICT MONTHLY AGGREGATION LOGIC (CRITICAL)
+  // All reporting, summing, and dashboard aggregation queries are based STRICTLY on
+  // the month (1-12) and year (e.g., 2018) fields of the contribution, NOT paidDate (timestamp).
+  // Total monthly collections displayed on the Admin dashboard filters by:
+  // where("month", "==", selectedMonth), where("year", "==", selectedYear), and where("status", "==", "Paid") (and "ተከፍሏል")
+  const selectedMonthPaidContributions = contributions.filter((c) => {
+    const m = Number(c.month ?? c.ethiopianMonth);
+    const y = Number(c.year ?? c.ethiopianYear);
+    const isTargetMonth = m === selectedMonth && y === selectedYear;
+    const isPaid = c.status === 'Paid' || c.status === 'ተከፍሏል';
+    return isTargetMonth && isPaid;
   });
 
-  // Strict status check for Paid contributions: where("month", "==", selectedMonth), where("year", "==", selectedYear), and where("status", "==", "Paid")
-  const currentMonthStrictPaid = currentMonthContributions.filter(
-    (c) => c.status === 'Paid' || c.status === 'ተከፍሏል'
-  );
+  const selectedMonthPartialContributions = contributions.filter((c) => {
+    const m = Number(c.month ?? c.ethiopianMonth);
+    const y = Number(c.year ?? c.ethiopianYear);
+    return m === selectedMonth && y === selectedYear && ((c.status as any) === 'ከፊል' || (c.status as any) === 'partial');
+  });
 
-  const currentMonthReceived = currentMonthContributions.filter(
-    (c) => c.status === 'Paid' || c.status === 'ተከፍሏል' || c.status === 'ከፊል' || (Number(c.paidAmount) > 0)
-  );
+  // Strict monthly collections for selected month & year (ወርሃዊ)
+  const currentMonthMonthlyReceived = selectedMonthPaidContributions
+    .filter((c) => !c.type || c.type === 'ወርሃዊ')
+    .reduce((sum, c) => sum + Number(c.paidAmount || c.amount || 0), 0) +
+    selectedMonthPartialContributions
+      .filter((c) => !c.type || c.type === 'ወርሃዊ')
+      .reduce((sum, c) => sum + Number(c.paidAmount || 0), 0);
 
-  // Monthly dues collected strictly for the selected contribution month
-  const currentMonthMonthlyReceived = currentMonthStrictPaid
-    .filter((c) => c.type === 'ወርሃዊ' || !c.type)
-    .reduce((sum, c) => sum + (Number(c.paidAmount ?? c.amount) || 0), 0);
-
-  const currentMonthGenReceived = currentMonthStrictPaid
+  const currentMonthGenReceived = selectedMonthPaidContributions
     .filter((c) => c.type === 'ትውልድ')
-    .reduce((sum, c) => sum + (Number(c.paidAmount ?? c.amount) || 0), 0);
+    .reduce((sum, c) => sum + Number(c.paidAmount || c.amount || 0), 0) +
+    selectedMonthPartialContributions
+      .filter((c) => c.type === 'ትውልድ')
+      .reduce((sum, c) => sum + Number(c.paidAmount || 0), 0);
 
-  const currentMonthSpecialReceived = currentMonthStrictPaid
+  const currentMonthSpecialReceived = selectedMonthPaidContributions
     .filter((c) => c.type === 'ልዩ')
-    .reduce((sum, c) => sum + (Number(c.paidAmount ?? c.amount) || 0), 0);
+    .reduce((sum, c) => sum + Number(c.paidAmount || c.amount || 0), 0) +
+    selectedMonthPartialContributions
+      .filter((c) => c.type === 'ልዩ')
+      .reduce((sum, c) => sum + Number(c.paidAmount || 0), 0);
 
-  const totalContributionsReceivedThisMonth = currentMonthMonthlyReceived + currentMonthGenReceived + currentMonthSpecialReceived;
+  const totalContributionsReceivedThisMonth =
+    currentMonthMonthlyReceived + currentMonthGenReceived + currentMonthSpecialReceived;
+
+  const monthlyContributionsCount = selectedMonthPaidContributions.filter((c) => !c.type || c.type === 'ወርሃዊ').length;
+  const genContributionsCount = selectedMonthPaidContributions.filter((c) => c.type === 'ትውልድ').length;
+
   const totalCollectedThisMonth = currentMonthMonthlyReceived;
 
   const totalExpectedThisMonth = members.reduce((sum, m) => {
@@ -110,11 +124,13 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     return sum + (settings.monthlyRate[m.generation] || 0);
   }, 0);
 
-  const paidMembersCount = currentMonthContributions.filter((c) => c.status === 'ተከፍሏል').length;
-  const partialMembersCount = currentMonthContributions.filter((c) => c.status === 'ከፊል').length;
+  const paidMembersCount = selectedMonthPaidContributions.filter((c) => !c.type || c.type === 'ወርሃዊ').length;
+  const partialMembersCount = selectedMonthPartialContributions.filter((c) => !c.type || c.type === 'ወርሃዊ').length;
   const unpaidMembersCount = Math.max(members.length - paidMembersCount - partialMembersCount, 0);
   const collectionPercentage =
     totalExpectedThisMonth > 0 ? Math.round((currentMonthMonthlyReceived / totalExpectedThisMonth) * 100) : 0;
+
+  const currentMonthReceived = [...selectedMonthPaidContributions, ...selectedMonthPartialContributions];
 
   // Breakdown by payment methods for current Ethiopian month
   const cbeReceived = currentMonthReceived
@@ -270,21 +286,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                         </button>
                       )}
 
-                      {onOpenAdminPaymentManager && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onOpenAdminPaymentManager(m.id, 'list');
-                            setSearchQuery('');
-                          }}
-                          className="px-2.5 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-950 text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
-                          title="የዚህን አባል ክፍያዎች ይመልከቱ፣ ይሰርዙ ወይም ይመዝግቡ (Ledger)"
-                        >
-                          <CreditCard className="w-3 h-3 text-emerald-800" />
-                          <span>ክፍያዎች (Ledger)</span>
-                        </button>
-                      )}
-
                       {onNavigateToFamily && (
                         <button
                           type="button"
@@ -297,6 +298,21 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                         >
                           <Users className="w-3 h-3 text-neutral-600" />
                           <span>ቤተሰብ ({m.familyId})</span>
+                        </button>
+                      )}
+
+                      {onOpenPaymentManager && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onOpenPaymentManager(m.id, 'list');
+                            setSearchQuery('');
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-900 text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                          title="የዚህን አባል ክፍያዎች ተመልከት፣ ሰርዝ ወይም አዲስ መዝግብ"
+                        >
+                          <CreditCard className="w-3 h-3 text-emerald-800" />
+                          <span>ክፍያዎች</span>
                         </button>
                       )}
 
@@ -357,19 +373,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               <Crown className="w-4 h-4 text-[#FFD700]" />
               <span>የአመራር ክፍል</span>
             </button>
-            {onOpenAdminPaymentManager && (
-              <button
-                type="button"
-                onClick={() => onOpenAdminPaymentManager(undefined, 'list')}
-                className="px-4 py-2.5 rounded-lg bg-white hover:bg-neutral-100 text-[#1B5E20] font-bold text-xs transition-all shadow-sm cursor-pointer flex items-center gap-1.5 border border-[#FFD700]"
-                title="የአባላትን ክፍያዎች ማኔጅመንት (መመልከት፣ መመዝገብ፣ መሰረዝ)"
-              >
-                <CreditCard className="w-4 h-4 text-[#1B5E20]" />
-                <span>ክፍያ ማኔጅመንት (Ledger)</span>
-              </button>
-            )}
             <button
-              onClick={() => onOpenAdminPaymentManager ? onOpenAdminPaymentManager(undefined, 'add') : onOpenRecordPayment()}
+              onClick={onOpenRecordPayment}
               className="px-4 py-2.5 rounded-lg bg-[#FFD700] text-[#1B5E20] hover:bg-[#e6c200] font-bold text-xs transition-all shadow-sm cursor-pointer flex items-center gap-1.5"
             >
               <Plus className="w-4 h-4" />
@@ -393,6 +398,17 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 <span>ፋይል አስመጣ (Bulk Import)</span>
               </button>
             )}
+            {onOpenPaymentManager && (
+              <button
+                type="button"
+                onClick={() => onOpenPaymentManager(undefined, 'list')}
+                className="px-4 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs border border-white/20 transition-all shadow-sm cursor-pointer flex items-center gap-1.5"
+                title="የአባላት የክፍያዎች መዝገብ፣ ክፍያ መመዝገብ ወይም መሰረዝ"
+              >
+                <CreditCard className="w-4 h-4 text-[#FFD700]" />
+                <span>የክፍያዎች መዝገብ</span>
+              </button>
+            )}
             <button
               onClick={onOpenPrintReport}
               className="px-3.5 py-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium text-xs border border-white/10 transition-all flex items-center gap-1.5"
@@ -404,48 +420,65 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         </div>
       </div>
 
+      {/* Requirement 2 & 3: Strict Monthly Aggregation Filter Bar */}
+      <div className="bg-white rounded-2xl p-4 border border-emerald-900/15 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span className="px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-900 font-bold text-xs flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5 text-emerald-800" />
+            <span>የክፍያ ወር (Contribution Month)፦</span>
+          </span>
+          {/* Ethiopian Month Dropdown */}
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(Number(e.target.value))}
+            className="text-xs font-bold bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2 text-neutral-800 focus:ring-2 focus:ring-emerald-700/40 cursor-pointer"
+          >
+            {ETHIOPIAN_MONTHS.map((m) => (
+              <option key={m.number} value={m.number}>
+                {m.number}ኛ ወር - {m.amharic}
+              </option>
+            ))}
+          </select>
+
+          {/* Ethiopian Year Dropdown */}
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(Number(e.target.value))}
+            className="text-xs font-bold bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2 text-neutral-800 focus:ring-2 focus:ring-emerald-700/40 font-mono cursor-pointer"
+          >
+            <option value={2018}>2018 ዓ.ም</option>
+            <option value={2019}>2019 ዓ.ም</option>
+          </select>
+
+          <span className="text-[11px] text-neutral-500 font-medium">
+            (የተጣራው ገቢ በጥብቅ በክፍያው ወር/ዓመት ላይ ብቻ የተመሰረተ ነው)
+          </span>
+        </div>
+
+        {onOpenPaymentManager && (
+          <button
+            type="button"
+            onClick={() => onOpenPaymentManager(undefined, 'add')}
+            className="px-3.5 py-2 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-white font-bold text-xs transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+            title="በእጅ ክፍያ መዝግብ (Add Manual Offline Payment)"
+          >
+            <Plus className="w-4 h-4 text-[#FFD700]" />
+            <span>ክፍያ መዝግብ (Manual)</span>
+          </button>
+        )}
+      </div>
+
       {/* 4 Core KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* KPI 1: የወሩ ጠቅላላ ገቢ (Strict Monthly Aggregation by Month & Year) */}
+        {/* KPI 1: የወሩ ጠቅላላ ገቢ */}
         <div className="card-abarrus flex flex-col justify-between">
-          <div className="flex items-center justify-between gap-1">
+          <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-[#757575]">የ{selectedMonthName} {selectedYear} ጠቅላላ ገቢ</span>
             <div className="p-2 rounded-lg bg-[#1B5E20]/10 text-[#1B5E20]">
               <Wallet className="w-4 h-4" />
             </div>
           </div>
-
-          {/* Strict Contribution Month Selector */}
-          <div className="mt-2 pt-2 border-t border-neutral-100 space-y-1">
-            <label className="text-[10px] font-bold text-emerald-900 uppercase tracking-wider block">
-              የክፍያ ወር (Contribution Month)፡
-            </label>
-            <div className="grid grid-cols-2 gap-1.5">
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                className="text-[11px] font-bold bg-neutral-50 border border-neutral-200 rounded-lg px-2 py-1 text-neutral-900 focus:ring-1 focus:ring-emerald-700"
-                title="የክፍያ ወር (Contribution Month)"
-              >
-                {ETHIOPIAN_MONTHS.map((m) => (
-                  <option key={m.number} value={m.number}>
-                    {m.number} = {m.amharic}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(Number(e.target.value))}
-                className="text-[11px] font-bold font-mono bg-neutral-50 border border-neutral-200 rounded-lg px-2 py-1 text-neutral-900 focus:ring-1 focus:ring-emerald-700"
-                title="የክፍያ ዓመት (Contribution Year)"
-              >
-                <option value={2018}>2018 ዓ.ም</option>
-                <option value={2019}>2019 ዓ.ም</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="mt-2.5">
+          <div className="mt-3">
             <p className="text-2xl font-bold text-[#1B5E20] font-mono tabular-nums">
               {totalCollectedThisMonth.toLocaleString()} ብር
             </p>
@@ -453,9 +486,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               <span>ከሚጠበቅ {totalExpectedThisMonth.toLocaleString()} ብር</span>
               <span className="font-bold text-[#1B5E20]">{collectionPercentage}%</span>
             </div>
-            <p className="text-[10px] text-neutral-400 mt-1 italic">
-              * በክፍያ ወር ({selectedMonthName}) ላይ ብቻ የተመሰረተ ጥብቅ ስሌት
-            </p>
           </div>
           <div className="w-full h-2 bg-[#E0E0E0] rounded-full mt-3 overflow-hidden">
             <div
@@ -554,13 +584,13 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 text-[11px] font-extrabold tracking-wide">
-                  የወሩ ገቢ ማጠቃለያ ({currentMonthName} {currentDate.year} ዓ.ም)
+                  የወሩ ገቢ ማጠቃለያ ({selectedMonthName} {selectedYear} ዓ.ም)
                 </span>
                 <span className="text-neutral-300">·</span>
                 <span className="text-xs text-neutral-500 font-medium font-mono">{currentDate.formatted}</span>
               </div>
               <h2 className="text-base sm:text-lg font-bold text-neutral-900 mt-1">
-                የ{currentMonthName} ወር ጠቅላላ የተሰበሰበ መዋጮ ማጠቃለያ
+                የ{selectedMonthName} {selectedYear} ጠቅላላ የተሰበሰበ መዋጮ ማጠቃለያ
               </h2>
               <p className="text-xs text-neutral-500">
                 በወቅቱ የኢትዮጵያ ወር የተሰበሰቡ ወርሃዊ፣ የትውልድ እና ልዩ መዋጮዎች ዝርዝር ስሌት

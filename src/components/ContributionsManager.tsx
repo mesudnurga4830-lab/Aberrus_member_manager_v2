@@ -47,10 +47,10 @@ interface ContributionsManagerProps {
   families: Family[];
   settings: SettingsRates;
   onOpenRecordPayment: () => void;
+  onOpenPaymentManager?: (memberId?: string, mode?: 'list' | 'add') => void;
   onUpdateStatus: (id: string, newStatus: ContributionStatus) => void;
   onDeleteContribution: (id: string) => void;
   onOpenPrintReport: () => void;
-  onOpenAdminPaymentManager?: (memberId?: string, mode?: 'list' | 'add') => void;
 }
 
 export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
@@ -59,10 +59,10 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
   families,
   settings,
   onOpenRecordPayment,
+  onOpenPaymentManager,
   onUpdateStatus,
   onDeleteContribution,
   onOpenPrintReport,
-  onOpenAdminPaymentManager,
 }) => {
   // Live real-time Firestore contributions state
   const [liveContributions, setLiveContributions] = useState<Contribution[]>(propContributions);
@@ -526,6 +526,17 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
             <span>ሪፖርት አትም</span>
           </button>
 
+          {onOpenPaymentManager && (
+            <button
+              onClick={() => onOpenPaymentManager(undefined, 'list')}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white text-xs font-bold transition-colors shadow-xs cursor-pointer"
+              title="የአባላት ክፍያዎች መዝገብ አስተዳድር (Delete & Manual Add)"
+            >
+              <CreditCard className="w-3.5 h-3.5 text-[#FFD700]" />
+              <span>የአባላት ክፍያዎች (Ledger)</span>
+            </button>
+          )}
+
           <button
             onClick={onOpenRecordPayment}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#1B5E20] hover:bg-[#154a19] text-white text-xs font-bold transition-colors shadow-sm"
@@ -876,6 +887,9 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-neutral-700 whitespace-nowrap bg-neutral-100 px-2.5 py-1.5 rounded-lg border border-neutral-200">
+                የክፍያ ወር (Contribution Month)፦
+              </span>
               {/* Year selector */}
               <select
                 value={selectedYear}

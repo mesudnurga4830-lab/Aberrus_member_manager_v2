@@ -1158,8 +1158,8 @@ app.get('/api/contributions', async (req: Request, res: Response) => {
     if (memberId) list = list.filter((c) => c.memberId === String(memberId).trim());
     if (status) list = list.filter((c) => String(c.status).toLowerCase() === String(status).toLowerCase());
     if (type) list = list.filter((c) => c.type === String(type).trim());
-    if (month) list = list.filter((c) => Number(c.ethiopianMonth) === Number(month));
-    if (year) list = list.filter((c) => Number(c.ethiopianYear) === Number(year));
+    if (month) list = list.filter((c) => Number(c.month ?? c.ethiopianMonth) === Number(month));
+    if (year) list = list.filter((c) => Number(c.year ?? c.ethiopianYear) === Number(year));
 
     res.status(200).json({ success: true, count: list.length, contributions: list });
   } catch (err: any) {
@@ -1195,9 +1195,16 @@ app.post('/api/contributions', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'memberId is required' });
     }
     const id = body.id || `CON-${Date.now().toString().slice(-6)}`;
+    const m = Number(body.month ?? body.ethiopianMonth ?? 11);
+    const y = Number(body.year ?? body.ethiopianYear ?? 2018);
     const contributionData = {
       id,
       ...body,
+      month: m,
+      year: y,
+      ethiopianMonth: m,
+      ethiopianYear: y,
+      status: body.status || 'Paid',
       updatedAt: new Date().toISOString(),
     };
 
