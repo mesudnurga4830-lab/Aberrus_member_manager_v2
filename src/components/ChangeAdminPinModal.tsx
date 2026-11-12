@@ -88,20 +88,18 @@ export const ChangeAdminPinModal: React.FC<ChangeAdminPinModalProps> = ({
   };
 
   const handleResetDefault = () => {
-    if (confirm('የአስተዳዳሪ ፒን ኮዱን ወደ ነባሪው መመለስ ይፈልጋሉ?')) {
-      resetAdminPinToDefault();
-      setSuccessMessage('የአስተዳዳሪ ፒን ወደ ነባሪው ተመልሷል!');
-      setCurrentPin('');
-      setNewPin('');
-      setConfirmPin('');
-      if (onSuccess) {
-        onSuccess(MASTER_ADMIN.defaultPin);
-      }
-      setTimeout(() => {
-        onClose();
-        setSuccessMessage(null);
-      }, 1200);
+    resetAdminPinToDefault();
+    setSuccessMessage('የአስተዳዳሪ ፒን ወደ ነባሪው ተመልሷል!');
+    setCurrentPin('');
+    setNewPin('');
+    setConfirmPin('');
+    if (onSuccess) {
+      onSuccess(MASTER_ADMIN.defaultPin);
     }
+    setTimeout(() => {
+      onClose();
+      setSuccessMessage(null);
+    }, 1200);
   };
 
   return (

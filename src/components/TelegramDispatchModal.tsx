@@ -106,11 +106,10 @@ export const TelegramDispatchModal: React.FC<TelegramDispatchModalProps> = ({
             <div className="relative">
               <input
                 type="tel"
-                inputMode="numeric"
-                pattern="[0-9]*"
+                inputMode="tel"
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
-                placeholder="ለምሳሌ፡ 0911234567 ወይም +251911234567"
+                placeholder="ለምሳሌ፡ 0911234567 ወይም +966..."
                 className="w-full pl-9 pr-3 py-2 text-xs font-mono font-bold bg-white rounded-lg border border-neutral-300 focus:outline-none focus:ring-2 focus:ring-emerald-700"
               />
               <Phone className="w-4 h-4 text-neutral-400 absolute left-2.5 top-2.5" />

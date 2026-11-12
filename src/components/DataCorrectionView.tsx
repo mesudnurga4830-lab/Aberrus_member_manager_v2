@@ -33,7 +33,13 @@ import {
   getEffectiveGenRate,
 } from '../utils/storage';
 import { getEthiopianMonthName, formatEthiopianCurrency } from '../utils/ethiopianCalendar';
-import { deleteMemberFromFirestore, saveMemberToFirestore, normalizePhoneNumber } from '../firebase';
+import {
+  deleteMemberFromFirestore,
+  saveMemberToFirestore,
+  normalizePhoneNumber,
+  deleteContributionFromFirestore,
+  saveContributionToFirestore,
+} from '../firebase';
 
 interface DataCorrectionViewProps {
   contributions: Contribution[];
@@ -116,13 +122,20 @@ export const DataCorrectionView: React.FC<DataCorrectionViewProps> = ({
     );
   });
 
-  // Handle Delete Contribution
-  const handleConfirmDeleteContribution = () => {
+  // Handle Delete Contribution (Local Storage + Firestore + API)
+  const handleConfirmDeleteContribution = async () => {
     if (!contributionToDelete) return;
-    deleteContribution(contributionToDelete.id);
+    const target = contributionToDelete;
+    deleteContribution(target.id);
     setContributionToDelete(null);
     onRefreshData();
-    showToast(`የደረሰኝ #${contributionToDelete.receiptNumber || contributionToDelete.id} ክፍያ በተሳካ ሁኔታ ተሰርዟል!`);
+    showToast(`የደረሰኝ #${target.receiptNumber || target.id} ክፍያ በተሳካ ሁኔታ ተሰርዟል!`);
+    try {
+      await deleteContributionFromFirestore(target.id);
+      onRefreshData();
+    } catch (err) {
+      console.error('Error deleting contribution from Firestore:', err);
+    }
   };
 
   // Handle Open Edit Contribution
@@ -136,10 +149,10 @@ export const DataCorrectionView: React.FC<DataCorrectionViewProps> = ({
     setEditNotes(c.notes || '');
   };
 
-  // Handle Save Edit Contribution
-  const handleSaveEditContribution = () => {
+  // Handle Save Edit Contribution (Local Storage + Firestore)
+  const handleSaveEditContribution = async () => {
     if (!contributionToEdit) return;
-    updateContribution(contributionToEdit.id, {
+    const updated = updateContribution(contributionToEdit.id, {
       paidAmount: editAmount,
       amount: editAmount,
       ethiopianMonth: editMonth,
@@ -152,6 +165,14 @@ export const DataCorrectionView: React.FC<DataCorrectionViewProps> = ({
     setContributionToEdit(null);
     onRefreshData();
     showToast('የክፍያው መረጃ በተሳካ ሁኔታ ተስተካክሏል!');
+    if (updated) {
+      try {
+        await saveContributionToFirestore(updated);
+        onRefreshData();
+      } catch (err) {
+        console.error('Error saving updated contribution to Firestore:', err);
+      }
+    }
   };
 
   // Handle Open Edit Member
@@ -755,11 +776,10 @@ export const DataCorrectionView: React.FC<DataCorrectionViewProps> = ({
                   <label className="block font-bold text-neutral-700 mb-1">ስልክ ቁጥር፡</label>
                   <input
                     type="tel"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
+                    inputMode="tel"
                     value={editMemberPhone}
                     onChange={(e) => setEditMemberPhone(e.target.value)}
-                    placeholder="0911234567"
+                    placeholder="0911234567 ወይም +966..."
                     className="w-full px-3 py-2 bg-neutral-50 border border-neutral-300 rounded-lg font-mono font-bold"
                   />
                 </div>

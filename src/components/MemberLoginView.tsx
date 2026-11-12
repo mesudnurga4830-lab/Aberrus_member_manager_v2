@@ -66,10 +66,12 @@ export const MemberLoginView: React.FC<MemberLoginViewProps> = ({
     try {
       const result = await loginOrRegisterMemberWithPhone(clean, passwordInput.trim());
 
-      // Explicitly verify and update phone number in member record and Firestore document
-      if (!result.member.phone || result.member.phone !== clean) {
+      // If the member had no phone, save it; otherwise keep existing saved format intact
+      if (!result.member.phone) {
         result.member.phone = clean;
         (result.member as any).phoneNumber = clean;
+      }
+      if (result.member.authUid !== result.user.uid) {
         result.member.authUid = result.user.uid;
         await saveMemberToFirestore(result.member);
       }
@@ -151,7 +153,7 @@ export const MemberLoginView: React.FC<MemberLoginViewProps> = ({
     }
   };
 
-  const cleanDigits = normalizePhoneNumber(phoneInput);
+  const cleanDigits = phoneInput.replace(/\D/g, '');
   const suggestedDefaultPass = cleanDigits.length >= 4 ? cleanDigits.slice(-4) : '••••';
 
   return (
@@ -235,16 +237,21 @@ export const MemberLoginView: React.FC<MemberLoginViewProps> = ({
                 <div className="relative">
                   <input
                     type="tel"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
+                    inputMode="tel"
                     required
-                    placeholder={isEn ? 'e.g. 0912345678' : 'ለምሳሌ፦ 0912345678'}
+                    placeholder={isEn ? 'e.g. 0912345678 or +966501234567' : 'ለምሳሌ፦ 0912345678 ወይም +966501234567'}
                     value={phoneInput}
                     onChange={(e) => setPhoneInput(e.target.value)}
                     className="w-full text-xs font-mono bg-[#F5F5F5] border border-[#E0E0E0] rounded-xl p-3 pr-10 text-[#212121] focus:ring-2 focus:ring-[#1B5E20] outline-none"
                   />
                   <Phone className="w-4 h-4 text-[#757575] absolute right-3 top-3.5" />
                 </div>
+                {/* Requirement 5: UI HELPER TEXT */}
+                <p className="text-[11px] text-[#757575] mt-1.5 leading-relaxed font-medium">
+                  {isEn
+                    ? 'In Ethiopia, enter starting with 09... From abroad, include your country code (e.g. +966...)'
+                    : 'ኢትዮጵያ ውስጥ ካሉ በ09... ይጻፉ። ከውጭ ሀገር ካሉ የአገር ኮድዎን ጨምረው ይጻፉ (ለምሳሌ +966...)'}
+                </p>
               </div>
 
               <div>

@@ -21,6 +21,7 @@ import {
   FileText,
   Clock,
   ShieldCheck,
+  RefreshCw,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Member, Contribution, ContributionType, PaymentMethod, SettingsRates, Family } from '../types';
@@ -69,6 +70,8 @@ export const AdminMemberPaymentManagerModal: React.FC<AdminMemberPaymentManagerM
   const [formNotes, setFormNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
+  const [paymentToDelete, setPaymentToDelete] = useState<Contribution | null>(null);
+  const [locallyDeletedIds, setLocallyDeletedIds] = useState<string[]>([]);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Selected member object
@@ -91,10 +94,11 @@ export const AdminMemberPaymentManagerModal: React.FC<AdminMemberPaymentManagerM
     }
   }, [selectedMember, formType, settings]);
 
-  // All recorded payments for the selected member
+  // All recorded payments for the selected member (excluding locally deleted)
   const memberPayments = useMemo(() => {
     if (!selectedMember) return [];
     return contributions
+      .filter((c) => !locallyDeletedIds.includes(c.id))
       .filter((c) => c.memberId === selectedMember.id || c.beneficiaryId === selectedMember.id)
       .sort((a, b) => {
         const yA = Number(a.year ?? a.ethiopianYear ?? 0);
@@ -104,7 +108,7 @@ export const AdminMemberPaymentManagerModal: React.FC<AdminMemberPaymentManagerM
         const mB = Number(b.month ?? b.ethiopianMonth ?? 0);
         return mB - mA;
       });
-  }, [contributions, selectedMember]);
+  }, [contributions, selectedMember, locallyDeletedIds]);
 
   // Total collected for this member
   const totalPaid = useMemo(() => {
@@ -128,27 +132,31 @@ export const AdminMemberPaymentManagerModal: React.FC<AdminMemberPaymentManagerM
 
   if (!isOpen) return null;
 
-  // Handle Delete Payment
-  const handleDeleteClick = async (payment: Contribution) => {
-    const paymentLabel = `${payment.type} (${payment.ethiopianMonthName || payment.month || ''} ${
-      payment.year || payment.ethiopianYear || ''
-    })`;
-    const confirmed = window.confirm(
-      `እርግጠኛ ነዎት ይህ ክፍያ ይሰረዝ?\n\n• አባል፦ ${payment.memberName} (${payment.memberId})\n• ክፍያ፦ ${paymentLabel}\n• መጠን፦ ${payment.amount} ብር\n• ሁኔታ፦ ${payment.status}\n\nይህ ድርጊት መዝገቡን ከFirestore 'contributions' ዳታቤዝ ሙሉ በሙሉ ይሰርዘዋል።`
-    );
+  // Trigger Delete Confirmation Modal (no browser window.confirm!)
+  const handleDeleteClick = (payment: Contribution) => {
+    setPaymentToDelete(payment);
+  };
 
-    if (!confirmed) return;
+  // Execute confirmed payment deletion
+  const handleConfirmDelete = async () => {
+    if (!paymentToDelete) return;
+    const payment = paymentToDelete;
 
     try {
       setIsDeletingId(payment.id);
+      // Optimistic instant UI update
+      setLocallyDeletedIds((prev) => [...prev, payment.id]);
       await onDeletePayment(payment.id);
+      setPaymentToDelete(null);
       setNotification({
         type: 'success',
-        message: `የክፍያ መዝገብ "${payment.id}" በተሳካ ሁኔታ ተሰርዟል!`,
+        message: `የክፍያ መዝገብ "${payment.id}" (${payment.type}) ከዳታቤዝ በተሳካ ሁኔታ ተሰርዟል!`,
       });
       setTimeout(() => setNotification(null), 4000);
     } catch (err: any) {
       console.error('Delete payment error:', err);
+      // Revert optimistic removal on failure
+      setLocallyDeletedIds((prev) => prev.filter((id) => id !== payment.id));
       setNotification({
         type: 'error',
         message: err.message || 'ክፍያውን መሰረዝ አልተቻለም። እባክዎ በድጋሚ ይሞክሩ።',
@@ -695,6 +703,89 @@ export const AdminMemberPaymentManagerModal: React.FC<AdminMemberPaymentManagerM
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Modal Overlay (Eliminates browser window.confirm failure in iframe) */}
+      {paymentToDelete && (
+        <div className="fixed inset-0 z-60 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-red-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 text-red-600 mb-4">
+              <div className="p-3 bg-red-100 rounded-xl">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-neutral-900">
+                  የክፍያ መዝገብ ይሰረዝ? (Delete Payment)
+                </h3>
+                <p className="text-xs text-neutral-500">
+                  በስህተት የተመዘገበ ክፍያን ከዳታቤዝ የመሰረዝ ማረጋገጫ
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-red-50/70 border border-red-200 rounded-xl p-3.5 space-y-2 text-xs mb-5">
+              <div className="flex justify-between">
+                <span className="text-neutral-600 font-medium">የአባል ስም፡</span>
+                <span className="font-bold text-neutral-900">{paymentToDelete.memberName} ({paymentToDelete.memberId})</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-600 font-medium">የክፍያ ዓይነት፡</span>
+                <span className="font-bold text-neutral-900">{paymentToDelete.type}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-600 font-medium">ወር / ዓ.ም፡</span>
+                <span className="font-semibold text-neutral-900">
+                  {paymentToDelete.type === 'ትውልድ'
+                    ? 'የትውልድ መዋጮ'
+                    : `${paymentToDelete.ethiopianMonthName || paymentToDelete.month || ''} ${paymentToDelete.year || paymentToDelete.ethiopianYear || ''} ዓ.ም`}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-600 font-medium">የተከፈለ መጠን፡</span>
+                <span className="font-mono font-bold text-red-700">
+                  {Number(paymentToDelete.paidAmount || paymentToDelete.amount || 0).toLocaleString()} ብር
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-600 font-medium">የክፍያ መለያ (ID)፡</span>
+                <span className="font-mono text-[10px] text-neutral-500">{paymentToDelete.id}</span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-neutral-500 mb-5 leading-relaxed">
+              ⚠️ ይህ ድርጊት የክፍያውን መዝገብ ከFirestore 'contributions' ዳታቤዝ እና ከሂሳብ መዝገብ ላይ ሙሉ በሙሉ ያጠፋዋል።
+            </p>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                disabled={isDeletingId === paymentToDelete.id}
+                onClick={() => setPaymentToDelete(null)}
+                className="px-4 py-2.5 rounded-xl border border-neutral-300 text-neutral-700 hover:bg-neutral-100 text-xs font-semibold transition-colors cursor-pointer"
+              >
+                ተመለስ (Cancel)
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingId === paymentToDelete.id}
+                onClick={handleConfirmDelete}
+                className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {isDeletingId === paymentToDelete.id ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>በመሰረዝ ላይ...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>አዎ፣ ሙሉ በሙሉ ሰርዝ (Delete)</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

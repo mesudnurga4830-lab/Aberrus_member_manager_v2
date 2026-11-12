@@ -2382,9 +2382,8 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
               </label>
               <input
                 type="tel"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                placeholder={activeMember.phone || '0911234567'}
+                inputMode="tel"
+                placeholder={activeMember.phone || '0911234567 ወይም +966...'}
                 value={complaintPhone}
                 onChange={(e) => setComplaintPhone(e.target.value)}
                 className="w-full text-xs bg-[#F5F5F5] border border-[#E0E0E0] rounded-lg p-2.5 text-[#212121] focus:ring-2 focus:ring-[#1B5E20]"

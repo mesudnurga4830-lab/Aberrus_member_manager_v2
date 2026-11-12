@@ -270,9 +270,8 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
               </label>
               <input
                 type="tel"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                placeholder="0911234567"
+                inputMode="tel"
+                placeholder="0911234567 ወይም +966..."
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 className="w-full text-xs rounded-xl border border-neutral-300 px-3 py-2 bg-neutral-50/50 focus:ring-2 focus:ring-emerald-700/40 font-mono"

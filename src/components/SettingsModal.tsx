@@ -55,6 +55,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const [adminPin, setLocalAdminPin] = useState(getAdminPin());
   const [savedNotice, setSavedNotice] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   React.useEffect(() => {
     const handlePinChanged = (e: any) => {
@@ -671,19 +672,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* Reset / Actions */}
           <div className="pt-4 flex items-center justify-between border-t border-neutral-200">
-            <button
-              type="button"
-              onClick={() => {
-                if (confirm('ሁሉንም መረጃ ወደ መጀመሪያው ሁኔታ መመለስ ይፈልጋሉ?')) {
-                  onReset();
-                  onClose();
-                }
-              }}
-              className="inline-flex items-center gap-1.5 text-xs text-red-600 hover:text-red-700 font-medium cursor-pointer"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>ዳታውን ዳግም ጀምር (Reset All)</span>
-            </button>
+            {confirmReset ? (
+              <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-1.5">
+                <span className="text-[11px] font-bold text-red-700 px-1">ሁሉንም ዳታ ዳግም መመለስ እርግጠኛ ነዎት?</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onReset();
+                    onClose();
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
+                >
+                  አዎ፣ ዳግም ጀምር
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmReset(false)}
+                  className="px-2 py-1 rounded-lg border border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-100 font-medium text-xs transition-colors cursor-pointer"
+                >
+                  ተመለስ
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmReset(true)}
+                className="inline-flex items-center gap-1.5 text-xs text-red-600 hover:text-red-700 font-medium cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>ዳታውን ዳግም ጀምር (Reset All)</span>
+              </button>
+            )}
 
             <div className="flex items-center gap-2">
               <button

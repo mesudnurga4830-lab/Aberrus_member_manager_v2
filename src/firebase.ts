@@ -5,7 +5,11 @@
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
+  initializeFirestore,
   getFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  waitForPendingWrites,
   collection,
   doc,
   getDocs,
@@ -41,8 +45,37 @@ import { generateLoginToken } from './utils/token';
 // Initialize Firebase App
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Firestore with specific database ID from config
-export const db: Firestore = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+/**
+ * Initialize Firestore with persistentLocalCache (Offline persistence & multi-tab auto-sync)
+ */
+function createPersistentFirestoreInstance(): Firestore {
+  try {
+    return initializeFirestore(
+      app,
+      {
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager(),
+        }),
+      },
+      firebaseConfig.firestoreDatabaseId
+    );
+  } catch (err) {
+    try {
+      return initializeFirestore(
+        app,
+        {
+          localCache: persistentLocalCache(),
+        },
+        firebaseConfig.firestoreDatabaseId
+      );
+    } catch (e2) {
+      console.warn('[Firestore] Falling back to standard getFirestore:', e2);
+      return getFirestore(app, firebaseConfig.firestoreDatabaseId);
+    }
+  }
+}
+
+export const db: Firestore = createPersistentFirestoreInstance();
 
 // Initialize Firebase Auth
 export const auth = getAuth(app);
@@ -264,14 +297,11 @@ export async function getMemberByLoginToken(tokenOrId: string): Promise<Member |
     console.warn('[Firestore] Query by doc ID notice:', err);
   }
 
-  // C. Try matching by phone number in Firestore
+  // C. Try matching by phone number in Firestore (supports global and local formats)
   try {
-    const membersRef = collection(db, MEMBERS_COLLECTION);
-    const qPhone = query(membersRef, where('phone', '==', clean));
-    const snapPhone = await getDocs(qPhone);
-    if (!snapPhone.empty) {
-      const d = snapPhone.docs[0];
-      return { id: d.id, ...d.data() } as Member;
+    const phoneMatch = await getMemberByPhone(clean);
+    if (phoneMatch) {
+      return phoneMatch;
     }
   } catch (err) {
     console.warn('[Firestore] Query by phone notice:', err);
@@ -315,29 +345,161 @@ export async function getMemberByLoginToken(tokenOrId: string): Promise<Member |
 }
 
 /**
- * Normalize Ethiopian and international phone numbers (e.g. +251912345678, +251712345678, 0912345678, 0712345678, 912345678 -> 0912345678)
+ * Validates whether a phone number matches local Ethiopian or global international format.
+ * - Local Ethiopian: 10 digits starting with 09 or 07 (or 9 digits starting with 9 or 7)
+ * - Global International: starts with '+' (E.164 format, 7 to 15 digits) or '00', or 9 to 15 digits
  */
-export function normalizePhoneNumber(rawPhone: string): string {
-  if (!rawPhone) return '';
-  const digits = String(rawPhone).replace(/\D/g, '');
-  if (digits.startsWith('251') && digits.length >= 11) {
-    return '0' + digits.slice(3);
-  }
-  if (digits.length === 9 && (digits.startsWith('9') || digits.startsWith('7'))) {
-    return '0' + digits;
-  }
-  if (digits.length === 10 && (digits.startsWith('09') || digits.startsWith('07'))) {
-    return digits;
-  }
-  return digits || String(rawPhone).trim();
+export function isValidPhoneNumber(rawPhone: string): boolean {
+  if (!rawPhone) return false;
+  const trimmed = String(rawPhone).trim().replace(/[\s()\-.]/g, '');
+  if (!trimmed) return false;
+
+  // 1. Local Ethiopian 10 digits: 09... or 07...
+  if (/^(09|07)\d{8}$/.test(trimmed)) return true;
+
+  // 2. Ethiopian without leading 0 (9 digits: 9... or 7...)
+  if (/^(9|7)\d{8}$/.test(trimmed)) return true;
+
+  // 3. Ethiopian international with +251
+  if (/^\+251(9|7)\d{8}$/.test(trimmed)) return true;
+
+  // 4. Ethiopian international with 251
+  if (/^251(9|7)\d{8}$/.test(trimmed)) return true;
+
+  // 5. Global international format starting with '+' (ITU E.164: + followed by 7 to 15 digits)
+  if (/^\+[1-9]\d{6,14}$/.test(trimmed)) return true;
+
+  // 6. Global international starting with '00'
+  if (/^00[1-9]\d{6,14}$/.test(trimmed)) return true;
+
+  // 7. Standard digit sequence between 8 and 15 digits
+  if (/^\d{8,15}$/.test(trimmed)) return true;
+
+  return false;
 }
 
 /**
- * Creates dummy email from phone number (<phone>@abarrus.local)
+ * Normalize phone numbers with STRICT BACKWARD COMPATIBILITY:
+ * - Local Ethiopian (09... or 07...): STRICTLY kept as "09..." / "07...". NEVER force-converted to +251...
+ * - Ethiopian 9 digits (9... or 7...): prepends 0 -> "09..." / "07..."
+ * - International starting with '+': keeps '+' followed by digits (e.g. +966501234567, +12025550123)
+ * - International starting with '00': converts '00' to '+' (e.g. 00966... -> +966...)
+ */
+export function normalizePhoneNumber(rawPhone: string): string {
+  if (!rawPhone) return '';
+  const trimmed = String(rawPhone).trim().replace(/[\s()\-.]/g, '');
+  if (!trimmed) return '';
+
+  // 1. If it starts with '+', keep the '+' followed by digits
+  if (trimmed.startsWith('+')) {
+    const digitsOnly = trimmed.slice(1).replace(/\D/g, '');
+    return '+' + digitsOnly;
+  }
+
+  // 2. If it starts with '00', convert to '+' international format
+  if (trimmed.startsWith('00') && trimmed.length > 4) {
+    const digitsOnly = trimmed.slice(2).replace(/\D/g, '');
+    return '+' + digitsOnly;
+  }
+
+  // 3. Ethiopian 10-digit format (09... or 07...): STRICTLY preserve leading 09/07, DO NOT convert to +251
+  if (trimmed.length === 10 && (trimmed.startsWith('09') || trimmed.startsWith('07'))) {
+    return trimmed;
+  }
+
+  // 4. Ethiopian 9-digit format (9... or 7...): prepend 0 -> 09... / 07...
+  if (trimmed.length === 9 && (trimmed.startsWith('9') || trimmed.startsWith('7'))) {
+    return '0' + trimmed;
+  }
+
+  // 5. If it starts with 251 and has 12 digits (e.g. 251912345678)
+  if (trimmed.startsWith('251') && trimmed.length === 12) {
+    return '+' + trimmed;
+  }
+
+  // 6. Default clean string
+  return trimmed;
+}
+
+/**
+ * Creates dummy email from phone number (<cleanPhone>@abarrus.local).
+ * - If user enters "0912345678", generates "0912345678@abarrus.local"
+ * - If user enters "+966501234567", strips the "+" sign and generates "966501234567@abarrus.local"
  */
 export function getDummyEmailFromPhone(phone: string): string {
-  const clean = normalizePhoneNumber(phone);
+  if (!phone) return '';
+  const normalized = normalizePhoneNumber(phone);
+  // Strip '+' sign, spaces, hyphens, and parentheses
+  const clean = String(normalized)
+    .trim()
+    .replace(/^\+/, '')
+    .replace(/[\s()\-.]/g, '');
   return `${clean}@abarrus.local`;
+}
+
+/**
+ * Returns candidate search variations for smart phone lookup in Firestore.
+ * Prioritizes the exact input typed by the user as candidate #1!
+ */
+export function getPhoneNumberVariations(phone: string): string[] {
+  if (!phone) return [];
+  const trimmed = String(phone).trim().replace(/[\s()\-.]/g, '');
+  if (!trimmed) return [];
+
+  const variations: string[] = [];
+  const add = (v: string) => {
+    if (v && !variations.includes(v)) {
+      variations.push(v);
+    }
+  };
+
+  // 1. Prioritize what the user typed (and normalized) as candidate #1
+  const norm = normalizePhoneNumber(trimmed);
+  add(trimmed);
+  add(norm);
+
+  // 2. Ethiopian variations
+  // If user typed "09..." or "07..." (10 digits)
+  if (trimmed.length === 10 && (trimmed.startsWith('09') || trimmed.startsWith('07'))) {
+    const nine = trimmed.slice(1);
+    add(`+251${nine}`);
+    add(`251${nine}`);
+    add(nine);
+  }
+  // If user typed "+2519..." or "+2517..."
+  else if (trimmed.startsWith('+251') && trimmed.length >= 12) {
+    const nine = trimmed.slice(4);
+    add(`0${nine}`);
+    add(`251${nine}`);
+    add(nine);
+  }
+  // If user typed "2519..." or "2517..."
+  else if (trimmed.startsWith('251') && trimmed.length === 12) {
+    const nine = trimmed.slice(3);
+    add(`+251${nine}`);
+    add(`0${nine}`);
+    add(nine);
+  }
+  // If user typed 9 digits "9..." or "7..."
+  else if (trimmed.length === 9 && (trimmed.startsWith('9') || trimmed.startsWith('7'))) {
+    add(`0${trimmed}`);
+    add(`+251${trimmed}`);
+    add(`251${trimmed}`);
+  }
+  // 3. Global International variations (e.g. +966..., 00966...)
+  else if (trimmed.startsWith('+')) {
+    const withoutPlus = trimmed.slice(1);
+    add(withoutPlus);
+    add(`00${withoutPlus}`);
+  } else if (trimmed.startsWith('00')) {
+    const without00 = trimmed.slice(2);
+    add(`+${without00}`);
+    add(without00);
+  } else if (trimmed.length >= 10) {
+    add(`+${trimmed}`);
+  }
+
+  return variations;
 }
 
 /**
@@ -349,8 +511,8 @@ export function getDummyEmailFromPhone(phone: string): string {
 export function formatAuthPassword(enteredPassword?: string, phone?: string): string {
   let pass = (enteredPassword || '').trim();
   if (!pass && phone) {
-    const cleanPhone = normalizePhoneNumber(phone);
-    pass = cleanPhone.slice(-4) || '1234';
+    const digitsOnly = String(phone).replace(/\D/g, '');
+    pass = digitsOnly.slice(-4) || '1234';
   }
   if (pass.length < 6) {
     return `ab_${pass}`;
@@ -359,60 +521,79 @@ export function formatAuthPassword(enteredPassword?: string, phone?: string): st
 }
 
 /**
- * Look up member in Firestore by phone number (checks both 'phone' and 'phoneNumber' fields)
+ * Smart look up member in Firestore by phone number.
+ * Searches with smart fallback across candidate variations:
+ * - If user typed "0912345678", checks "0912345678" first
+ * - If user typed "+251912345678", checks "+251912345678" first
+ * - If not found, checks alternate format (09... vs +251...) before throwing not found error
+ * - Supports any global international number (e.g. +966..., +1..., +44...)
  */
 export async function getMemberByPhone(phone: string): Promise<Member | null> {
-  const cleanPhone = normalizePhoneNumber(phone);
-  if (!cleanPhone) return null;
+  const variations = getPhoneNumberVariations(phone);
+  if (variations.length === 0) return null;
 
   try {
     const membersRef = collection(db, MEMBERS_COLLECTION);
-    const q1 = query(membersRef, where('phone', '==', cleanPhone));
-    const snap1 = await getDocs(q1);
-    if (!snap1.empty) {
-      const d = snap1.docs[0];
-      return { ...d.data(), id: d.id, phone: cleanPhone, phoneNumber: cleanPhone } as unknown as Member;
+
+    // 1. Check indexed query for each variation in priority order
+    for (const candidate of variations) {
+      const q1 = query(membersRef, where('phone', '==', candidate));
+      const snap1 = await getDocs(q1);
+      if (!snap1.empty) {
+        const d = snap1.docs[0];
+        const data = d.data() as any;
+        return { ...data, id: d.id, phone: data.phone || candidate, phoneNumber: data.phoneNumber || candidate } as unknown as Member;
+      }
+
+      const q2 = query(membersRef, where('phoneNumber', '==', candidate));
+      const snap2 = await getDocs(q2);
+      if (!snap2.empty) {
+        const d = snap2.docs[0];
+        const data = d.data() as any;
+        return { ...data, id: d.id, phone: data.phone || candidate, phoneNumber: data.phoneNumber || candidate } as unknown as Member;
+      }
     }
 
-    // Also check alternate field name 'phoneNumber'
-    const q2 = query(membersRef, where('phoneNumber', '==', cleanPhone));
-    const snap2 = await getDocs(q2);
-    if (!snap2.empty) {
-      const d = snap2.docs[0];
-      return { ...d.data(), id: d.id, phone: cleanPhone, phoneNumber: cleanPhone } as unknown as Member;
-    }
-
-    // Secondary scan across all docs in case spaces/formatting differed
+    // 2. Secondary scan across all docs in case spaces/formatting in Firestore differed
     const allSnap = await getDocs(membersRef);
     for (const d of allSnap.docs) {
       const m = d.data() as any;
       const raw = m.phone || m.phoneNumber;
-      if (raw && normalizePhoneNumber(String(raw)) === cleanPhone) {
-        return { ...m, id: d.id, phone: cleanPhone, phoneNumber: cleanPhone } as unknown as Member;
+      if (!raw) continue;
+      const rawTrimmed = String(raw).trim().replace(/[\s()\-.]/g, '');
+      const rawNorm = normalizePhoneNumber(rawTrimmed);
+      if (variations.includes(rawTrimmed) || variations.includes(rawNorm)) {
+        return { ...m, id: d.id, phone: m.phone || rawNorm, phoneNumber: m.phoneNumber || rawNorm } as unknown as Member;
       }
     }
   } catch (err) {
     console.warn('[Firestore] Phone lookup notice:', err);
   }
 
-  // Fallback to local storage
+  // 3. Fallback to local storage
   try {
     const localList = getMembers();
     const foundLocal = localList.find((m) => {
       const raw = m.phone || (m as any).phoneNumber;
-      return raw && normalizePhoneNumber(String(raw)) === cleanPhone;
+      if (!raw) return false;
+      const rawTrimmed = String(raw).trim().replace(/[\s()\-.]/g, '');
+      const rawNorm = normalizePhoneNumber(rawTrimmed);
+      return variations.includes(rawTrimmed) || variations.includes(rawNorm);
     });
     if (foundLocal) {
-      return { ...foundLocal, phone: cleanPhone, phoneNumber: cleanPhone };
+      return { ...foundLocal, phone: foundLocal.phone || variations[0], phoneNumber: (foundLocal as any).phoneNumber || variations[0] };
     }
   } catch {}
 
-  // Fallback to initial seed members
+  // 4. Fallback to initial seed members
   const foundInit = initialMembers.find((m) => {
     const raw = m.phone || (m as any).phoneNumber;
-    return raw && normalizePhoneNumber(String(raw)) === cleanPhone;
+    if (!raw) return false;
+    const rawTrimmed = String(raw).trim().replace(/[\s()\-.]/g, '');
+    const rawNorm = normalizePhoneNumber(rawTrimmed);
+    return variations.includes(rawTrimmed) || variations.includes(rawNorm);
   });
-  return foundInit ? { ...foundInit, phone: cleanPhone, phoneNumber: cleanPhone } : null;
+  return foundInit ? { ...foundInit, phone: foundInit.phone || variations[0], phoneNumber: (foundInit as any).phoneNumber || variations[0] } : null;
 }
 
 /**
@@ -454,10 +635,10 @@ export async function mapAuthUidToMember(memberId: string, authUid: string, phon
 }
 
 /**
- * Look up member in Firestore by Firebase Auth UID or Phone
+ * Look up member in Firestore by Firebase Auth UID or Phone (checks all variations)
  */
 export async function getMemberByAuthUidOrPhone(authUid: string, phone?: string): Promise<Member | null> {
-  const cleanPhone = phone ? normalizePhoneNumber(phone) : '';
+  const variations = phone ? getPhoneNumberVariations(phone) : [];
 
   try {
     const membersRef = collection(db, MEMBERS_COLLECTION);
@@ -469,36 +650,38 @@ export async function getMemberByAuthUidOrPhone(authUid: string, phone?: string)
       if (!snapUid.empty) {
         const d = snapUid.docs[0];
         const data = d.data();
-        const p = normalizePhoneNumber(data.phone || data.phoneNumber || cleanPhone);
-        return { ...data, id: d.id, phone: p, phoneNumber: p } as unknown as Member;
+        return { ...data, id: d.id } as unknown as Member;
       }
     }
 
-    // 2. Try querying by phone or phoneNumber
-    if (cleanPhone) {
-      const qPhone = query(membersRef, where('phone', '==', cleanPhone));
+    // 2. Try querying by candidate phone variations
+    for (const candidate of variations) {
+      const qPhone = query(membersRef, where('phone', '==', candidate));
       const snapPhone = await getDocs(qPhone);
       if (!snapPhone.empty) {
         const d = snapPhone.docs[0];
-        const data = d.data();
-        return { ...data, id: d.id, phone: cleanPhone, phoneNumber: cleanPhone } as unknown as Member;
+        return { ...d.data(), id: d.id } as unknown as Member;
       }
 
-      const qPhone2 = query(membersRef, where('phoneNumber', '==', cleanPhone));
+      const qPhone2 = query(membersRef, where('phoneNumber', '==', candidate));
       const snapPhone2 = await getDocs(qPhone2);
       if (!snapPhone2.empty) {
         const d = snapPhone2.docs[0];
-        const data = d.data();
-        return { ...data, id: d.id, phone: cleanPhone, phoneNumber: cleanPhone } as unknown as Member;
+        return { ...d.data(), id: d.id } as unknown as Member;
       }
+    }
 
-      // Check all docs in case formatting differed
+    // 3. Scan all docs if needed
+    if (variations.length > 0) {
       const allSnap = await getDocs(membersRef);
       for (const d of allSnap.docs) {
         const m = d.data() as any;
         const raw = m.phone || m.phoneNumber;
-        if (raw && normalizePhoneNumber(String(raw)) === cleanPhone) {
-          return { ...m, id: d.id, phone: cleanPhone, phoneNumber: cleanPhone } as unknown as Member;
+        if (!raw) continue;
+        const rawTrimmed = String(raw).trim().replace(/[\s()\-.]/g, '');
+        const rawNorm = normalizePhoneNumber(rawTrimmed);
+        if (variations.includes(rawTrimmed) || variations.includes(rawNorm)) {
+          return { ...m, id: d.id } as unknown as Member;
         }
       }
     }
@@ -511,29 +694,30 @@ export async function getMemberByAuthUidOrPhone(authUid: string, phone?: string)
     const localList = getMembers();
     if (authUid) {
       const foundByUid = localList.find((m) => m.authUid === authUid);
-      if (foundByUid) {
-        const p = normalizePhoneNumber(foundByUid.phone || (foundByUid as any).phoneNumber || cleanPhone);
-        return { ...foundByUid, phone: p, phoneNumber: p };
-      }
+      if (foundByUid) return foundByUid;
     }
-    if (cleanPhone) {
+    if (variations.length > 0) {
       const foundByPhone = localList.find((m) => {
         const raw = m.phone || (m as any).phoneNumber;
-        return raw && normalizePhoneNumber(String(raw)) === cleanPhone;
+        if (!raw) return false;
+        const rawTrimmed = String(raw).trim().replace(/[\s()\-.]/g, '');
+        const rawNorm = normalizePhoneNumber(rawTrimmed);
+        return variations.includes(rawTrimmed) || variations.includes(rawNorm);
       });
-      if (foundByPhone) {
-        return { ...foundByPhone, phone: cleanPhone, phoneNumber: cleanPhone };
-      }
+      if (foundByPhone) return foundByPhone;
     }
   } catch {}
 
   // Fallback to initialMembers
-  if (cleanPhone) {
+  if (variations.length > 0) {
     const foundInit = initialMembers.find((m) => {
       const raw = m.phone || (m as any).phoneNumber;
-      return raw && normalizePhoneNumber(String(raw)) === cleanPhone;
+      if (!raw) return false;
+      const rawTrimmed = String(raw).trim().replace(/[\s()\-.]/g, '');
+      const rawNorm = normalizePhoneNumber(rawTrimmed);
+      return variations.includes(rawTrimmed) || variations.includes(rawNorm);
     });
-    if (foundInit) return { ...foundInit, phone: cleanPhone, phoneNumber: cleanPhone };
+    if (foundInit) return foundInit;
   }
 
   return null;
@@ -541,11 +725,11 @@ export async function getMemberByAuthUidOrPhone(authUid: string, phone?: string)
 
 /**
  * Member Phone + Password Authentication (Auto-Register on first login)
- * - Verifies phone exists in Firestore members collection
- * - Uses dummy email <phone>@abarrus.local
+ * - Verifies phone exists in Firestore members collection (checking variations)
+ * - Uses dummy email <cleanPhone>@abarrus.local
  * - Default password is the last 4 digits of phone
- * - Automatically registers if account doesn't exist yet
- * - Maps Firebase Auth UID to Firestore member document
+ * - Supports global international numbers (e.g. +966...) as well as local Ethiopian (09...)
+ * - Preserves existing "09..." format for backward compatibility
  */
 export async function loginOrRegisterMemberWithPhone(
   phone: string,
@@ -556,7 +740,7 @@ export async function loginOrRegisterMemberWithPhone(
     throw new Error('እባክዎ ትክክለኛ ስልክ ቁጥር ያስገቡ (Please enter a valid phone number)');
   }
 
-  // 1. Verify that this phone number exists in the Firestore members collection
+  // 1. Verify that this phone number exists in the Firestore members collection (smart lookup)
   const member = await getMemberByPhone(cleanPhone);
   if (!member) {
     throw new Error(
@@ -564,80 +748,114 @@ export async function loginOrRegisterMemberWithPhone(
     );
   }
 
-  const dummyEmail = getDummyEmailFromPhone(cleanPhone);
-  const defaultLast4 = cleanPhone.slice(-4) || '1234';
+  // Primary dummy email from typed phone (Requirement 3: strip '+' if present)
+  const primaryDummyEmail = getDummyEmailFromPhone(cleanPhone);
+  // Alternate dummy email from member's stored phone in Firestore (if different)
+  const storedDummyEmail = member.phone ? getDummyEmailFromPhone(member.phone) : primaryDummyEmail;
+
+  const digitsOnly = cleanPhone.replace(/\D/g, '');
+  const defaultLast4 = digitsOnly.slice(-4) || '1234';
   const effectivePass = passwordInput && passwordInput.trim().length > 0 ? passwordInput.trim() : defaultLast4;
   const authPass = formatAuthPassword(effectivePass, cleanPhone);
 
   // 2. Try to Sign In with Firebase Auth
-  try {
-    const userCredential = await signInWithEmailAndPassword(auth, dummyEmail, authPass);
-    try {
-      await updateProfile(userCredential.user, { displayName: member.fullName });
-    } catch {}
-    member.phone = cleanPhone;
-    (member as any).phoneNumber = cleanPhone;
-    member.authUid = userCredential.user.uid;
-    await mapAuthUidToMember(member.id, userCredential.user.uid, cleanPhone);
-    await saveMemberToFirestore(member);
-    return { member, user: userCredential.user, isNewRegistration: false };
-  } catch (signInErr: any) {
-    const errCode = signInErr?.code || '';
+  // We try primary email first; if not found, we also check storedDummyEmail
+  const emailsToTry = [primaryDummyEmail];
+  if (storedDummyEmail && storedDummyEmail !== primaryDummyEmail) {
+    emailsToTry.push(storedDummyEmail);
+  }
 
-    // If user doesn't exist, auto-register them
-    if (
-      errCode === 'auth/user-not-found' ||
-      errCode === 'auth/invalid-credential' ||
-      errCode === 'auth/invalid-email'
-    ) {
+  let lastSignInErr: any = null;
+  for (const email of emailsToTry) {
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, authPass);
       try {
-        const createCredential = await createUserWithEmailAndPassword(auth, dummyEmail, authPass);
-        try {
-          await updateProfile(createCredential.user, { displayName: member.fullName });
-        } catch {}
+        await updateProfile(userCredential.user, { displayName: member.fullName });
+      } catch {}
+
+      // Preserve member's phone number as stored if already present, or use cleanPhone
+      if (!member.phone) {
         member.phone = cleanPhone;
         (member as any).phoneNumber = cleanPhone;
-        member.authUid = createCredential.user.uid;
-        await mapAuthUidToMember(member.id, createCredential.user.uid, cleanPhone);
-        await saveMemberToFirestore(member);
-        return { member, user: createCredential.user, isNewRegistration: true };
-      } catch (createErr: any) {
-        if (createErr?.code === 'auth/email-already-in-use') {
-          throw new Error(
-            'የይለፍ ቃል የተሳሳተ ነው። ነባሪ የይለፍ ቃልዎ የስልክ ቁጥርዎ የመጨረሻ 4 አሃዞች ናቸው። (Incorrect password. Your default password is the last 4 digits of your phone number.)'
-          );
-        }
-        if (createErr?.code === 'auth/weak-password') {
-          const strongPass = `abarrus_${defaultLast4}`;
-          const retryCred = await createUserWithEmailAndPassword(auth, dummyEmail, strongPass);
-          try {
-            await updateProfile(retryCred.user, { displayName: member.fullName });
-          } catch {}
-          member.phone = cleanPhone;
-          (member as any).phoneNumber = cleanPhone;
-          member.authUid = retryCred.user.uid;
-          await mapAuthUidToMember(member.id, retryCred.user.uid, cleanPhone);
-          await saveMemberToFirestore(member);
-          return { member, user: retryCred.user, isNewRegistration: true };
-        }
-        throw createErr;
+      }
+      member.authUid = userCredential.user.uid;
+      await mapAuthUidToMember(member.id, userCredential.user.uid, member.phone || cleanPhone);
+      await saveMemberToFirestore(member);
+      return { member, user: userCredential.user, isNewRegistration: false };
+    } catch (err: any) {
+      lastSignInErr = err;
+      const code = err?.code || '';
+      // If wrong password on existing account, don't try alternate email, throw immediately
+      if (code === 'auth/wrong-password') {
+        throw new Error(
+          'የይለፍ ቃል የተሳሳተ ነው። ነባሪ የይለፍ ቃልዎ የስልክ ቁጥርዎ የመጨረሻ 4 አሃዞች ናቸው። (Incorrect password. Your default password is the last 4 digits of your phone number.)'
+        );
       }
     }
-
-    if (errCode === 'auth/wrong-password') {
-      throw new Error(
-        'የይለፍ ቃል የተሳሳተ ነው። ነባሪ የይለፍ ቃልዎ የስልክ ቁጥርዎ የመጨረሻ 4 አሃዞች ናቸው። (Incorrect password. Your default password is the last 4 digits of your phone number.)'
-      );
-    }
-
-    if (errCode === 'auth/too-many-requests') {
-      throw new Error(
-        'በጣም ብዙ ሙከራዎች ተደርገዋል። እባክዎ ትንሽ ቆይተው እንደገና ይሞክሩ። (Too many attempts. Please try again later.)'
-      );
-    }
-
-    throw signInErr;
   }
+
+  // 3. If account doesn't exist under either email, auto-register them
+  const errCode = lastSignInErr?.code || '';
+  if (
+    errCode === 'auth/user-not-found' ||
+    errCode === 'auth/invalid-credential' ||
+    errCode === 'auth/invalid-email'
+  ) {
+    // Choose creation email: prefer primaryDummyEmail
+    const createEmail = primaryDummyEmail;
+    try {
+      const createCredential = await createUserWithEmailAndPassword(auth, createEmail, authPass);
+      try {
+        await updateProfile(createCredential.user, { displayName: member.fullName });
+      } catch {}
+
+      if (!member.phone) {
+        member.phone = cleanPhone;
+        (member as any).phoneNumber = cleanPhone;
+      }
+      member.authUid = createCredential.user.uid;
+      await mapAuthUidToMember(member.id, createCredential.user.uid, member.phone || cleanPhone);
+      await saveMemberToFirestore(member);
+      return { member, user: createCredential.user, isNewRegistration: true };
+    } catch (createErr: any) {
+      if (createErr?.code === 'auth/email-already-in-use') {
+        throw new Error(
+          'የይለፍ ቃል የተሳሳተ ነው። ነባሪ የይለፍ ቃልዎ የስልክ ቁጥርዎ የመጨረሻ 4 አሃዞች ናቸው። (Incorrect password. Your default password is the last 4 digits of your phone number.)'
+        );
+      }
+      if (createErr?.code === 'auth/weak-password') {
+        const strongPass = `abarrus_${defaultLast4}`;
+        const retryCred = await createUserWithEmailAndPassword(auth, createEmail, strongPass);
+        try {
+          await updateProfile(retryCred.user, { displayName: member.fullName });
+        } catch {}
+
+        if (!member.phone) {
+          member.phone = cleanPhone;
+          (member as any).phoneNumber = cleanPhone;
+        }
+        member.authUid = retryCred.user.uid;
+        await mapAuthUidToMember(member.id, retryCred.user.uid, member.phone || cleanPhone);
+        await saveMemberToFirestore(member);
+        return { member, user: retryCred.user, isNewRegistration: true };
+      }
+      throw createErr;
+    }
+  }
+
+  if (errCode === 'auth/wrong-password') {
+    throw new Error(
+      'የይለፍ ቃል የተሳሳተ ነው። ነባሪ የይለፍ ቃልዎ የስልክ ቁጥርዎ የመጨረሻ 4 አሃዞች ናቸው። (Incorrect password. Your default password is the last 4 digits of your phone number.)'
+    );
+  }
+
+  if (errCode === 'auth/too-many-requests') {
+    throw new Error(
+      'በጣም ብዙ ሙከራዎች ተደርገዋል። እባክዎ ትንሽ ቆይተው እንደገና ይሞክሩ። (Too many attempts. Please try again later.)'
+    );
+  }
+
+  throw lastSignInErr;
 }
 
 /**
@@ -802,18 +1020,27 @@ export function sanitizeForFirestore<T>(data: T): T {
 }
 
 /**
- * Helper to safely perform client Firestore writes with graceful handling for quota exhaustion
+ * Helper to safely perform client Firestore writes with persistent local cache support and quota handling
  */
 async function safeClientFirestoreWrite(operation: () => Promise<void>, actionDesc: string): Promise<boolean> {
   try {
     await operation();
     return true;
   } catch (err: any) {
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
     const isQuota =
       err?.code === 'resource-exhausted' ||
       err?.code === 8 ||
       String(err?.message || '').includes('RESOURCE_EXHAUSTED') ||
       String(err?.message || '').includes('Quota limit exceeded');
+
+    if (isOffline) {
+      console.info(
+        `[Firestore Offline Cache] ${actionDesc} saved in local persistent cache. Auto-sync will complete when connected.`
+      );
+      return true;
+    }
+
     if (isQuota) {
       console.warn(
         `[Firestore Quota Notice] Daily write quota reached during ${actionDesc}. Data is safely stored in local memory and will sync when quota resets.`
@@ -823,6 +1050,64 @@ async function safeClientFirestoreWrite(operation: () => Promise<void>, actionDe
     }
     return false;
   }
+}
+
+/**
+ * Wait for all local offline writes to be committed to cloud Firestore
+ */
+export async function waitForPendingFirestoreWrites(): Promise<void> {
+  try {
+    await waitForPendingWrites(db);
+  } catch (err) {
+    console.info('[Firestore] waitForPendingWrites notice:', err);
+  }
+}
+
+export type FirestoreSyncStatus = 'online' | 'offline' | 'syncing';
+
+/**
+ * Subscribe to network and Firestore sync state
+ */
+export function subscribeToSyncState(callback: (status: FirestoreSyncStatus) => void): () => void {
+  let isListening = true;
+
+  const checkSync = async () => {
+    if (!isListening) return;
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      callback('offline');
+      return;
+    }
+    callback('syncing');
+    try {
+      await waitForPendingWrites(db);
+      if (isListening) callback('online');
+    } catch {
+      if (isListening) callback('online');
+    }
+  };
+
+  const handleOnline = () => {
+    checkSync();
+  };
+
+  const handleOffline = () => {
+    callback('offline');
+  };
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+  }
+
+  checkSync();
+
+  return () => {
+    isListening = false;
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    }
+  };
 }
 
 /**
@@ -980,9 +1265,9 @@ export async function bulkImportMembersToFirestore(
       continue;
     }
 
-    // Validate Phone Number: exactly 10 digits starting with 09 (or 07)
+    // Validate Phone Number: global format or Ethiopian (09...)
+    const isValidPhone = isValidPhoneNumber(rawPhone);
     const cleanPhone = normalizePhoneNumber(rawPhone);
-    const isValidPhone = /^(09|07)\d{8}$/.test(cleanPhone);
 
     if (!isValidPhone) {
       skippedRecords.push({
@@ -990,7 +1275,7 @@ export async function bulkImportMembersToFirestore(
         memberId: rawId,
         fullName: rawName,
         phone: rawPhone || 'N/A',
-        reason: `Invalid Phone Number: '${rawPhone}'. Must be exactly 10 digits starting with 09 (ትክክለኛ 10 አሃዝ በ09 የሚጀምር ስልክ መሆን አለበት)`,
+        reason: `Invalid Phone Number: '${rawPhone}'. Must be a valid phone number (09... or international e.g. +966...) (ትክክለኛ ስልክ ቁጥር መሆን አለበት)`,
       });
       continue;
     }
@@ -1138,10 +1423,32 @@ export async function saveContributionToFirestore(contribution: Contribution): P
  * Delete a Contribution from Firestore
  */
 export async function deleteContributionFromFirestore(contributionId: string): Promise<void> {
-  await safeClientFirestoreWrite(
-    () => deleteDoc(doc(db, CONTRIBUTIONS_COLLECTION, contributionId)),
-    `deleting contribution ${contributionId}`
-  );
+  // 1. Delete from Firestore client SDK directly
+  try {
+    await safeClientFirestoreWrite(
+      () => deleteDoc(doc(db, CONTRIBUTIONS_COLLECTION, contributionId)),
+      `deleting contribution ${contributionId}`
+    );
+  } catch (clientErr) {
+    console.warn('[Firestore] Client delete error:', clientErr);
+  }
+
+  // 2. Synchronize deletion with server endpoint if online
+  if (typeof navigator === 'undefined' || navigator.onLine) {
+    try {
+      const res = await fetch(`/api/contributions/${encodeURIComponent(contributionId)}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!res.ok) {
+        console.warn(`[API] Server delete returned status ${res.status}`);
+      }
+    } catch (apiErr) {
+      console.warn('[API] Delete contribution fetch notice (offline/local):', apiErr);
+    }
+  }
 }
 
 /**

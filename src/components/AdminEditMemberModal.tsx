@@ -76,6 +76,7 @@ export const AdminEditMemberModal: React.FC<AdminEditMemberModalProps> = ({
   const [monthlyPaid, setMonthlyPaid] = useState<boolean>(isCurrentlyMonthlyPaid);
   const [genPaid, setGenPaid] = useState<boolean>(isCurrentlyGenPaid);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     if (member) {
@@ -206,11 +207,10 @@ export const AdminEditMemberModal: React.FC<AdminEditMemberModalProps> = ({
                 </label>
                 <input
                   type="tel"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
+                  inputMode="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="0911234567"
+                  placeholder="0911234567 ወይም +966..."
                   className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-300 text-sm font-mono text-neutral-900 focus:ring-2 focus:ring-emerald-700/30 focus:border-emerald-700 transition-all"
                 />
               </div>
@@ -387,23 +387,38 @@ export const AdminEditMemberModal: React.FC<AdminEditMemberModalProps> = ({
             {/* Footer Buttons */}
             <div className="pt-3 border-t border-neutral-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
               {onDeleteMember ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const confirmed = window.confirm(
-                      `⚠️ እርግጠኛ ነዎት? "${member.fullName}" (${member.id}) የተባሉትን አባል ከዝርዝር ውስጥ ሙሉ በሙሉ መሰረዝ ይፈልጋሉ?\n\nይህ አባል በስህተት የተመዘገበ ከሆነ አዎ በማለት ማጥፋት ይችላሉ።`
-                    );
-                    if (confirmed) {
-                      onDeleteMember(member.id);
-                      onClose();
-                    }
-                  }}
-                  className="px-3.5 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-bold text-xs transition-colors inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
-                  title="በስህተት የተመዘገበ አባል ሰርዝ"
-                >
-                  <Trash2 className="w-4 h-4 text-red-600" />
-                  <span>ይህን አባል ሰርዝ (Delete Member)</span>
-                </button>
+                confirmDelete ? (
+                  <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-1.5">
+                    <span className="text-[11px] font-bold text-red-700 px-1">እርግጠኛ ነዎት?</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onDeleteMember(member.id);
+                        onClose();
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
+                    >
+                      አዎ፣ ሰርዝ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDelete(false)}
+                      className="px-2 py-1.5 rounded-lg border border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-100 font-medium text-xs transition-colors cursor-pointer"
+                    >
+                      ተመለስ
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDelete(true)}
+                    className="px-3.5 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-bold text-xs transition-colors inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                    title="በስህተት የተመዘገበ አባል ሰርዝ"
+                  >
+                    <Trash2 className="w-4 h-4 text-red-600" />
+                    <span>ይህን አባል ሰርዝ (Delete Member)</span>
+                  </button>
+                )
               ) : (
                 <div />
               )}

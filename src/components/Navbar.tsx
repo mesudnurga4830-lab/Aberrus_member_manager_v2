@@ -73,10 +73,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const handleGoogleAuth = async () => {
     if (googleUser) {
-      if (confirm(`ከGoogle መለያዎ (${googleUser.email}) መውጣት ይፈልጋሉ?`)) {
-        await logoutGoogle();
-        setGoogleUser(null);
-      }
+      await logoutGoogle();
+      setGoogleUser(null);
       return;
     }
     setIsGoogleSigningIn(true);

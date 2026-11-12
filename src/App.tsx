@@ -45,6 +45,7 @@ import { DataCorrectionView } from './components/DataCorrectionView';
 import { TelegramDispatchModal } from './components/TelegramDispatchModal';
 import { BulkImportModal } from './components/BulkImportModal';
 import { AdminMemberPaymentManagerModal } from './components/AdminMemberPaymentManagerModal';
+import { NetworkStatusIndicator } from './components/NetworkStatusIndicator';
 import { getCurrentEthiopianDate, getEthiopianMonthName } from './utils/ethiopianCalendar';
 import {
   auth,
@@ -161,17 +162,24 @@ export default function App() {
         // Member Login: dummy email is <phone>@abarrus.local
         let phone = '';
         if (email.endsWith('@abarrus.local')) {
-          phone = normalizePhoneNumber(email.replace('@abarrus.local', ''));
+          phone = email.replace('@abarrus.local', '');
         }
 
         try {
           const matchedMem = await getMemberByAuthUidOrPhone(firebaseUser.uid, phone);
           if (matchedMem) {
-            // Verify phone and phoneNumber in Firestore document
-            if (phone && (!matchedMem.phone || matchedMem.phone !== phone || !matchedMem.authUid || matchedMem.authUid !== firebaseUser.uid)) {
-              matchedMem.phone = phone;
-              (matchedMem as any).phoneNumber = phone;
+            // Keep existing valid phone number on member if present, or fill if empty
+            let shouldSave = false;
+            if (!matchedMem.phone && phone) {
+              matchedMem.phone = normalizePhoneNumber(phone);
+              (matchedMem as any).phoneNumber = matchedMem.phone;
+              shouldSave = true;
+            }
+            if (!matchedMem.authUid || matchedMem.authUid !== firebaseUser.uid) {
               matchedMem.authUid = firebaseUser.uid;
+              shouldSave = true;
+            }
+            if (shouldSave) {
               await saveMemberToFirestore(matchedMem);
             }
 
@@ -388,7 +396,12 @@ export default function App() {
   const handleDeleteContribution = async (id: string) => {
     deleteContribution(id);
     setContributions(getContributions());
-    await deleteContributionFromFirestore(id);
+    try {
+      await deleteContributionFromFirestore(id);
+    } catch (err) {
+      console.warn('[Firestore] Error deleting contribution from Firestore:', err);
+    }
+    setContributions(getContributions());
   };
 
   const handleDeleteMember = async (id: string) => {
@@ -1075,6 +1088,9 @@ export default function App() {
           onClose={() => setTelegramDispatchPayload(null)}
         />
       )}
+
+      {/* Offline / Online Network Status Indicator & Firestore Auto-Sync Banner */}
+      <NetworkStatusIndicator />
     </div>
   );
 }

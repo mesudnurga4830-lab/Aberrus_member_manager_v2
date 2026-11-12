@@ -698,9 +698,8 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
                 <label className="block text-[11px] text-emerald-200 mb-1">ስልክ ቁጥር (Phone)</label>
                 <input
                   type="tel"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  placeholder="0911234567"
+                  inputMode="tel"
+                  placeholder="0911234567 ወይም +966..."
                   value={editPhone}
                   onChange={(e) => setEditPhone(e.target.value)}
                   className="w-full text-xs rounded-xl bg-white/10 border border-white/20 text-white px-3 py-2 font-mono"

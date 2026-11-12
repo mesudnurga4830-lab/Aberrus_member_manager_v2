@@ -91,6 +91,11 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
   const [isExporting, setIsExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
 
+  // In-app delete confirmation state (no browser confirm dialogs in iframe)
+  const [paymentToDelete, setPaymentToDelete] = useState<Contribution | null>(null);
+  const [isDeletingPayment, setIsDeletingPayment] = useState<boolean>(false);
+  const [deleteNotice, setDeleteNotice] = useState<string | null>(null);
+
   // Notification logs state
   const [notificationLogs, setNotificationLogs] = useState<NotificationLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState<boolean>(false);
@@ -104,6 +109,31 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
   const [gmailBody, setGmailBody] = useState('');
   const [isSendingGmail, setIsSendingGmail] = useState(false);
   const [gmailStatusNotice, setGmailStatusNotice] = useState<string | null>(null);
+
+  // Execute payment deletion
+  const handleConfirmDeleteContribution = async () => {
+    if (!paymentToDelete) return;
+    const c = paymentToDelete;
+    setIsDeletingPayment(true);
+    try {
+      // 1. Optimistically update local view
+      setLiveContributions((prev) => prev.filter((item) => item.id !== c.id));
+      // 2. Call parent callback
+      onDeleteContribution(c.id);
+      // 3. Delete from Firestore & server API
+      await deleteContributionFromFirestore(c.id);
+      setDeleteNotice(`የክፍያ መዝገብ "${c.id}" (${c.type}) በተሳካ ሁኔታ ተሰርዟል!`);
+      setPaymentToDelete(null);
+      setTimeout(() => setDeleteNotice(null), 4000);
+    } catch (err: any) {
+      console.error('Error deleting contribution:', err);
+      // Rollback on error
+      setLiveContributions((prev) => [c, ...prev]);
+      alert('ክፍያውን መሰረዝ አልተቻለም፡ ' + (err?.message || 'Error'));
+    } finally {
+      setIsDeletingPayment(false);
+    }
+  };
 
   useEffect(() => {
     const unsub = initGoogleAuth(
@@ -1184,14 +1214,9 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
                               <FileText className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={async () => {
-                                if (confirm(`ክፍያ ቁጥር ${c.id} ይሰረዝ?`)) {
-                                  onDeleteContribution(c.id);
-                                  await deleteContributionFromFirestore(c.id);
-                                }
-                              }}
-                              className="p-1.5 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                              title="ክፍያ ሰርዝ"
+                              onClick={() => setPaymentToDelete(c)}
+                              className="p-1.5 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                              title="ክፍያ ሰርዝ (Delete Payment)"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -1260,12 +1285,10 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
                   </button>
                   <button
                     onClick={async () => {
-                      if (confirm('ከGoogle/Gmail መለያዎ መውጣት ይፈልጋሉ?')) {
-                        await logoutGoogle();
-                        setGoogleUser(null);
-                      }
+                      await logoutGoogle();
+                      setGoogleUser(null);
                     }}
-                    className="px-2.5 py-1.5 rounded-lg border border-neutral-300 text-neutral-600 hover:bg-neutral-100 text-xs font-medium transition-colors"
+                    className="px-2.5 py-1.5 rounded-lg border border-neutral-300 text-neutral-600 hover:bg-neutral-100 text-xs font-medium transition-colors cursor-pointer"
                   >
                     ውጣ
                   </button>
@@ -1589,11 +1612,6 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
                 type="button"
                 disabled={isSendingGmail || !gmailRecipient.trim()}
                 onClick={async () => {
-                  const confirmed = window.confirm(
-                    `እርግጠኛ ነዎት ይህን መልዕክት ወደ "${gmailRecipient}" በGmail መለያዎ (${googleUser?.email}) በኩል መላክ ይፈልጋሉ?`
-                  );
-                  if (!confirmed) return;
-
                   setIsSendingGmail(true);
                   setGmailStatusNotice(null);
                   try {
@@ -1621,6 +1639,97 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
                   <>
                     <Mail className="w-3.5 h-3.5" />
                     <span>ላክ (Send with Gmail)</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Delete Notification Banner */}
+      {deleteNotice && (
+        <div className="fixed bottom-6 right-6 z-60 bg-emerald-900 text-white text-xs font-bold px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 border border-emerald-700 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <Check className="w-4 h-4 text-emerald-400" />
+          <span>{deleteNotice}</span>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal Overlay */}
+      {paymentToDelete && (
+        <div className="fixed inset-0 z-60 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-red-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 text-red-600 mb-4">
+              <div className="p-3 bg-red-100 rounded-xl">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-neutral-900">
+                  የክፍያ መዝገብ ይሰረዝ? (Delete Payment)
+                </h3>
+                <p className="text-xs text-neutral-500">
+                  በስህተት የተመዘገበ ክፍያን ከዳታቤዝ የመሰረዝ ማረጋገጫ
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-red-50/70 border border-red-200 rounded-xl p-3.5 space-y-2 text-xs mb-5">
+              <div className="flex justify-between">
+                <span className="text-neutral-600 font-medium">የአባል ስም፡</span>
+                <span className="font-bold text-neutral-900">{paymentToDelete.memberName} ({paymentToDelete.memberId})</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-600 font-medium">የክፍያ ዓይነት፡</span>
+                <span className="font-bold text-neutral-900">{paymentToDelete.type}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-600 font-medium">ወር / ዓ.ም፡</span>
+                <span className="font-semibold text-neutral-900">
+                  {paymentToDelete.type === 'ትውልድ'
+                    ? 'የትውልድ መዋጮ'
+                    : `${paymentToDelete.ethiopianMonthName || paymentToDelete.ethiopianMonth || ''} ${paymentToDelete.ethiopianYear || ''} ዓ.ም`}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-600 font-medium">የተከፈለ መጠን፡</span>
+                <span className="font-mono font-bold text-red-700">
+                  {Number(paymentToDelete.paidAmount || paymentToDelete.amount || 0).toLocaleString()} ብር
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-600 font-medium">የክፍያ መለያ (ID)፡</span>
+                <span className="font-mono text-[10px] text-neutral-500">{paymentToDelete.id}</span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-neutral-500 mb-5 leading-relaxed">
+              ⚠️ ይህ ድርጊት የተሳሳተውን የክፍያ መዝገብ ከFirestore 'contributions' ዳታቤዝ ላይ ሙሉ በሙሉ ይሰርዘዋል።
+            </p>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                disabled={isDeletingPayment}
+                onClick={() => setPaymentToDelete(null)}
+                className="px-4 py-2.5 rounded-xl border border-neutral-300 text-neutral-700 hover:bg-neutral-100 text-xs font-semibold transition-colors cursor-pointer"
+              >
+                ተመለስ (Cancel)
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingPayment}
+                onClick={handleConfirmDeleteContribution}
+                className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {isDeletingPayment ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>በመሰረዝ ላይ...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>አዎ፣ ሙሉ በሙሉ ሰርዝ (Delete)</span>
                   </>
                 )}
               </button>
