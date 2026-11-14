@@ -9,7 +9,13 @@ export type ContributionType = 'ወርሃዊ' | 'ትውልድ' | 'ልዩ'; // Mo
 
 export type ContributionStatus = 'ተከፍሏል' | 'ያልተከፈለ' | 'ከፊል' | 'Pending' | 'Paid'; // Paid, Unpaid, Partial, Pending Admin Approval
 
-export type PaymentMethod = 'የኢትዮጵያ ንግድ ባንክ (CBE)' | 'ጥሬ ገንዘብ (Cash)' | 'ሌላ' | 'ቴሌብር (Telebirr)' | 'አዋሽ ባንክ (Awash)';
+export type PaymentMethod =
+  | 'የኢትዮጵያ ንግድ ባንክ (CBE)'
+  | 'ጥሬ ገንዘብ (Cash)'
+  | 'ሌላ'
+  | 'ቴሌብር (Telebirr)'
+  | 'አዋሽ ባንክ (Awash)'
+  | 'Credit Wallet (ቀሪ ሂሳብ)';
 
 export type UserRole = 'admin' | 'family_head' | 'member';
 
@@ -32,6 +38,7 @@ export interface Member {
   loginToken?: string; // Unique secure token for member login
   telegramId?: string | number; // Telegram Chat/User ID for notifications
   authUid?: string; // Firebase Authentication UID
+  walletBalance?: number; // የአባሉ የቀሪ ሂሳብ (Remaining Credit Balance from Batch Payments in ETB)
 }
 
 export interface Family {
@@ -78,6 +85,37 @@ export interface Contribution {
   beneficiaryName?: string; // The selected member's full name
   isProxyPayment?: boolean; // Whether paid on behalf of someone else
   slipPhoto?: string | null; // Attached receipt image URL or base64
+  // Batch Payment Master Receipt linking
+  masterReceiptId?: string; // Link to MasterReceipt.id
+  masterReceiptNumber?: string; // Human-readable Master Receipt number
+}
+
+export type MasterReceiptStatus =
+  | 'Pending'
+  | 'Partially Allocated'
+  | 'Fully Allocated'
+  | 'Credited to Wallet';
+
+export interface MasterReceipt {
+  id: string; // e.g. MREC-17315...
+  receiptNumber: string; // e.g. BATCH-2018-4821
+  payerId: string; // Member ID who deposited the lump sum
+  payerName: string;
+  familyId: string;
+  familyName: string;
+  totalAmount: number; // Total deposited amount (e.g. 10000)
+  allocatedAmount: number; // Total distributed so far
+  remainingBalance: number; // totalAmount - allocatedAmount
+  paymentMethod: PaymentMethod;
+  transactionRef: string;
+  slipPhoto?: string | null;
+  status: MasterReceiptStatus;
+  walletCredited: boolean; // True once payer's walletBalance has been credited
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: 'member' | 'admin';
+  allocationsCount?: number;
 }
 
 export interface LeadershipRoleAssignee {

@@ -20,7 +20,8 @@
         "isMinor": { "type": "boolean", "description": "Whether member is under 18" },
         "isSpouse": { "type": "boolean", "description": "Whether member is spouse" },
         "joinedDate": { "type": "string", "description": "Date joined" },
-        "notes": { "type": "string", "description": "Administrative notes" }
+        "notes": { "type": "string", "description": "Administrative notes" },
+        "walletBalance": { "type": "number", "description": "Member remaining credit wallet balance in ETB" }
       },
       "required": ["id", "fullName", "generation", "familyId", "familyName", "phone", "loginToken"]
     },
@@ -54,9 +55,37 @@
         "beneficiaryId": { "type": "string", "description": "Member ID of recipient beneficiary" },
         "beneficiaryName": { "type": "string", "description": "Full name of recipient beneficiary" },
         "isProxyPayment": { "type": "boolean", "description": "Whether this payment was made for someone else" },
-        "slipPhoto": { "type": "string", "description": "Receipt image or screenshot" }
+        "slipPhoto": { "type": "string", "description": "Receipt image or screenshot" },
+        "masterReceiptId": { "type": "string", "description": "Parent Master Receipt ID for batch allocations" },
+        "masterReceiptNumber": { "type": "string", "description": "Parent Master Receipt display code" }
       },
       "required": ["id", "memberId", "type", "ethiopianMonth", "ethiopianYear", "amount", "paidAmount", "status"]
+    },
+    "MasterReceipt": {
+      "title": "MasterReceipt",
+      "description": "Batch/lump-sum payment receipt that can be allocated across multiple members and contribution types",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique Master Receipt ID" },
+        "receiptNumber": { "type": "string", "description": "Master Receipt reference code" },
+        "payerId": { "type": "string", "description": "Member ID of payer" },
+        "payerName": { "type": "string", "description": "Full name of payer" },
+        "familyId": { "type": "string", "description": "Family ID of payer" },
+        "familyName": { "type": "string", "description": "Family Name of payer" },
+        "totalAmount": { "type": "number", "description": "Total lump-sum amount deposited" },
+        "allocatedAmount": { "type": "number", "description": "Amount allocated across contributions" },
+        "remainingBalance": { "type": "number", "description": "Remaining unallocated credit balance" },
+        "paymentMethod": { "type": "string", "description": "Payment method" },
+        "transactionRef": { "type": "string", "description": "Bank transaction reference" },
+        "slipPhoto": { "type": "string", "description": "Receipt image URL or base64" },
+        "status": { "type": "string", "description": "Allocation status" },
+        "walletCredited": { "type": "boolean", "description": "Whether payer wallet balance was credited" },
+        "notes": { "type": "string", "description": "Optional notes" },
+        "createdAt": { "type": "string", "description": "Creation ISO timestamp" },
+        "updatedAt": { "type": "string", "description": "Update ISO timestamp" },
+        "allocationsCount": { "type": "number", "description": "Number of linked child contributions" }
+      },
+      "required": ["id", "receiptNumber", "payerId", "totalAmount", "allocatedAmount", "remainingBalance", "status"]
     },
     "Family": {
       "title": "Family",
@@ -143,6 +172,10 @@
     "/contributions/{contributionId}": {
       "schema": "Contribution",
       "description": "Monthly and generation payment records"
+    },
+    "/masterReceipts/{receiptId}": {
+      "schema": "MasterReceipt",
+      "description": "Master lump-sum batch receipts and remaining wallet balance tracking"
     },
     "/families/{familyId}": {
       "schema": "Family",

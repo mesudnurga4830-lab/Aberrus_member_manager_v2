@@ -131,8 +131,157 @@ export function getFamilyHeadDirectChatUrl(family: Family): string {
 }
 
 /**
+ * Formats an individual payment receipt message for Telegram according to strict rules:
+ * - Monthly ('ወርሃዊ'): Shows ONLY paid amount, month name, and payment date (NO remaining balance).
+ * - Generation ('ትውልድ'): Shows paid amount, date, Total Paid, and Remaining Balance
+ *   (Total Expected Generation Contribution - Total Paid Generation Contribution).
+ */
+export function formatSinglePaymentTelegramReport(
+  contribution: Contribution,
+  member: Member | undefined,
+  allContributions: Contribution[] = getContributions(),
+  settings: SettingsRates = getSettings()
+): string {
+  const paidAmt = Number(contribution.paidAmount ?? contribution.amount ?? 0);
+  const datePaid =
+    contribution.datePaid || new Date().toLocaleDateString('am-ET');
+  const memberName = member?.fullName || contribution.memberName || 'አባል';
+  const memberId = member?.id || contribution.memberId;
+
+  if (contribution.type === 'ትውልድ') {
+    const genStats = member
+      ? getMemberGenContributionStats(member, settings, allContributions)
+      : (() => {
+          const genContribs = allContributions.filter(
+            (c) =>
+              c.memberId === memberId &&
+              c.type === 'ትውልድ' &&
+              (c.status === 'ተከፍሏል' ||
+                c.status === 'ከፊል' ||
+                String(c.status).toLowerCase() === 'paid' ||
+                String(c.status).toLowerCase() === 'partial')
+          );
+          const paidSoFar = genContribs.reduce(
+            (sum, c) => sum + Number(c.paidAmount ?? c.amount ?? 0),
+            0
+          );
+          const expectedAmount =
+            settings.generationPayment[contribution.generation] ?? 500;
+          return {
+            expectedAmount,
+            paidSoFar,
+            remainingBalance: Math.max(expectedAmount - paidSoFar, 0),
+          };
+        })();
+
+    return `🏛️ የአበሩስ አንድነት ማህበር — የትውልድ መዋጮ የክፍያ ሪፖርት
+━━━━━━━━━━━━━━━━━━━━
+👤 አባል፦ ${memberName} (${memberId})
+🏷️ የክፍያ ዓይነት፦ የትውልድ መዋጮ
+💵 የተከፈለ መጠን፦ ${paidAmt.toLocaleString()} ብር
+📅 የክፍያ ቀን፦ ${datePaid}
+
+📊 የትውልድ መዋጮ ማጠቃለያ፦
+• ጠቅላላ የተከፈለ (Total Paid)፦ ${genStats.paidSoFar.toLocaleString()} ብር
+• ቀሪ መዋጮ (Remaining Balance)፦ ${genStats.remainingBalance.toLocaleString()} ብር
+━━━━━━━━━━━━━━━━━━━━
+— የአበሩስ አንድነት ማህበር`;
+  }
+
+  // Monthly contribution ('ወርሃዊ') — STRICTLY NO remaining balance!
+  const monthName =
+    contribution.ethiopianMonthName ||
+    getEthiopianMonthName(contribution.ethiopianMonth || 11);
+  const year = contribution.ethiopianYear || 2018;
+
+  return `🏛️ የአበሩስ አንድነት ማህበር — የወርሃዊ መዋጮ የክፍያ ሪፖርት
+━━━━━━━━━━━━━━━━━━━━
+👤 አባል፦ ${memberName} (${memberId})
+🏷️ የክፍያ ዓይነት፦ ወርሃዊ መዋጮ
+💵 የተከፈለው መጠን፦ ${paidAmt.toLocaleString()} ብር
+📅 የወሩ ስም፦ ${monthName} ${year} ዓ.ም
+🗓️ የክፍያ ቀን፦ ${datePaid}
+━━━━━━━━━━━━━━━━━━━━
+— የአበሩስ አንድነት ማህበር`;
+}
+
+export interface BulkTelegramPaymentItem {
+  member: Member;
+  type: Contribution['type'];
+  amount: number;
+  ethiopianMonth?: number;
+  ethiopianMonthName?: string;
+  ethiopianYear?: number;
+  datePaid?: string;
+}
+
+/**
+ * Formats a bulk/batch payment report for Telegram:
+ * - For each member in the list:
+ *   - If Generation ('ትውልድ'): appends `ቀሪ፡ X ብር` (Total Expected Gen - Total Paid Gen).
+ *   - If Monthly ('ወርሃዊ'): shows ONLY paid amount, month name, and payment date; NO remaining info.
+ */
+export function formatBulkPaymentTelegramReport(params: {
+  payer?: Member | null;
+  items: BulkTelegramPaymentItem[];
+  allContributions?: Contribution[];
+  settings?: SettingsRates;
+  masterReceiptNumber?: string;
+  title?: string;
+}): string {
+  const {
+    payer,
+    items,
+    allContributions = getContributions(),
+    settings = getSettings(),
+    masterReceiptNumber,
+    title = 'የጅምላ ክፍያ ሪፖርት (Bulk Payment Report)',
+  } = params;
+
+  const totalAmount = items.reduce((s, i) => s + Number(i.amount || 0), 0);
+  const todayStr = new Date().toLocaleDateString('am-ET');
+
+  const lines = items.map((item, idx) => {
+    const datePaid = item.datePaid || todayStr;
+    if (item.type === 'ትውልድ') {
+      const genStats = getMemberGenContributionStats(
+        item.member,
+        settings,
+        allContributions
+      );
+      return `${idx + 1}. ${item.member.fullName} — የትውልድ መዋጮ፡ ${Number(item.amount).toLocaleString()} ብር | ቀን፡ ${datePaid} | ጠቅላላ የተከፈለ፡ ${genStats.paidSoFar.toLocaleString()} ብር | ቀሪ፡ ${genStats.remainingBalance.toLocaleString()} ብር`;
+    }
+
+    const monthName =
+      item.ethiopianMonthName ||
+      getEthiopianMonthName(item.ethiopianMonth || 11);
+    const year = item.ethiopianYear || 2018;
+    return `${idx + 1}. ${item.member.fullName} — ወርሃዊ (${monthName} ${year} ዓ.ም)፡ ${Number(item.amount).toLocaleString()} ብር · የክፍያ ቀን፡ ${datePaid}`;
+  });
+
+  const payerLine = payer
+    ? `💳 ከፋይ አባል፦ ${payer.fullName} (${payer.id})\n`
+    : '';
+  const receiptLine = masterReceiptNumber
+    ? `🧾 የዋና ደረሰኝ ቁጥር፦ ${masterReceiptNumber}\n`
+    : '';
+
+  return `🏛️ የአበሩስ አንድነት ማህበር
+📋 ${title}
+━━━━━━━━━━━━━━━━━━━━
+${payerLine}${receiptLine}👥 የተከፈለላቸው አባላት ብዛት፦ ${items.length}
+💰 ጠቅላላ የተከፈለ መጠን፦ ${totalAmount.toLocaleString()} ብር
+📅 ቀን፦ ${todayStr}
+
+📌 የአባላት ክፍያ ዝርዝር፦
+${lines.join('\n') || '• ምንም ክፍያ አልተመዘገበም'}
+━━━━━━━━━━━━━━━━━━━━
+— የአበሩስ አንድነት ማህበር`;
+}
+
+/**
  * Generates an up-to-date shareable message and deep-link for a member.
- * Includes complete updated payment history (monthly + generation) and excludes Pagumen completely.
+ * Includes monthly payments (no remaining balance) and generation stats (Total Paid + Remaining Balance).
  */
 export function shareAppLinkToMember(
   member: Member,
@@ -164,32 +313,45 @@ export function shareAppLinkToMember(
     totalPaidSoFar = monthlyPaid;
 
     const paidMonthsText = monthlyCons.length > 0
-      ? monthlyCons.map((c) => `${getEthiopianMonthName(c.ethiopianMonth)} ${c.ethiopianYear}`).join('፣ ')
+      ? monthlyCons
+          .map(
+            (c) =>
+              `${getEthiopianMonthName(c.ethiopianMonth)} ${c.ethiopianYear}${c.datePaid ? ` (${c.datePaid})` : ''}`
+          )
+          .join('፣ ')
       : 'እስካሁን አልተመዘገበም';
 
     statusSection = `💍 ሁኔታ፡ የአባል የትዳር አጋር
-• ወርሃዊ መዋጮ፡ 100 ብር በወር
+• ወርሃዊ መዋጮ፡ ${monthlyRate} ብር በወር
 • ከትውልድ መዋጮ ሙሉ በሙሉ ነፃ
 • የተከፈሉ ወራት፡ ${paidMonthsText}
-• ጠቅላላ የተከፈለ ወርሃዊ፡ ${monthlyPaid} ብር`;
+• የተከፈለ ወርሃዊ መጠን፡ ${monthlyPaid.toLocaleString()} ብር`;
   } else {
-    // Standard Member
+    // Standard Member: Monthly shows ONLY paid amount, months & dates (ZERO remaining balance).
+    // Generation shows Total Paid and Remaining Balance (Total Expected Gen - Total Paid Gen).
     const monthlyCons = memberCons.filter((c) => c.type === 'ወርሃዊ' && (c.status === 'ተከፍሏል' || c.status === 'ከፊል'));
     const monthlyPaid = monthlyCons.reduce((sum, c) => sum + (c.paidAmount || 0), 0);
 
     const paidMonthsText = monthlyCons.length > 0
-      ? monthlyCons.map((c) => `${getEthiopianMonthName(c.ethiopianMonth)} ${c.ethiopianYear}`).join('፣ ')
+      ? monthlyCons
+          .map(
+            (c) =>
+              `${getEthiopianMonthName(c.ethiopianMonth)} ${c.ethiopianYear}${c.datePaid ? ` (${c.datePaid})` : ''}`
+          )
+          .join('፣ ')
       : 'እስካሁን አልተመዘገበም';
 
     const genStats = getMemberGenContributionStats(member, settings, allContributions);
     totalPaidSoFar = monthlyPaid + genStats.paidSoFar;
 
     statusSection = `📊 የወቅቱ ክፍያ ታሪክ፡
-• ወርሃዊ ተመን፡ ${monthlyRate} ብር/ወር
-• የተከፈሉ ወራት፡ ${paidMonthsText}
-• የተከፈለ ወርሃዊ ድምር፡ ${monthlyPaid} ብር
-• የትውልድ መዋጮ ግዴታ፡ ${genStats.expectedAmount} ብር
-• የትውልድ የተከፈለ፡ ${genStats.paidSoFar} ብር (ቀሪ፡ ${genStats.remainingBalance} ብር | ${genStats.status})`;
+• የተከፈሉ ወራት (ወርሃዊ)፡ ${paidMonthsText}
+• የተከፈለ ወርሃዊ መጠን፡ ${monthlyPaid.toLocaleString()} ብር
+
+🏛️ የትውልድ መዋጮ፡
+• Total Expected: ${genStats.expectedAmount.toLocaleString()} ብር
+• Total Paid (ጠቅላላ የተከፈለ)፡ ${genStats.paidSoFar.toLocaleString()} ብር
+• Remaining Balance (ቀሪ መዋጮ)፡ ${genStats.remainingBalance.toLocaleString()} ብር (${genStats.status})`;
   }
 
   const text = `ሰላም ${member.fullName}፤
@@ -202,7 +364,7 @@ export function shareAppLinkToMember(
 • የክፍያ መጀመሪያ ቀን፡ ሀምሌ 01፣ 2018 ዓ.ም
 
 ${statusSection}
-• አጠቃላይ የተከፈለ ድምር፡ ${totalPaidSoFar} ብር
+• አጠቃላይ የተከፈለ ድምር፡ ${totalPaidSoFar.toLocaleString()} ብር
 
 📲 የግል መረጃዎንና ዲጂታል ካርድዎን በቀጥታ በስልክዎ ለመክፈት፡
 👉 ${directUrl}
@@ -224,12 +386,16 @@ ${statusSection}
 
 /**
  * Generates an up-to-date shareable message and deep-link for a family representative.
+ * Monthly section shows ONLY paid amount, month name, and payment dates (ZERO remaining info).
+ * Generation section shows Total Paid and Remaining Balance (Expected - Total Paid Gen).
  */
 export function shareAppLinkToFamilyHead(
   family: Family,
   allMembers: Member[] = [],
   allContributions: Contribution[] = getContributions(),
-  settings: SettingsRates = getSettings()
+  settings: SettingsRates = getSettings(),
+  reportMonth: number = 11,
+  reportYear: number = 2018
 ): {
   url: string;
   directUrl: string;
@@ -243,112 +409,118 @@ export function shareAppLinkToFamilyHead(
   const directChatUrl = getFamilyHeadDirectChatUrl(family);
   const phoneTelegramUrl = getTelegramPhoneUrl(family.phone || '');
 
+  const monthName = getEthiopianMonthName(reportMonth);
+
   // Calculate family aggregates if members provided
   const familyMembers = allMembers.filter((m) => m.familyId === family.id);
-  const activeContributingCount = familyMembers.filter((m) => !m.isMinor).length;
-  const minorsCount = familyMembers.filter((m) => m.isMinor).length;
-
   const familyCons = allContributions.filter((c) => c.familyId === family.id);
-  const monthlyCollected = familyCons
-    .filter((c) => c.type === 'ወርሃዊ' && (c.status === 'ተከፍሏል' || c.status === 'ከፊል'))
-    .reduce((sum, c) => sum + (c.paidAmount || 0), 0);
-  const genCollected = familyCons
-    .filter((c) => c.type === 'ትውልድ' && (c.status === 'ተከፍሏል' || c.status === 'ከፊል'))
-    .reduce((sum, c) => sum + (c.paidAmount || 0), 0);
 
-  // Calculate detailed monthly and generation members for family
-  const monthCons = familyCons.filter((c) => c.type === 'ወርሃዊ');
-  const paidMonthlyMembers = familyMembers.filter((m) => {
-    const c = monthCons.find((con) => con.memberId === m.id);
-    const st = String(c?.status || '').toLowerCase();
-    return st === 'ተከፍሏል' || st === 'paid' || st === 'completed';
+  // 1. Monthly contributions for this period (NO remaining balance!)
+  const monthCons = familyCons.filter(
+    (c) =>
+      c.type === 'ወርሃዊ' &&
+      Number(c.ethiopianMonth) === reportMonth &&
+      Number(c.ethiopianYear) === reportYear
+  );
+  const paidMonthlyCons = monthCons.filter((c) => {
+    const st = String(c.status || '').toLowerCase();
+    return st === 'ተከፍሏል' || st === 'paid' || st === 'completed' || st === 'ከፊል' || st === 'partial';
   });
-  const unpaidMonthlyMembers = familyMembers.filter((m) => {
-    if (m.isMinor) return false;
-    const c = monthCons.find((con) => con.memberId === m.id);
-    const st = String(c?.status || '').toLowerCase();
-    return !(st === 'ተከፍሏል' || st === 'paid' || st === 'completed');
-  });
+  const monthlyCollected = paidMonthlyCons.reduce(
+    (sum, c) => sum + (c.paidAmount || 0),
+    0
+  );
 
-  const genCons = familyCons.filter((c) => c.type === 'ትውልድ');
-  const paidGenMembers = familyMembers.filter((m) => {
-    const c = genCons.find((con) => con.memberId === m.id);
-    const st = String(c?.status || '').toLowerCase();
-    return st === 'ተከፍሏል' || st === 'paid';
-  });
-  const unpaidGenMembers = familyMembers.filter((m) => {
-    if (m.isMinor || m.isSpouse) return false;
-    const c = genCons.find((con) => con.memberId === m.id);
-    const st = String(c?.status || '').toLowerCase();
-    return !(st === 'ተከፍሏል' || st === 'paid');
-  });
+  const paidMonthlyMemberIds = new Set(
+    paidMonthlyCons
+      .filter((c) => {
+        const st = String(c.status || '').toLowerCase();
+        return st === 'ተከፍሏል' || st === 'paid' || st === 'completed';
+      })
+      .map((c) => c.memberId)
+  );
 
-  // Grouping helper without parentheses
-  const formatGroupedByGeneration = (memberList: Member[]): string => {
-    if (!memberList || memberList.length === 0) return '';
-    const map: Record<number, Member[]> = {};
-    for (const m of memberList) {
-      const gen = Number(m.generation) || 4;
-      if (!map[gen]) map[gen] = [];
-      map[gen].push(m);
+  const paidMonthlyLines = familyMembers
+    .filter((m) => paidMonthlyMemberIds.has(m.id))
+    .map((m) => {
+      const c = paidMonthlyCons.find((con) => con.memberId === m.id);
+      const amt = Number(c?.paidAmount || c?.amount || 0);
+      const d = c?.datePaid || '—';
+      return `• ${m.fullName} — ${amt.toLocaleString()} ብር · ${monthName} ${reportYear} · ቀን፡ ${d}`;
+    })
+    .join('\n');
+
+  // 2. Generation contributions per eligible member (Total Expected - Total Paid Gen)
+  const genEligibleMembers = familyMembers.filter((m) => !m.isMinor && !m.isSpouse);
+  const paidOrPartialGenLines: string[] = [];
+  const unpaidGenMembers: Array<{ member: Member; remainingBalance: number }> = [];
+  let totalGenExpected = 0;
+  let totalGenPaid = 0;
+  let totalGenRemaining = 0;
+
+  for (const m of genEligibleMembers) {
+    const stats = getMemberGenContributionStats(m, settings, familyCons);
+    totalGenExpected += stats.expectedAmount;
+    totalGenPaid += stats.paidSoFar;
+    totalGenRemaining += stats.remainingBalance;
+
+    if (stats.paidSoFar > 0) {
+      paidOrPartialGenLines.push(
+        `• ${m.fullName} — የተከፈለ፡ ${stats.paidSoFar.toLocaleString()} ብር | ቀሪ፡ ${stats.remainingBalance.toLocaleString()} ብር`
+      );
     }
-    const gens = Object.keys(map).map(Number).sort((a, b) => a - b);
-    const sections: string[] = [];
-    for (const g of gens) {
-      const list = map[g].map((m) => `• ${m.fullName}`).join('\n');
-      sections.push(`${g}ኛ ትውልድ\n${list}`);
+    if (stats.remainingBalance > 0) {
+      unpaidGenMembers.push({ member: m, remainingBalance: stats.remainingBalance });
     }
-    return sections.join('\n\n');
-  };
-
-  const expectedMonthly = familyMembers.reduce((sum, m) => {
-    if (m.isMinor) return sum;
-    if (m.isSpouse) return sum + 100;
-    return sum + 50;
-  }, 0);
-  const monthlyRemaining = Math.max(0, expectedMonthly - monthlyCollected);
-
-  let monthlyUnpaidSection = '';
-  if (unpaidMonthlyMembers.length === 0) {
-    monthlyUnpaidSection = `❌ ያልከፈሉ፦ 0 አባላት\nሁሉም ከፍለዋል ✅`;
-  } else {
-    monthlyUnpaidSection = `❌ ያልከፈሉ፦ ${unpaidMonthlyMembers.length} አባላት\n\n` + formatGroupedByGeneration(unpaidMonthlyMembers);
   }
 
-  const paidGenLines = paidGenMembers.map((m) => {
-    const c = genCons.find((con) => con.memberId === m.id);
-    const amt = Number(c?.paidAmount || c?.amount || 0);
-    return `• ${m.fullName} — ${amt.toLocaleString()} ብር`;
-  }).join('\n');
+  const formatUnpaidGenGrouped = (): string => {
+    if (unpaidGenMembers.length === 0) return '';
+    const map: Record<number, Array<{ member: Member; remainingBalance: number }>> = {};
+    for (const entry of unpaidGenMembers) {
+      const gen = Number(entry.member.generation) || 4;
+      if (!map[gen]) map[gen] = [];
+      map[gen].push(entry);
+    }
+    const gens = Object.keys(map).map(Number).sort((a, b) => a - b);
+    return gens
+      .map((g) => {
+        const list = map[g]
+          .map((e) => `• ${e.member.fullName} — ቀሪ፡ ${e.remainingBalance.toLocaleString()} ብር`)
+          .join('\n');
+        return `${g}ኛ ትውልድ\n${list}`;
+      })
+      .join('\n\n');
+  };
 
-  const unpaidGenGrouped = formatGroupedByGeneration(unpaidGenMembers);
+  const unpaidGenGrouped = formatUnpaidGenGrouped();
 
   const text = `🏛️ የአበሩስ አንድነት ማህበር
-የወርሃዊ መዋጮ ሪፖርት
+የመዋጮ ሪፖርት
 
 ━━━━━━━━━━━━━━━
-👨👩👧👦 ቤተሰብ፦ ${family.familyName}
+👨‍👩‍👧‍👦 ቤተሰብ፦ ${family.familyName}
 🔖 ኮድ፦ ${family.id}
 👤 ወኪል፦ ${family.headName}
-📅 ወቅት፦ ሀምሌ 2018 ዓ.ም
+📅 ወቅት፦ ${monthName} ${reportYear} ዓ.ም
 👥 አባላት፦ ${familyMembers.length}
 
 ━━━━━━━━━━━━━━━
-💰 ወርሃዊ መዋጮ
-• የሚጠበቅ፦ ${expectedMonthly.toLocaleString()} ብር
-• የተሰበሰበ፦ ${monthlyCollected.toLocaleString()} ብር
-• ቀሪ፦ ${monthlyRemaining.toLocaleString()} ብር
-${monthlyUnpaidSection}
+💰 ወርሃዊ መዋጮ (${monthName} ${reportYear} ዓ.ም)
+• የተከፈለ ጠቅላላ መጠን፦ ${monthlyCollected.toLocaleString()} ብር
+• የከፈሉ አባላት (${paidMonthlyMemberIds.size})፦
+${paidMonthlyLines || '• እስካሁን የከፈለ የለም'}
 
 ━━━━━━━━━━━━━━━
 🏛️ የትውልድ መዋጮ
-• ሙሉ የከፈሉ፦ ${paidGenMembers.length}
-• ቀሪ ያልከፈሉ፦ ${unpaidGenMembers.length}
+• ጠቅላላ የሚጠበቅ (Total Expected)፦ ${totalGenExpected.toLocaleString()} ብር
+• ጠቅላላ የተከፈለ (Total Paid)፦ ${totalGenPaid.toLocaleString()} ብር
+• ቀሪ መዋጮ (Remaining Balance)፦ ${totalGenRemaining.toLocaleString()} ብር
 
-✅ የከፈሉ
-${paidGenLines || '• እስካሁን የለም'}
+✅ የከፈሉ / በከፊል የከፈሉ
+${paidOrPartialGenLines.join('\n') || '• እስካሁን የለም'}
 
-❌ ያልከፈሉ
+❌ ያልጨረሱ / ያልከፈሉ
 ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
 
 ━━━━━━━━━━━━━━━
@@ -384,7 +556,7 @@ export function shareReportToFinanceOfficer(
 ━━━━━━━━━━━━━━━━━━━━
 ክቡር ${officer.name || officer.fullName || 'ፋይናንስ ሀላፊ'}፤
 
-የማህበሩ ወቅታዊ የፋይናንስ፣ የወርሃዊ መዋጮ እና የትውልድ መዋጮ ገቢና ቀሪ እዳ ሪፖርት እንደሚከተለው ተዘጋጅቷል፦
+የማህበሩ ወቅታዊ የፋይናንስ፣ የወርሃዊ መዋጮ ገቢ እና የትውልድ መዋጮ (የተከፈለና ቀሪ) ሪፖርት እንደሚከተለው ተዘጋጅቷል፦
 
 ${reportSummary}
 

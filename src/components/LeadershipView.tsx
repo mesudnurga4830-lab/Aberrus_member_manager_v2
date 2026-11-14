@@ -30,6 +30,7 @@ import {
 } from '../utils/telegramShare';
 import { generateFinancialReportPdf } from '../utils/pdfGenerator';
 import { getCurrentEthiopianDate, formatEthiopianCurrency } from '../utils/ethiopianCalendar';
+import { getMemberGenContributionStats } from '../utils/storage';
 
 interface LeadershipViewProps {
   settings: SettingsRates;
@@ -95,17 +96,21 @@ export const LeadershipView: React.FC<LeadershipViewProps> = ({
     .reduce((sum, c) => sum + (c.paidAmount || 0), 0);
 
   // Generate standardized leadership report summary string
+  // Strictly omits Monthly remaining balance; shows Generation Total Paid & Remaining Balance.
   const generateReportSummaryText = () => {
     const paidCount = monthContributions.filter((c) => c.status === 'ተከፍሏል').length;
     const unpaidCount = activeMembers.length - paidCount;
 
+    const totalGenRemaining = members
+      .filter((m) => !m.isMinor && !m.isSpouse)
+      .reduce((sum, m) => sum + getMemberGenContributionStats(m, settings, contributions).remainingBalance, 0);
+
     return `📅 ቀን፡ ${currentDate.formatted}
 👥 ጠቅላላ አባላት፡ ${members.length} (ከ18 ዓመት በታች፡ ${totalMinors}፣ የትዳር አጋር፡ ${totalSpouses})
-✅ የሐምሌ 2018 ክፍያ የፈጸሙ፡ ${paidCount} አባላት
-⏳ ቀሪ ያልከፈሉ፡ ${unpaidCount} አባላት
+✅ የሐምሌ 2018 ወርሃዊ ክፍያ የፈጸሙ፡ ${paidCount} አባላት (ያልከፈሉ፡ ${unpaidCount})
 💰 የተሰበሰበ ወርሃዊ መዋጮ፡ ${formatEthiopianCurrency(monthlyCollected)}
-📉 ቀሪ ያልተሰበሰበ እዳ፡ ${formatEthiopianCurrency(monthlyArrears)}
-🏛️ የተሰበሰበ የትውልድ መዋጮ፡ ${formatEthiopianCurrency(genCollected)}
+🏛️ የትውልድ መዋጮ ጠቅላላ የተከፈለ (Total Paid)፡ ${formatEthiopianCurrency(genCollected)}
+📉 የትውልድ መዋጮ ቀሪ (Remaining Balance)፡ ${formatEthiopianCurrency(totalGenRemaining)}
 🏦 የCBE ይፋዊ ሂሳብ፡ 1000778285146 (Aida, Ibrahim and zebiba)`;
   };
 

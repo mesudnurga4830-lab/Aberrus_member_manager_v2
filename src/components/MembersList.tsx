@@ -27,9 +27,18 @@ import {
   Heart,
   Baby,
   FileSpreadsheet,
+  Wallet,
+  CheckSquare,
+  Coins,
 } from 'lucide-react';
-import { shareAppLinkToMember } from '../utils/telegramShare';
+import {
+  shareAppLinkToMember,
+  formatBulkPaymentTelegramReport,
+  getAppUrl,
+} from '../utils/telegramShare';
 import { AdminEditMemberModal } from './AdminEditMemberModal';
+import { BulkPaySelectedModal } from './BulkPaySelectedModal';
+import { ETHIOPIAN_MONTHS, getCurrentEthiopianDate, getEthiopianMonthName } from '../utils/ethiopianCalendar';
 import {
   getEffectiveMonthlyRate,
   getEffectiveGenRate,
@@ -46,6 +55,12 @@ interface MembersListProps {
   onOpenQR: (member: Member) => void;
   onRecordPayment: (memberId: string) => void;
   onOpenPaymentManager?: (memberId?: string, mode?: 'list' | 'add') => void;
+  onOpenBatchPayment?: (payerId?: string) => void;
+  onBulkWalletPaymentComplete?: (result: {
+    payerId: string;
+    newWalletBalance: number;
+    createdContributions: Contribution[];
+  }) => void;
   onDeleteMember: (id: string) => void;
   onUpdateMember: (id: string, updates: Partial<Member>) => void;
   onToggleMonthlyStatus: (memberId: string, month: number, year: number, markPaid: boolean) => void;
@@ -102,12 +117,18 @@ export const MembersList: React.FC<MembersListProps> = ({
   onOpenQR,
   onRecordPayment,
   onOpenPaymentManager,
+  onOpenBatchPayment,
+  onBulkWalletPaymentComplete,
   onDeleteMember,
   onUpdateMember,
   onToggleMonthlyStatus,
   onToggleGenStatus,
   onDispatchTelegram,
 }) => {
+  const currentDate = getCurrentEthiopianDate();
+  const [activeMonth, setActiveMonth] = useState<number>(currentDate.month || 11);
+  const [activeYear, setActiveYear] = useState<number>(currentDate.year || 2018);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [selectedGenFilter, setSelectedGenFilter] = useState<string>('all');
@@ -116,6 +137,19 @@ export const MembersList: React.FC<MembersListProps> = ({
   const [adminEditingMember, setAdminEditingMember] = useState<Member | null>(null);
   const [memberToDelete, setMemberToDelete] = useState<Member | null>(null);
   const [deleteNotice, setDeleteNotice] = useState<string | null>(null);
+  const [lastBulkTelegramPayload, setLastBulkTelegramPayload] = useState<{
+    name: string;
+    role: string;
+    phone: string;
+    telegram?: string;
+    messageText: string;
+    directUrl: string;
+  } | null>(null);
+
+  // Bulk selection state for Pay Selected from Credit Wallet
+  const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set());
+  const [isBulkPayModalOpen, setIsBulkPayModalOpen] = useState<boolean>(false);
+  const selectAllCheckboxRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Keyboard shortcut: press '/' to focus search input, press 'Escape' to clear
@@ -203,6 +237,73 @@ export const MembersList: React.FC<MembersListProps> = ({
     selectedFamilyFilter !== 'all' ||
     categoryTab !== 'all';
 
+  // Helper to check active month Paid status (supports both 'ተከፍሏል' and 'Paid')
+  const isMemberPaidForActiveMonth = (memberId: string): boolean => {
+    return contributions.some((c) => {
+      const m = Number(c.month ?? c.ethiopianMonth);
+      const y = Number(c.year ?? c.ethiopianYear);
+      const st = String(c.status || '').trim().toLowerCase();
+      const isPaid = st === 'paid' || st === 'ተከፍሏል';
+      return c.memberId === memberId && (!c.type || c.type === 'ወርሃዊ') && m === activeMonth && y === activeYear && isPaid;
+    });
+  };
+
+  const selectedMembersList = useMemo(
+    () => members.filter((m) => selectedMemberIds.has(m.id)),
+    [members, selectedMemberIds]
+  );
+
+  const filteredPaidCount = useMemo(
+    () => filteredMembers.filter((m) => !m.isMinor && isMemberPaidForActiveMonth(m.id)).length,
+    [filteredMembers, contributions, activeMonth, activeYear]
+  );
+
+  const filteredUnpaidCount = useMemo(
+    () => filteredMembers.filter((m) => !m.isMinor && !isMemberPaidForActiveMonth(m.id)).length,
+    [filteredMembers, contributions, activeMonth, activeYear]
+  );
+
+  const allFilteredSelected =
+    filteredMembers.length > 0 && filteredMembers.every((m) => selectedMemberIds.has(m.id));
+  const someFilteredSelected =
+    filteredMembers.some((m) => selectedMemberIds.has(m.id)) && !allFilteredSelected;
+
+  useEffect(() => {
+    if (selectAllCheckboxRef.current) {
+      selectAllCheckboxRef.current.indeterminate = someFilteredSelected;
+    }
+  }, [someFilteredSelected]);
+
+  const handleToggleSelectAllFiltered = () => {
+    setSelectedMemberIds((prev) => {
+      const next = new Set(prev);
+      if (allFilteredSelected) {
+        filteredMembers.forEach((m) => next.delete(m.id));
+      } else {
+        filteredMembers.forEach((m) => next.add(m.id));
+      }
+      return next;
+    });
+  };
+
+  const handleToggleMemberSelect = (memberId: string) => {
+    setSelectedMemberIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(memberId)) next.delete(memberId);
+      else next.add(memberId);
+      return next;
+    });
+  };
+
+  const handleSelectUnpaidFiltered = () => {
+    const unpaidIds = filteredMembers
+      .filter((m) => !m.isMinor && !isMemberPaidForActiveMonth(m.id))
+      .map((m) => m.id);
+    setSelectedMemberIds(new Set(unpaidIds));
+  };
+
+  const activeMonthName = getEthiopianMonthName(activeMonth);
+
   return (
     <div className="space-y-6">
       {/* Top Bar */}
@@ -258,19 +359,36 @@ export const MembersList: React.FC<MembersListProps> = ({
         </div>
       </div>
 
-      {/* Deletion Toast / Notice */}
+      {/* Deletion / Bulk Payment Toast / Notice */}
       {deleteNotice && (
-        <div className="bg-emerald-50 border border-emerald-300 text-emerald-900 px-4 py-3 rounded-2xl flex items-center justify-between shadow-xs animate-in fade-in slide-in-from-top-2 duration-150">
+        <div className="bg-emerald-50 border border-emerald-300 text-emerald-900 px-4 py-3 rounded-2xl flex flex-wrap items-center justify-between gap-2 shadow-xs animate-in fade-in slide-in-from-top-2 duration-150">
           <div className="flex items-center gap-2 text-xs font-bold">
             <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
             <span>{deleteNotice}</span>
           </div>
-          <button
-            onClick={() => setDeleteNotice(null)}
-            className="text-emerald-700 hover:text-emerald-900 p-1 rounded-lg hover:bg-emerald-100 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {lastBulkTelegramPayload && onDispatchTelegram && (
+              <button
+                type="button"
+                onClick={() => onDispatchTelegram(lastBulkTelegramPayload)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#229ED9] hover:bg-[#1d8cc1] text-white text-[11px] font-bold shadow-xs cursor-pointer"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>የጅምላ ክፍያ ሪፖርት በTelegram ላክ</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setDeleteNotice(null);
+                setLastBulkTelegramPayload(null);
+              }}
+              className="text-emerald-700 hover:text-emerald-900 p-1 rounded-lg hover:bg-emerald-100 transition-colors cursor-pointer"
+              aria-label="ዝጋ"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -540,19 +658,117 @@ export const MembersList: React.FC<MembersListProps> = ({
         </div>
       </div>
 
+      {/* Bulk Selection & Pay Selected Toolbar Above Table */}
+      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-emerald-900/15 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Active Month Selector for Paid / Unpaid Status Column */}
+          <div className="flex items-center gap-1.5 bg-neutral-50 border border-neutral-200 rounded-xl px-2.5 py-1.5">
+            <span className="text-[11px] font-bold text-neutral-600">የክፍያ ወር፡</span>
+            <select
+              value={activeMonth}
+              onChange={(e) => setActiveMonth(Number(e.target.value))}
+              className="text-xs font-bold text-[#1B5E20] bg-transparent outline-none cursor-pointer"
+            >
+              {ETHIOPIAN_MONTHS.map((m) => (
+                <option key={m.number} value={m.number}>
+                  {m.amharic}
+                </option>
+              ))}
+            </select>
+            <select
+              value={activeYear}
+              onChange={(e) => setActiveYear(Number(e.target.value))}
+              className="text-xs font-mono font-bold text-neutral-700 bg-transparent outline-none cursor-pointer"
+            >
+              <option value={2018}>2018</option>
+              <option value={2019}>2019</option>
+            </select>
+          </div>
+
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-[11px] font-bold">
+            <span className="w-2 h-2 rounded-full bg-emerald-600" />
+            <span>Paid: {filteredPaidCount}</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-100 text-red-700 border border-red-200 text-[11px] font-bold">
+            <span className="w-2 h-2 rounded-full bg-red-600" />
+            <span>Unpaid: {filteredUnpaidCount}</span>
+          </span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleSelectUnpaidFiltered}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-800 border border-red-200 text-xs font-bold transition-colors cursor-pointer"
+            title="በዚህ ወር ያልከፈሉትን አባላት በሙሉ በአንድ ጊዜ ምረጥ"
+          >
+            <CheckSquare className="w-3.5 h-3.5 text-red-600" />
+            <span>ያልከፈሉትን ምረጥ ({filteredUnpaidCount})</span>
+          </button>
+
+          {selectedMemberIds.size > 0 && (
+            <button
+              type="button"
+              onClick={() => setSelectedMemberIds(new Set())}
+              className="inline-flex items-center gap-1 px-2.5 py-2 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-xs font-semibold transition-colors cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>ምርጫ አጽዳ</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => {
+              if (selectedMemberIds.size === 0) {
+                setDeleteNotice('እባክዎ መጀመሪያ ከሰንጠረዡ ላይ ቢያንስ አንድ አባል ይምረጡ (Checkbox ይንኩ)።');
+                setTimeout(() => setDeleteNotice(null), 4000);
+                return;
+              }
+              setIsBulkPayModalOpen(true);
+            }}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold transition-all shadow-sm cursor-pointer ${
+              selectedMemberIds.size > 0
+                ? 'bg-[#1B5E20] hover:bg-[#154a19] text-white ring-2 ring-[#FFD700]'
+                : 'bg-emerald-800/80 hover:bg-emerald-800 text-white/90'
+            }`}
+            title="ለተመረጡት አባላት ከCredit Wallet ክፍያ ፈጽም"
+          >
+            <Coins className="w-4 h-4 text-[#FFD700]" />
+            <span>
+              ለተመረጡት ክፈል (Pay Selected)
+              {selectedMemberIds.size > 0 ? ` — ${selectedMemberIds.size}` : ''}
+            </span>
+          </button>
+        </div>
+      </div>
+
       {/* Table View */}
       <div className="bg-white rounded-2xl border border-neutral-200/80 overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-neutral-50 text-neutral-700 font-semibold border-b border-neutral-200">
               <tr>
+                <th className="py-3 px-3 w-10 text-center">
+                  <input
+                    ref={selectAllCheckboxRef}
+                    type="checkbox"
+                    checked={allFilteredSelected}
+                    onChange={handleToggleSelectAllFiltered}
+                    aria-label="ሁሉንም ምረጥ (Select All)"
+                    title="ሁሉንም የሚታዩ አባላት ምረጥ / አንሳ"
+                    className="w-4 h-4 rounded border-neutral-300 accent-[#1B5E20] cursor-pointer"
+                  />
+                </th>
                 <th className="py-3 px-3">የአባላት ID</th>
                 <th className="py-3 px-3">FullName (ሙሉ ስም)</th>
                 <th className="py-3 px-2">ትውልድ</th>
                 <th className="py-3 px-3">Family (ቤተሰብ)</th>
                 <th className="py-3 px-3">Phone (ስልክ ቁጥር)</th>
                 <th className="py-3 px-3">Telegram Account</th>
-                <th className="py-3 px-3 text-center">ወርሃዊ (ሀምሌ 2018)</th>
+                <th className="py-3 px-3 text-center">
+                  የወሩ ሁኔታ ({activeMonthName} {activeYear})
+                </th>
                 <th className="py-3 px-3 text-center">የትውልድ መዋጮ (ሁኔታ & ቀሪ)</th>
                 <th className="py-3 px-2 text-center">QR & ሊንክ</th>
                 <th className="py-3 px-3 text-right">የአድሚን ኤዲት & ክፍያ</th>
@@ -561,7 +777,7 @@ export const MembersList: React.FC<MembersListProps> = ({
             <tbody className="divide-y divide-neutral-100">
               {filteredMembers.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-12 px-4 text-center">
+                  <td colSpan={11} className="py-12 px-4 text-center">
                     <div className="max-w-md mx-auto space-y-3">
                       <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center mx-auto border border-amber-200">
                         <Search className="w-6 h-6" />
@@ -580,14 +796,8 @@ export const MembersList: React.FC<MembersListProps> = ({
               ) : (
                 filteredMembers.map((member) => {
                   const monthlyRate = getEffectiveMonthlyRate(member, settings);
-                  const isMonthlyPaid = contributions.some(
-                    (c) =>
-                      c.memberId === member.id &&
-                      c.type === 'ወርሃዊ' &&
-                      c.ethiopianMonth === 11 &&
-                      c.ethiopianYear === 2018 &&
-                      c.status === 'ተከፍሏል'
-                  );
+                  const isMonthlyPaid = isMemberPaidForActiveMonth(member.id);
+                  const isSelected = selectedMemberIds.has(member.id);
 
                   const genStats = getMemberGenContributionStats(member, settings, contributions);
 
@@ -595,9 +805,26 @@ export const MembersList: React.FC<MembersListProps> = ({
                     <tr
                       key={member.id}
                       className={`hover:bg-neutral-50/80 transition-colors ${
-                        member.isMinor ? 'bg-amber-50/20' : member.isSpouse ? 'bg-purple-50/20' : ''
+                        isSelected
+                          ? 'bg-emerald-50/70'
+                          : member.isMinor
+                          ? 'bg-amber-50/20'
+                          : member.isSpouse
+                          ? 'bg-purple-50/20'
+                          : ''
                       }`}
                     >
+                      {/* Selection Checkbox */}
+                      <td className="py-3 px-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleToggleMemberSelect(member.id)}
+                          aria-label={`${member.fullName} ምረጥ`}
+                          className="w-4 h-4 rounded border-neutral-300 accent-[#1B5E20] cursor-pointer"
+                        />
+                      </td>
+
                       {/* Member ID */}
                       <td className="py-3 px-3 font-mono font-bold text-emerald-950">
                         {highlightMatch(member.id, searchQuery)}
@@ -636,9 +863,20 @@ export const MembersList: React.FC<MembersListProps> = ({
                                 </span>
                               )}
                             </div>
-                            <span className="text-[10px] text-neutral-400">
-                              ተመን፡ {monthlyRate} ብር/ወር
-                            </span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-[10px] text-neutral-400">
+                                ተመን፡ {monthlyRate} ብር/ወር
+                              </span>
+                              {(member.walletBalance || 0) > 0 && (
+                                <span
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-950 border border-amber-300 font-mono font-bold text-[10px]"
+                                  title="የአባሉ ያልተከፋፈለ ቀሪ ሂሳብ (Credit Wallet)"
+                                >
+                                  <Wallet className="w-2.5 h-2.5 text-amber-700" />
+                                  <span>ቀሪ ሂሳብ: {Number(member.walletBalance).toLocaleString()} ብር</span>
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -691,7 +929,7 @@ export const MembersList: React.FC<MembersListProps> = ({
                         )}
                       </td>
 
-                      {/* Monthly Payment (Hamle 2018) */}
+                      {/* Monthly Payment Status Badge (Paid / Unpaid) for Active Month */}
                       <td className="py-3 px-3 text-center">
                         {member.isMinor ? (
                           <span className="inline-block px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 font-bold text-[10px] border border-emerald-200">
@@ -700,25 +938,25 @@ export const MembersList: React.FC<MembersListProps> = ({
                         ) : isMonthlyPaid ? (
                           <button
                             type="button"
-                            onClick={() => onToggleMonthlyStatus(member.id, 11, 2018, false)}
-                            title="ሀምሌ ተከፍሏል - ወደ 'ያልተከፈለ' ለመቀየር ይጫኑ"
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 hover:bg-red-50 hover:text-red-700 hover:border-red-300 text-emerald-800 font-bold text-[11px] transition-all border border-emerald-300/80 group cursor-pointer shadow-2xs"
+                            onClick={() => onToggleMonthlyStatus(member.id, activeMonth, activeYear, false)}
+                            title={`${activeMonthName} ${activeYear} ተከፍሏል (Paid) - ለመቀየር ይጫኑ`}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 hover:bg-red-50 hover:text-red-700 hover:border-red-300 text-emerald-800 font-bold text-[11px] transition-all border border-emerald-300 group cursor-pointer shadow-2xs"
                           >
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 group-hover:hidden" />
                             <X className="w-3.5 h-3.5 text-red-600 hidden group-hover:inline" />
-                            <span className="group-hover:hidden">ተከፍሏል</span>
+                            <span className="group-hover:hidden">Paid · ተከፍሏል</span>
                             <span className="hidden group-hover:inline">ሰርዝ</span>
                           </button>
                         ) : (
                           <button
                             type="button"
-                            onClick={() => onToggleMonthlyStatus(member.id, 11, 2018, true)}
-                            title="ሀምሌ አልተከፈለም - ወደ 'ተከፍሏል' ለመቀየር ይጫኑ"
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-50 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-300 text-red-700 font-bold text-[11px] transition-all border border-red-200 group cursor-pointer shadow-2xs"
+                            onClick={() => onToggleMonthlyStatus(member.id, activeMonth, activeYear, true)}
+                            title={`${activeMonthName} ${activeYear} አልተከፈለም (Unpaid) - ለመክፈል ይጫኑ`}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-100 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-300 text-red-700 font-bold text-[11px] transition-all border border-red-300 group cursor-pointer shadow-2xs"
                           >
                             <AlertTriangle className="w-3.5 h-3.5 text-red-600 group-hover:hidden" />
                             <Check className="w-3.5 h-3.5 text-emerald-600 hidden group-hover:inline" />
-                            <span className="group-hover:hidden">አልከፈለም</span>
+                            <span className="group-hover:hidden">Unpaid · አልከፈለም</span>
                             <span className="hidden group-hover:inline">ክፈል</span>
                           </button>
                         )}
@@ -811,6 +1049,16 @@ export const MembersList: React.FC<MembersListProps> = ({
                             >
                               <CreditCard className="w-3 h-3 text-emerald-800" />
                               <span>ክፍያዎች</span>
+                            </button>
+                          )}
+                          {onOpenBatchPayment && (
+                            <button
+                              onClick={() => onOpenBatchPayment(member.id)}
+                              className="px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 font-bold text-[11px] transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                              title="የጅምላ ደረሰኝ / ቀሪ ሂሳብ ክፍፍል (Batch & Wallet)"
+                            >
+                              <Wallet className="w-3 h-3 text-amber-800" />
+                              <span>ክፍፍል</span>
                             </button>
                           )}
                           <button
@@ -935,6 +1183,66 @@ export const MembersList: React.FC<MembersListProps> = ({
             </div>
           </div>
         </div>
+      )}
+      {/* Bulk Pay Selected Members From Credit Wallet Modal */}
+      {isBulkPayModalOpen && (
+        <BulkPaySelectedModal
+          isOpen={isBulkPayModalOpen}
+          onClose={() => setIsBulkPayModalOpen(false)}
+          selectedMembers={selectedMembersList}
+          allMembers={members}
+          contributions={contributions}
+          settings={settings}
+          defaultMonth={activeMonth}
+          defaultYear={activeYear}
+          onOpenBatchPayment={onOpenBatchPayment}
+          onSuccess={(result) => {
+            if (onBulkWalletPaymentComplete) {
+              onBulkWalletPaymentComplete(result);
+            }
+            const payerMember = members.find((m) => m.id === result.payerId) || null;
+            const updatedContribs = [
+              ...result.createdContributions,
+              ...contributions.filter(
+                (existing) => !result.createdContributions.some((c) => c.id === existing.id)
+              ),
+            ];
+            const bulkReportText = formatBulkPaymentTelegramReport({
+              payer: payerMember,
+              items: result.createdContributions.map((c) => ({
+                member:
+                  members.find((m) => m.id === c.memberId) || {
+                    id: c.memberId,
+                    fullName: c.memberName,
+                    generation: c.generation,
+                    familyId: c.familyId,
+                    familyName: c.familyName,
+                    phone: '',
+                  },
+                type: c.type,
+                amount: Number(c.paidAmount ?? c.amount ?? 0),
+                ethiopianMonth: c.ethiopianMonth,
+                ethiopianMonthName: c.ethiopianMonthName,
+                ethiopianYear: c.ethiopianYear,
+                datePaid: c.datePaid,
+              })),
+              allContributions: updatedContribs,
+              settings,
+            });
+            setLastBulkTelegramPayload({
+              name: payerMember?.fullName || 'አስተዳዳሪ / ወኪል',
+              role: 'የጅምላ ክፍያ ሪፖርት',
+              phone: payerMember?.phone || '',
+              telegram: payerMember?.telegram || '',
+              messageText: bulkReportText,
+              directUrl: getAppUrl(),
+            });
+            setSelectedMemberIds(new Set());
+            setDeleteNotice(
+              `ለ${result.createdContributions.length} የተመረጡ አባላት ከCredit Wallet በተሳካ ሁኔታ ተከፍሏል! ቀሪ ሂሳብ፡ ${result.newWalletBalance.toLocaleString()} ብር`
+            );
+          }}
+        />
       )}
     </div>
   );

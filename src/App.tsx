@@ -45,6 +45,7 @@ import { DataCorrectionView } from './components/DataCorrectionView';
 import { TelegramDispatchModal } from './components/TelegramDispatchModal';
 import { BulkImportModal } from './components/BulkImportModal';
 import { AdminMemberPaymentManagerModal } from './components/AdminMemberPaymentManagerModal';
+import { BatchPaymentManagerModal } from './components/BatchPaymentManagerModal';
 import { NetworkStatusIndicator } from './components/NetworkStatusIndicator';
 import { getCurrentEthiopianDate, getEthiopianMonthName } from './utils/ethiopianCalendar';
 import {
@@ -121,11 +122,18 @@ export default function App() {
   const [isPaymentManagerOpen, setIsPaymentManagerOpen] = useState(false);
   const [paymentManagerMemberId, setPaymentManagerMemberId] = useState<string | undefined>(undefined);
   const [paymentManagerMode, setPaymentManagerMode] = useState<'list' | 'add'>('list');
+  const [isBatchPaymentOpen, setIsBatchPaymentOpen] = useState(false);
+  const [batchPaymentPayerId, setBatchPaymentPayerId] = useState<string | undefined>(undefined);
 
   const handleOpenPaymentManager = (memberId?: string, mode: 'list' | 'add' = 'list') => {
     setPaymentManagerMemberId(memberId);
     setPaymentManagerMode(mode);
     setIsPaymentManagerOpen(true);
+  };
+
+  const handleOpenBatchPayment = (payerId?: string) => {
+    setBatchPaymentPayerId(payerId);
+    setIsBatchPaymentOpen(true);
   };
 
   // Desktop Shortcut Prompt state
@@ -755,6 +763,7 @@ export default function App() {
                   setIsRecordPaymentOpen(true);
                 }}
                 onOpenPaymentManager={handleOpenPaymentManager}
+                onOpenBatchPayment={handleOpenBatchPayment}
                 onOpenAddMember={() => setIsAddMemberOpen(true)}
                 onOpenBulkImport={() => setIsBulkImportOpen(true)}
                 onOpenPrintReport={() => setIsPrintReportOpen(true)}
@@ -793,6 +802,15 @@ export default function App() {
                 onOpenQR={(m) => setActiveQRMember(m)}
                 onRecordPayment={(id) => handleOpenRecordPaymentForMember(id)}
                 onOpenPaymentManager={handleOpenPaymentManager}
+                onOpenBatchPayment={handleOpenBatchPayment}
+                onBulkWalletPaymentComplete={({ payerId, newWalletBalance, createdContributions }) => {
+                  updateMember(payerId, { walletBalance: newWalletBalance });
+                  if (createdContributions.length > 0) {
+                    createdContributions.forEach((c) => addContribution(c));
+                  }
+                  setMembers(getMembers());
+                  setContributions(getContributions());
+                }}
                 onDeleteMember={handleDeleteMember}
                 onUpdateMember={async (id, updates) => {
                   const rawPhone = updates.phone || (updates as any).phoneNumber;
@@ -842,9 +860,11 @@ export default function App() {
                   setIsRecordPaymentOpen(true);
                 }}
                 onOpenPaymentManager={handleOpenPaymentManager}
+                onOpenBatchPayment={handleOpenBatchPayment}
                 onUpdateStatus={handleUpdateContributionStatus}
                 onDeleteContribution={handleDeleteContribution}
                 onOpenPrintReport={() => setIsPrintReportOpen(true)}
+                onDispatchTelegram={(payload) => setTelegramDispatchPayload(payload)}
               />
             )}
 
@@ -1041,6 +1061,31 @@ export default function App() {
           onAddManualPayment={async (payment: Omit<Contribution, 'id'>) => {
             await handleSavePayment(payment);
           }}
+        />
+      )}
+
+      {/* Batch Payment & Wallet Allocation Modal */}
+      {isBatchPaymentOpen && (
+        <BatchPaymentManagerModal
+          isOpen={isBatchPaymentOpen}
+          onClose={() => {
+            setIsBatchPaymentOpen(false);
+            setBatchPaymentPayerId(undefined);
+          }}
+          members={members}
+          families={families}
+          contributions={contributions}
+          settings={settings}
+          initialPayerId={batchPaymentPayerId}
+          onBatchComplete={({ payerId, newWalletBalance, createdContributions }) => {
+            updateMember(payerId, { walletBalance: newWalletBalance });
+            if (createdContributions.length > 0) {
+              createdContributions.forEach((c) => addContribution(c));
+            }
+            setMembers(getMembers());
+            setContributions(getContributions());
+          }}
+          onDispatchTelegram={(payload) => setTelegramDispatchPayload(payload)}
         />
       )}
 

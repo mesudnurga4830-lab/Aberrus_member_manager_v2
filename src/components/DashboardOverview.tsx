@@ -37,6 +37,7 @@ interface DashboardOverviewProps {
   settings: SettingsRates;
   onOpenRecordPayment: () => void;
   onOpenPaymentManager?: (memberId?: string, mode?: 'list' | 'add') => void;
+  onOpenBatchPayment?: (payerId?: string) => void;
   onOpenAddMember: () => void;
   onOpenBulkImport?: () => void;
   onOpenPrintReport: () => void;
@@ -54,6 +55,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   settings,
   onOpenRecordPayment,
   onOpenPaymentManager,
+  onOpenBatchPayment,
   onOpenAddMember,
   onOpenBulkImport,
   onOpenPrintReport,
@@ -407,6 +409,17 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               >
                 <CreditCard className="w-4 h-4 text-[#FFD700]" />
                 <span>የክፍያዎች መዝገብ</span>
+              </button>
+            )}
+            {onOpenBatchPayment && (
+              <button
+                type="button"
+                onClick={() => onOpenBatchPayment()}
+                className="px-4 py-2.5 rounded-lg bg-[#FFD700] hover:bg-[#e6c200] text-[#1B5E20] font-extrabold text-xs transition-all shadow-sm cursor-pointer flex items-center gap-1.5"
+                title="የጅምላ ደረሰኝ መዝገብ እና የክፍያ ክፍፍል (Batch Payment & Wallet)"
+              >
+                <Wallet className="w-4 h-4" />
+                <span>የክፍፍል ክፍያ (Batch)</span>
               </button>
             )}
             <button

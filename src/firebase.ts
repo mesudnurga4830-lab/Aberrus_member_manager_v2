@@ -37,9 +37,19 @@ import {
   User,
 } from 'firebase/auth';
 import firebaseConfig from '../firebase-applet-config.json';
-import { Member, Contribution, Family, SettingsRates, NotificationLog } from './types';
+import {
+  Member,
+  Contribution,
+  Family,
+  SettingsRates,
+  NotificationLog,
+  MasterReceipt,
+  MasterReceiptStatus,
+  ContributionType,
+} from './types';
 import { initialSettings, initialMembers } from './data/initialData';
-import { getMembers, saveMembers, addMembersBatch } from './utils/storage';
+import { getMembers, saveMembers, addMembersBatch, addContributionsBatch, updateMember } from './utils/storage';
+import { getEthiopianMonthName } from './utils/ethiopianCalendar';
 import { generateLoginToken } from './utils/token';
 
 // Initialize Firebase App
@@ -256,6 +266,7 @@ export const COMPLAINTS_COLLECTION = 'complaints';
 export const RECEIPTS_COLLECTION = 'receipts';
 export const TELEGRAM_USERS_COLLECTION = 'telegramUsers';
 export const NOTIFICATION_LOGS_COLLECTION = 'notificationLogs';
+export const MASTER_RECEIPTS_COLLECTION = 'masterReceipts';
 
 /**
  * 1. QUERY CODE USED FOR MEMBER LOGIN BY TOKEN OR ID OR PHONE
@@ -1974,4 +1985,463 @@ export async function saveSettingsToFirestore(settings: SettingsRates): Promise<
     'saving association settings rates'
   );
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BATCH PAYMENT / MASTER RECEIPT & WALLET CREDIT SYSTEM
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface BatchAllocationItem {
+  member: Member;
+  type: ContributionType;
+  ethiopianMonth: number;
+  ethiopianYear: number;
+  amount: number;
+  notes?: string;
+}
+
+/**
+ * Save or update a Master Receipt document in Firestore `masterReceipts`
+ */
+export async function saveMasterReceiptToFirestore(receipt: MasterReceipt): Promise<void> {
+  const sanitized = sanitizeForFirestore({
+    ...receipt,
+    totalAmount: Number(receipt.totalAmount || 0),
+    allocatedAmount: Number(receipt.allocatedAmount || 0),
+    remainingBalance: Number(receipt.remainingBalance || 0),
+    updatedAt: new Date().toISOString(),
+  });
+
+  await safeClientFirestoreWrite(
+    () => setDoc(doc(db, MASTER_RECEIPTS_COLLECTION, receipt.id), sanitized, { merge: true }),
+    `saving master receipt ${receipt.id}`
+  );
+}
+
+/**
+ * Fetch all Master Receipts from Firestore
+ */
+export async function getMasterReceiptsFromFirestore(): Promise<MasterReceipt[]> {
+  try {
+    const snap = await getDocs(collection(db, MASTER_RECEIPTS_COLLECTION));
+    const list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as MasterReceipt));
+    return list.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  } catch (err) {
+    console.error('[Firestore Error] Failed to fetch masterReceipts:', err);
+    return [];
+  }
+}
+
+/**
+ * Real-time onSnapshot listener for Master Receipts
+ */
+export function subscribeToMasterReceipts(
+  onData: (receipts: MasterReceipt[]) => void,
+  onError?: (err: any) => void
+): () => void {
+  const collRef = collection(db, MASTER_RECEIPTS_COLLECTION);
+  return onSnapshot(
+    collRef,
+    (snapshot) => {
+      const docs = snapshot.docs
+        .map((d) => ({ id: d.id, ...d.data() } as MasterReceipt))
+        .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+      onData(docs);
+    },
+    (err) => {
+      console.error('[Firestore onSnapshot Error in subscribeToMasterReceipts]:', err);
+      if (onError) onError(err);
+    }
+  );
+}
+
+/**
+ * Update a member's walletBalance (Remaining Credit Balance) in Firestore and local storage
+ */
+export async function updateMemberWalletBalanceInFirestore(
+  memberId: string,
+  newBalance: number
+): Promise<void> {
+  const safeBalance = Math.max(0, Number(newBalance || 0));
+  await safeClientFirestoreWrite(
+    () =>
+      setDoc(
+        doc(db, MEMBERS_COLLECTION, memberId),
+        {
+          walletBalance: safeBalance,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      ),
+    `updating walletBalance for ${memberId}`
+  );
+
+  try {
+    updateMember(memberId, { walletBalance: safeBalance });
+  } catch {}
+}
+
+/**
+ * Approve a pending Master Receipt and credit its full amount to the payer's walletBalance
+ */
+export async function creditMasterReceiptToWalletInFirestore(
+  receipt: MasterReceipt,
+  currentPayerWalletBalance: number = 0
+): Promise<{ updatedReceipt: MasterReceipt; newWalletBalance: number }> {
+  const alreadyCredited = Boolean(receipt.walletCredited);
+  const depositAmount = Number(receipt.totalAmount || 0);
+  const newWalletBalance = alreadyCredited
+    ? Number(currentPayerWalletBalance || 0)
+    : Number(currentPayerWalletBalance || 0) + depositAmount;
+
+  const updatedReceipt: MasterReceipt = {
+    ...receipt,
+    walletCredited: true,
+    status: receipt.remainingBalance <= 0 ? 'Fully Allocated' : 'Credited to Wallet',
+    updatedAt: new Date().toISOString(),
+  };
+
+  await saveMasterReceiptToFirestore(updatedReceipt);
+  if (!alreadyCredited) {
+    await updateMemberWalletBalanceInFirestore(receipt.payerId, newWalletBalance);
+  }
+
+  return { updatedReceipt, newWalletBalance };
+}
+
+/**
+ * Allocate funds from a Master Receipt across multiple members and contribution types.
+ * Links every created child contribution with `masterReceiptId` & `masterReceiptNumber`,
+ * updates `masterReceipt.allocatedAmount` and `masterReceipt.remainingBalance`,
+ * and updates the payer member's `walletBalance` so any unallocated remainder stays on their account.
+ */
+export async function allocateBatchPaymentsInFirestore(params: {
+  masterReceipt: MasterReceipt;
+  payerCurrentWalletBalance: number;
+  allocations: BatchAllocationItem[];
+  finalizeRemainderToWallet?: boolean;
+}): Promise<{
+  updatedReceipt: MasterReceipt;
+  createdContributions: Contribution[];
+  newWalletBalance: number;
+}> {
+  const {
+    masterReceipt,
+    payerCurrentWalletBalance,
+    allocations,
+    finalizeRemainderToWallet = false,
+  } = params;
+
+  const batchTotal = allocations.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const currentRemaining = Number(masterReceipt.remainingBalance ?? masterReceipt.totalAmount ?? 0);
+
+  if (batchTotal > currentRemaining) {
+    throw new Error(
+      `የተመደበው ጠቅላላ መጠን (${batchTotal.toLocaleString()} ብር) ካለው ቀሪ ሂሳብ (${currentRemaining.toLocaleString()} ብር) ይበልጣል።`
+    );
+  }
+
+  const nowIso = new Date().toISOString();
+  const baseTs = Date.now();
+
+  const createdContributions: Contribution[] = allocations.map((item, index) => {
+    const isGen = item.type === 'ትውልድ';
+    const mNum = isGen ? 0 : Number(item.ethiopianMonth || 1);
+    const yNum = Number(item.ethiopianYear || 2018);
+    const mName = isGen ? 'የትውልድ መዋጮ' : getEthiopianMonthName(mNum);
+    const amt = Number(item.amount || 0);
+    const contribId = `CON-BATCH-${baseTs}-${index + 1}`;
+
+    return {
+      id: contribId,
+      memberId: item.member.id,
+      memberName: item.member.fullName,
+      familyId: item.member.familyId || masterReceipt.familyId || '',
+      familyName: item.member.familyName || masterReceipt.familyName || '',
+      generation: item.member.generation || 4,
+      type: item.type,
+      ethiopianMonth: mNum,
+      ethiopianMonthName: mName,
+      ethiopianYear: yNum,
+      month: mNum,
+      year: yNum,
+      amount: amt,
+      paidAmount: amt,
+      status: 'ተከፍሏል',
+      paymentMethod: masterReceipt.paymentMethod,
+      transactionRef: masterReceipt.transactionRef,
+      datePaid: nowIso.slice(0, 10),
+      recordedBy: 'Admin (Batch Allocation)',
+      receiptNumber: `${masterReceipt.receiptNumber}-${index + 1}`,
+      notes:
+        item.notes?.trim() ||
+        `በጅምላ ደረሰኝ (${masterReceipt.receiptNumber}) ከ${masterReceipt.payerName} ሂሳብ የተከፈለ`,
+      payerId: masterReceipt.payerId,
+      payerName: masterReceipt.payerName,
+      beneficiaryId: item.member.id,
+      beneficiaryName: item.member.fullName,
+      isProxyPayment: item.member.id !== masterReceipt.payerId,
+      slipPhoto: masterReceipt.slipPhoto || null,
+      masterReceiptId: masterReceipt.id,
+      masterReceiptNumber: masterReceipt.receiptNumber,
+    };
+  });
+
+  const newAllocatedAmount = Number(masterReceipt.allocatedAmount || 0) + batchTotal;
+  const newRemainingBalance = Math.max(0, Number(masterReceipt.totalAmount || 0) - newAllocatedAmount);
+
+  let nextStatus: MasterReceiptStatus = 'Partially Allocated';
+  if (newRemainingBalance <= 0) {
+    nextStatus = 'Fully Allocated';
+  } else if (finalizeRemainderToWallet) {
+    nextStatus = 'Credited to Wallet';
+  }
+
+  const updatedReceipt: MasterReceipt = {
+    ...masterReceipt,
+    allocatedAmount: newAllocatedAmount,
+    remainingBalance: newRemainingBalance,
+    allocationsCount: Number(masterReceipt.allocationsCount || 0) + createdContributions.length,
+    walletCredited: true,
+    status: nextStatus,
+    updatedAt: nowIso,
+  };
+
+  // Calculate payer's new walletBalance:
+  // If masterReceipt was not yet credited to wallet, net change = +totalAmount - batchTotal (which is +newRemainingBalance if no prior allocations)
+  // If masterReceipt was already credited to wallet, subtract batchTotal from payer's current walletBalance
+  const baseWallet = Number(payerCurrentWalletBalance || 0);
+  const newWalletBalance = masterReceipt.walletCredited
+    ? Math.max(0, baseWallet - batchTotal)
+    : Math.max(0, baseWallet + Number(masterReceipt.totalAmount || 0) - batchTotal);
+
+  // Persist atomically with writeBatch (works offline too with persistentLocalCache!)
+  try {
+    const batch = writeBatch(db);
+
+    for (const c of createdContributions) {
+      const payload = sanitizeForFirestore({
+        ...c,
+        status: 'Paid',
+        statusAm: 'ተከፍሏል',
+        updatedAt: nowIso,
+      });
+      batch.set(doc(db, CONTRIBUTIONS_COLLECTION, c.id), payload, { merge: true });
+    }
+
+    batch.set(
+      doc(db, MASTER_RECEIPTS_COLLECTION, updatedReceipt.id),
+      sanitizeForFirestore(updatedReceipt),
+      { merge: true }
+    );
+
+    batch.set(
+      doc(db, MEMBERS_COLLECTION, masterReceipt.payerId),
+      {
+        walletBalance: newWalletBalance,
+        updatedAt: nowIso,
+      },
+      { merge: true }
+    );
+
+    await safeClientFirestoreWrite(() => batch.commit(), `committing batch allocation ${masterReceipt.id}`);
+  } catch (err) {
+    console.error('[Batch Allocation Firestore Error]:', err);
+    throw err;
+  }
+
+  // Sync local storage immediately
+  try {
+    if (createdContributions.length > 0) {
+      addContributionsBatch(createdContributions);
+    }
+    updateMember(masterReceipt.payerId, { walletBalance: newWalletBalance });
+  } catch {}
+
+  return {
+    updatedReceipt,
+    createdContributions,
+    newWalletBalance,
+  };
+}
+
+/**
+ * Delete a Master Receipt document from Firestore
+ */
+export async function deleteMasterReceiptFromFirestore(receiptId: string): Promise<void> {
+  await safeClientFirestoreWrite(
+    () => deleteDoc(doc(db, MASTER_RECEIPTS_COLLECTION, receiptId)),
+    `deleting master receipt ${receiptId}`
+  );
+}
+
+export interface WalletBulkPaymentItem {
+  member: Member;
+  amount: number;
+  notes?: string;
+}
+
+/**
+ * Pay Monthly or Generation contributions for multiple selected members directly from
+ * a payer member's Credit Wallet (`walletBalance`) using an atomic Firestore writeBatch.
+ * Optionally links to an open MasterReceipt of the payer if provided and sufficient.
+ */
+export async function paySelectedFromWalletInFirestore(params: {
+  payer: Member;
+  items: WalletBulkPaymentItem[];
+  type: ContributionType;
+  ethiopianMonth: number;
+  ethiopianYear: number;
+  linkedMasterReceipt?: MasterReceipt | null;
+}): Promise<{
+  createdContributions: Contribution[];
+  newWalletBalance: number;
+  updatedReceipt?: MasterReceipt;
+}> {
+  const {
+    payer,
+    items,
+    type,
+    ethiopianMonth,
+    ethiopianYear,
+    linkedMasterReceipt,
+  } = params;
+
+  const payableItems = items.filter((item) => Number(item.amount || 0) > 0);
+  if (payableItems.length === 0) {
+    throw new Error('ቢያንስ ከ0 ብር በላይ ክፍያ ያለው አንድ አባል መመረጥ አለበት።');
+  }
+
+  const totalDeduction = payableItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const currentWallet = Number(payer.walletBalance || 0);
+
+  if (totalDeduction > currentWallet) {
+    throw new Error(
+      `የ${payer.fullName} ቀሪ ሂሳብ (${currentWallet.toLocaleString()} ብር) ለጠቅላላ ክፍያው (${totalDeduction.toLocaleString()} ብር) በቂ አይደለም።`
+    );
+  }
+
+  const nowIso = new Date().toISOString();
+  const baseTs = Date.now();
+  const isGen = type === 'ትውልድ';
+  const mNum = isGen ? 0 : Number(ethiopianMonth || 1);
+  const yNum = Number(ethiopianYear || 2018);
+  const mName = isGen ? 'የትውልድ መዋጮ' : getEthiopianMonthName(mNum);
+
+  const canLinkMasterReceipt =
+    Boolean(linkedMasterReceipt) &&
+    Number(linkedMasterReceipt?.remainingBalance || 0) >= totalDeduction;
+
+  const batchTxRef = canLinkMasterReceipt && linkedMasterReceipt
+    ? linkedMasterReceipt.transactionRef || linkedMasterReceipt.receiptNumber
+    : `WLT-${String(baseTs).slice(-6)}`;
+
+  const createdContributions: Contribution[] = payableItems.map((item, idx) => {
+    const amt = Number(item.amount || 0);
+    const contribId = `CON-WLT-${baseTs}-${idx + 1}`;
+    const receiptNo = canLinkMasterReceipt && linkedMasterReceipt
+      ? `${linkedMasterReceipt.receiptNumber}-W${idx + 1}`
+      : `WLT-RCPT-${String(baseTs).slice(-5)}-${idx + 1}`;
+
+    return {
+      id: contribId,
+      memberId: item.member.id,
+      memberName: item.member.fullName,
+      familyId: item.member.familyId || payer.familyId || '',
+      familyName: item.member.familyName || payer.familyName || '',
+      generation: item.member.generation || 4,
+      type,
+      ethiopianMonth: mNum,
+      ethiopianMonthName: mName,
+      ethiopianYear: yNum,
+      month: mNum,
+      year: yNum,
+      amount: amt,
+      paidAmount: amt,
+      status: 'ተከፍሏል',
+      paymentMethod: 'Credit Wallet (ቀሪ ሂሳብ)',
+      transactionRef: batchTxRef,
+      datePaid: nowIso.slice(0, 10),
+      recordedBy: 'Admin (Wallet Bulk Pay)',
+      receiptNumber: receiptNo,
+      notes:
+        item.notes?.trim() ||
+        `ከ${payer.fullName} (${payer.id}) የCredit Wallet ቀሪ ሂሳብ የተከፈለ`,
+      payerId: payer.id,
+      payerName: payer.fullName,
+      beneficiaryId: item.member.id,
+      beneficiaryName: item.member.fullName,
+      isProxyPayment: item.member.id !== payer.id,
+      ...(canLinkMasterReceipt && linkedMasterReceipt
+        ? {
+            masterReceiptId: linkedMasterReceipt.id,
+            masterReceiptNumber: linkedMasterReceipt.receiptNumber,
+          }
+        : {}),
+    };
+  });
+
+  const newWalletBalance = Math.max(0, currentWallet - totalDeduction);
+
+  let updatedReceipt: MasterReceipt | undefined;
+  if (canLinkMasterReceipt && linkedMasterReceipt) {
+    const newAllocated = Number(linkedMasterReceipt.allocatedAmount || 0) + totalDeduction;
+    const newReceiptRemaining = Math.max(0, Number(linkedMasterReceipt.totalAmount || 0) - newAllocated);
+    updatedReceipt = {
+      ...linkedMasterReceipt,
+      allocatedAmount: newAllocated,
+      remainingBalance: newReceiptRemaining,
+      allocationsCount: Number(linkedMasterReceipt.allocationsCount || 0) + createdContributions.length,
+      walletCredited: true,
+      status: newReceiptRemaining <= 0 ? 'Fully Allocated' : 'Partially Allocated',
+      updatedAt: nowIso,
+    };
+  }
+
+  const batch = writeBatch(db);
+
+  for (const c of createdContributions) {
+    const payload = sanitizeForFirestore({
+      ...c,
+      status: 'Paid',
+      statusAm: 'ተከፍሏል',
+      updatedAt: nowIso,
+    });
+    batch.set(doc(db, CONTRIBUTIONS_COLLECTION, c.id), payload, { merge: true });
+  }
+
+  batch.set(
+    doc(db, MEMBERS_COLLECTION, payer.id),
+    {
+      walletBalance: newWalletBalance,
+      updatedAt: nowIso,
+    },
+    { merge: true }
+  );
+
+  if (updatedReceipt) {
+    batch.set(
+      doc(db, MASTER_RECEIPTS_COLLECTION, updatedReceipt.id),
+      sanitizeForFirestore(updatedReceipt),
+      { merge: true }
+    );
+  }
+
+  await safeClientFirestoreWrite(
+    () => batch.commit(),
+    `paying ${createdContributions.length} members from wallet ${payer.id}`
+  );
+
+  try {
+    addContributionsBatch(createdContributions);
+    updateMember(payer.id, { walletBalance: newWalletBalance });
+  } catch {}
+
+  return {
+    createdContributions,
+    newWalletBalance,
+    updatedReceipt,
+  };
+}
+
+
 

@@ -48,6 +48,7 @@ import {
   getMembers,
   getFamilies,
   getSettings,
+  getMemberGenContributionStats,
 } from '../utils/storage';
 import { TelegramWebhookManager } from './TelegramWebhookManager';
 
@@ -134,7 +135,14 @@ export const AutomationsPanel: React.FC<AutomationsPanelProps> = ({
     .reduce((sum, c) => sum + (c.paidAmount || 0), 0);
 
   // 1. Compose App Link Invitation Message
-  const appLinkInvitationMessage = shareAppLinkToFamilyHead(selectedFamily).text;
+  const appLinkInvitationMessage = shareAppLinkToFamilyHead(
+    selectedFamily,
+    members,
+    contributions,
+    settings,
+    currentDate.month,
+    currentDate.year
+  ).text;
 
   // 2. Compose Monthly Reminder Message (ቀን 5)
   const monthlyReminderMessage = `ሰላም ${selectedFamily.headName} (የ${selectedFamily.familyName} ቤተሰብ ወኪል)፤
@@ -150,7 +158,28 @@ export const AutomationsPanel: React.FC<AutomationsPanelProps> = ({
 አባላትን እንድታሳስቡ በአክብሮት እንጠይቃለን። እናመሰግናለን!
 — የአበሩስ ቤተሰብ ማህበር አስተዳደር`;
 
+  const eligibleGenMembers = familyMembers.filter((m) => !m.isMinor && !m.isSpouse);
+  let famGenTotalExpected = 0;
+  let famGenTotalPaid = 0;
+  let famGenTotalRemaining = 0;
+  const genRemainingEntries: Array<{ member: Member; paidSoFar: number; remainingBalance: number }> = [];
+
+  for (const m of eligibleGenMembers) {
+    const st = getMemberGenContributionStats(m, settings, contributions);
+    famGenTotalExpected += st.expectedAmount;
+    famGenTotalPaid += st.paidSoFar;
+    famGenTotalRemaining += st.remainingBalance;
+    if (st.remainingBalance > 0) {
+      genRemainingEntries.push({
+        member: m,
+        paidSoFar: st.paidSoFar,
+        remainingBalance: st.remainingBalance,
+      });
+    }
+  }
+
   // 3. Compose End-of-Month Family Payment Report (የወሩ መጨረሻ ሪፖርት)
+  // Strictly: NO remaining balance for Monthly; ONLY Total Paid + Remaining Balance for Generation.
   const endOfMonthReportMessage = `📊 የአበሩስ ቤተሰብ ማህበር - የወሩ መጨረሻ የቤተሰብ የክፍያ ሪፖርት
 ━━━━━━━━━━━━━━━━━━━━
 ቤተሰብ፡ ${selectedFamily.familyName} (${selectedFamily.id})
@@ -161,21 +190,33 @@ export const AutomationsPanel: React.FC<AutomationsPanelProps> = ({
 
 የመተግበሪያ ሊንክ፦ ${liveAppUrl}/?role=family_head&familyId=${encodeURIComponent(selectedFamily.id)}
 
-💰 የወርሃዊ መዋጮ ማጠቃለያ፡
-• የሚጠበቅ ድምር፡ ${totalFamilyMonthlyExpected.toLocaleString()} ብር
-• የተሰበሰበ፡ ${totalFamilyMonthlyPaid.toLocaleString()} ብር
-• ያልተሰበሰበ ቀሪ፡ ${(totalFamilyMonthlyExpected - totalFamilyMonthlyPaid).toLocaleString()} ብር
+💰 የወርሃዊ መዋጮ (${currentMonthName} ${currentDate.year} ዓ.ም)፡
+• የተከፈለ ጠቅላላ መጠን፡ ${totalFamilyMonthlyPaid.toLocaleString()} ብር
 
 ✅ ወርሃዊ መዋጮ የከፈሉ (${paidMembers.length})፡
-${paidMembers.map((m) => `• ${m.fullName} (${m.generation}ኛ)`).join('\n') || '• እስካሁን የለም'}
+${paidMembers
+  .map((m) => {
+    const c = familyMonthlyCon.find((con) => con.memberId === m.id);
+    const amt = Number(c?.paidAmount || c?.amount || 0);
+    const d = c?.datePaid || currentDate.formatted;
+    return `• ${m.fullName} — ${amt.toLocaleString()} ብር · ${currentMonthName} ${currentDate.year} · ቀን፡ ${d}`;
+  })
+  .join('\n') || '• እስካሁን የለም'}
 
 ⚠️ ወርሃዊ መዋጮ ያልከፈሉ (${unpaidMembers.length})፡
-${unpaidMembers.map((m) => `• ${m.fullName} (${m.generation}ኛ - ${settings.monthlyRate[m.generation] || 75} ብር)`).join('\n') || '• ሁሉም ከፍለዋል!'}
+${unpaidMembers.map((m) => `• ${m.fullName} (${m.generation}ኛ ትውልድ)`).join('\n') || '• ሁሉም ከፍለዋል!'}
 
 🎖️ የትውልድ መዋጮ ሁኔታ፡
-• የከፈሉ፡ ${genPaidMembers.length} አባላት
-• ያልከፈሉ፡ ${genUnpaidMembers.length} አባላት
-${genUnpaidMembers.slice(0, 6).map((m) => `• ${m.fullName} (${m.generation}ኛ - ${settings.generationPayment[m.generation] || 500} ብር)`).join('\n')}${genUnpaidMembers.length > 6 ? `\n• እና ሌሎች ${genUnpaidMembers.length - 6} አባላት` : ''}
+• ጠቅላላ የሚጠበቅ (Total Expected)፡ ${famGenTotalExpected.toLocaleString()} ብር
+• ጠቅላላ የተከፈለ (Total Paid)፡ ${famGenTotalPaid.toLocaleString()} ብር
+• ቀሪ መዋጮ (Remaining Balance)፡ ${famGenTotalRemaining.toLocaleString()} ብር
+${genRemainingEntries
+  .slice(0, 8)
+  .map(
+    (e) =>
+      `• ${e.member.fullName} — የተከፈለ፡ ${e.paidSoFar.toLocaleString()} ብር | ቀሪ፡ ${e.remainingBalance.toLocaleString()} ብር`
+  )
+  .join('\n') || '• ሁሉም የትውልድ መዋጮን አጠናቀዋል ✅'}${genRemainingEntries.length > 8 ? `\n• እና ሌሎች ${genRemainingEntries.length - 8} አባላት` : ''}
 
 💳 ይፋዊ የክፍያ ማስገቢያ አካውንት፡
 • Commercial Bank of Ethiopia (የኢትዮጵያ ንግድ ባንክ)፡ ${settings.associationInfo.cbeAccount} (${settings.associationInfo.cbeAccountName})
@@ -271,7 +312,7 @@ ${genUnpaidMembers.slice(0, 6).map((m) => `• ${m.fullName} (${m.generation}ኛ
     // 1. Save data first
     saveAllDataNow({ members, families, contributions, settings });
 
-    const { url } = shareAppLinkToFamilyHead(fam);
+    const { url } = shareAppLinkToFamilyHead(fam, members, contributions, settings, currentDate.month, currentDate.year);
     window.open(url, '_blank');
     recordTelegramLinkSent(fam.id);
     setDispatchedRecords(getTelegramDispatchedHeads());

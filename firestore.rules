@@ -63,6 +63,11 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Master Batch Receipts (lump-sum wallet & allocation tracking)
+    match /masterReceipts/{receiptId} {
+      allow read, write: if true;
+    }
+
     // Automated notification & summary email logs
     match /notificationLogs/{logId} {
       allow read, write: if true;

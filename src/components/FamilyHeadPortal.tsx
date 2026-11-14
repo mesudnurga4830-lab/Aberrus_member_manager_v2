@@ -42,6 +42,7 @@ import {
   getContributions,
   getMembers,
   saveAllDataNow,
+  getMemberGenContributionStats,
 } from '../utils/storage';
 
 interface FamilyHeadPortalProps {
@@ -197,58 +198,93 @@ export const FamilyHeadPortal: React.FC<FamilyHeadPortalProps> = ({
     const fUnpaidMembers = currentFamMembers.filter((m) => !m.isMinor && !freshPaidIds.has(m.id));
 
     const freshGen = freshCons.filter((c) => c.familyId === currentFamily.id && c.type === 'ትውልድ');
-    const freshGenPaidIds = new Set(freshGen.filter((c) => c.status === 'ተከፍሏል').map((c) => c.memberId));
-    const fGenPaid = currentFamMembers.filter((m) => freshGenPaidIds.has(m.id));
-    const fGenUnpaid = currentFamMembers.filter((m) => !m.isMinor && !m.isSpouse && !freshGenPaidIds.has(m.id));
+    const genEligibleMembers = currentFamMembers.filter((m) => !m.isMinor && !m.isSpouse);
 
-    const fTotalExpected = currentFamMembers.reduce((sum, m) => {
-      if (m.isMinor) return sum;
-      if (m.isSpouse) return sum + (settings.spouseMonthlyRate || 100);
-      return sum + (settings.monthlyRate[m.generation] || 0);
-    }, 0);
+    const paidOrPartialGenMembers: Array<{ member: Member; paidSoFar: number; remainingBalance: number }> = [];
+    const unpaidGenMembersList: Array<{ member: Member; remainingBalance: number }> = [];
+    let totalGenExpected = 0;
+    let totalGenPaid = 0;
+    let totalGenRemaining = 0;
+
+    for (const m of genEligibleMembers) {
+      const stats = getMemberGenContributionStats(m, settings, freshCons);
+      totalGenExpected += stats.expectedAmount;
+      totalGenPaid += stats.paidSoFar;
+      totalGenRemaining += stats.remainingBalance;
+
+      if (stats.paidSoFar > 0) {
+        paidOrPartialGenMembers.push({
+          member: m,
+          paidSoFar: stats.paidSoFar,
+          remainingBalance: stats.remainingBalance,
+        });
+      }
+      if (stats.remainingBalance > 0) {
+        unpaidGenMembersList.push({ member: m, remainingBalance: stats.remainingBalance });
+      }
+    }
 
     const fTotalPaid = freshMonthly
       .filter((c) => c.status === 'ተከፍሏል' || c.status === 'ከፊል')
       .reduce((sum, c) => sum + (c.paidAmount || 0), 0);
 
-    const fTotalArrears = Math.max(fTotalExpected - fTotalPaid, 0);
-
     // Helper: Group members by generation without parentheses
-    const formatGroupedByGeneration = (memberList: Member[]): string => {
-      if (!memberList || memberList.length === 0) return '';
-      const map: Record<number, Member[]> = {};
-      for (const m of memberList) {
-        const gen = Number(m.generation) || 4;
+    const formatGroupedByGeneration = (
+      entries: Array<{ member: Member; suffix?: string }>
+    ): string => {
+      if (!entries || entries.length === 0) return '';
+      const map: Record<number, Array<{ member: Member; suffix?: string }>> = {};
+      for (const e of entries) {
+        const gen = Number(e.member.generation) || 4;
         if (!map[gen]) map[gen] = [];
-        map[gen].push(m);
+        map[gen].push(e);
       }
       const gens = Object.keys(map).map(Number).sort((a, b) => a - b);
       const sections: string[] = [];
       for (const g of gens) {
-        const list = map[g].map((m) => `• ${m.fullName}`).join('\n');
+        const list = map[g]
+          .map((e) => `• ${e.member.fullName}${e.suffix ? ` — ${e.suffix}` : ''}`)
+          .join('\n');
         sections.push(`<b>${g}ኛ ትውልድ</b>\n${list}`);
       }
       return sections.join('\n\n');
     };
 
+    const paidMonthlyLines = fPaidMembers
+      .map((m) => {
+        const c = freshMonthly.find((con) => con.memberId === m.id);
+        const amt = Number(c?.paidAmount || c?.amount || 0);
+        const datePaid = c?.datePaid || '—';
+        return `• ${m.fullName} — ${amt.toLocaleString()} ብር · ${currentMonthName} ${selectedYear} · ቀን፡ ${datePaid}`;
+      })
+      .join('\n');
+
     let monthlyUnpaidSection = '';
     if (fUnpaidMembers.length === 0) {
       monthlyUnpaidSection = `❌ <b>ያልከፈሉ፦</b> 0 አባላት\nሁሉም ከፍለዋል ✅`;
     } else {
-      monthlyUnpaidSection = `❌ <b>ያልከፈሉ፦</b> ${fUnpaidMembers.length} አባላት\n\n` + formatGroupedByGeneration(fUnpaidMembers);
+      monthlyUnpaidSection =
+        `❌ <b>ያልከፈሉ፦</b> ${fUnpaidMembers.length} አባላት\n\n` +
+        formatGroupedByGeneration(fUnpaidMembers.map((m) => ({ member: m })));
     }
 
-    // Paid generation members: • Name — Amount ብር (clean, no parentheses)
-    const paidGenLines = fGenPaid.map((m) => {
-      const c = freshGen.find((con) => con.memberId === m.id);
-      const amt = Number(c?.paidAmount || c?.amount || 0);
-      return `• ${m.fullName} — ${amt.toLocaleString()} ብር`;
-    }).join('\n');
+    // Paid / partial Generation lines: always show Total Paid & Remaining Balance (Expected - Total Paid Gen)
+    const paidGenLines = paidOrPartialGenMembers
+      .map(
+        (e) =>
+          `• ${e.member.fullName} — የተከፈለ፡ ${e.paidSoFar.toLocaleString()} ብር | ቀሪ፡ ${e.remainingBalance.toLocaleString()} ብር`
+      )
+      .join('\n');
 
-    const unpaidGenGrouped = formatGroupedByGeneration(fGenUnpaid);
+    const unpaidGenGrouped = formatGroupedByGeneration(
+      unpaidGenMembersList.map((e) => ({
+        member: e.member,
+        suffix: `ቀሪ፡ ${e.remainingBalance.toLocaleString()} ብር`,
+      }))
+    );
 
     return `🏛️ <b>የአበሩስ አንድነት ማህበር</b>
-የወርሃዊ መዋጮ ሪፖርት
+የመዋጮ ሪፖርት
 
 ━━━━━━━━━━━━━━━
 👨‍👩‍👧‍👦 <b>ቤተሰብ፦</b> ${currentFamily.familyName}
@@ -258,21 +294,23 @@ export const FamilyHeadPortal: React.FC<FamilyHeadPortalProps> = ({
 👥 <b>አባላት፦</b> ${currentFamMembers.length}
 
 ━━━━━━━━━━━━━━━
-💰 <b>ወርሃዊ መዋጮ</b>
-• የሚጠበቅ፦ ${fTotalExpected.toLocaleString()} ብር
-• የተሰበሰበ፦ ${fTotalPaid.toLocaleString()} ብር
-• ቀሪ፦ ${fTotalArrears.toLocaleString()} ብር
+💰 <b>ወርሃዊ መዋጮ (${currentMonthName} ${selectedYear} ዓ.ም)</b>
+• የተከፈለ ጠቅላላ መጠን፦ ${fTotalPaid.toLocaleString()} ብር
+✅ <b>የከፈሉ (${fPaidMembers.length})፦</b>
+${paidMonthlyLines || '• እስካሁን የከፈለ የለም'}
+
 ${monthlyUnpaidSection}
 
 ━━━━━━━━━━━━━━━
 🏛️ <b>የትውልድ መዋጮ</b>
-• ሙሉ የከፈሉ፦ ${fGenPaid.length}
-• ቀሪ ያልከፈሉ፦ ${fGenUnpaid.length}
+• ጠቅላላ የሚጠበቅ (Total Expected)፦ ${totalGenExpected.toLocaleString()} ብር
+• ጠቅላላ የተከፈለ (Total Paid)፦ ${totalGenPaid.toLocaleString()} ብር
+• ቀሪ መዋጮ (Remaining Balance)፦ ${totalGenRemaining.toLocaleString()} ብር
 
-✅ <b>የከፈሉ</b>
+✅ <b>የከፈሉ / በከፊል የከፈሉ (${paidOrPartialGenMembers.length})</b>
 ${paidGenLines || '• እስካሁን የለም'}
 
-❌ <b>ያልከፈሉ</b>
+❌ <b>ያልጨረሱ / ያልከፈሉ (${unpaidGenMembersList.length})</b>
 ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
 
 ━━━━━━━━━━━━━━━
@@ -610,7 +648,7 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
           <div className="flex flex-wrap items-center gap-2.5">
             <button
               onClick={() => {
-                const payload = shareAppLinkToFamilyHead(currentFamily, members, contributions, settings);
+                const payload = shareAppLinkToFamilyHead(currentFamily, members, contributions, settings, selectedMonth, selectedYear);
                 recordTelegramLinkSent(currentFamily.id);
                 setDispatchedRecords(getTelegramDispatchedHeads());
                 try {

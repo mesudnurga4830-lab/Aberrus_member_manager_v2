@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Member, Contribution, SettingsRates, Family, UserRole, ContributionStatus } from '../types';
+import { Member, Contribution, SettingsRates, Family, UserRole, ContributionStatus, MasterReceipt, PaymentMethod } from '../types';
 import {
   subscribeToMemberContributions,
   matchMonthContribution,
@@ -16,6 +16,8 @@ import {
   getFamilyContributions,
   getMemberByLoginToken,
   updateCurrentMemberPassword,
+  subscribeToMasterReceipts,
+  saveMasterReceiptToFirestore,
 } from '../firebase';
 import { generateSvgQRCode } from '../utils/qrCode';
 import { getCurrentEthiopianDate, getEthiopianMonthName } from '../utils/ethiopianCalendar';
@@ -55,6 +57,8 @@ import {
   KeyRound,
   Eye,
   EyeOff,
+  Wallet,
+  Layers,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { shareAppLinkToMember } from '../utils/telegramShare';
@@ -125,6 +129,10 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
   const [slipPhoto, setSlipPhoto] = useState<string | null>(null);
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
   const [submittedAlert, setSubmittedAlert] = useState(false);
+  const [submittedBatchAlert, setSubmittedBatchAlert] = useState(false);
+  const [receiptUploadMode, setReceiptUploadMode] = useState<'single' | 'batch'>('single');
+  const [batchIntendedNotes, setBatchIntendedNotes] = useState<string>('');
+  const [myMasterReceipts, setMyMasterReceipts] = useState<MasterReceipt[]>([]);
   const [activeTabSubView, setActiveTabSubView] = useState<'overview' | 'family' | 'receipt' | 'proxyHistory' | 'complaint' | 'password'>('overview');
 
   // Change Password state (for individual member profile only)
@@ -315,6 +323,23 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
     return () => {
       unsubscribe();
     };
+  }, [activeMember?.id]);
+
+  // Subscribe to member's Master Receipts (Batch / Lump-Sum receipts)
+  useEffect(() => {
+    if (!activeMember?.id) {
+      setMyMasterReceipts([]);
+      return;
+    }
+    const unsub = subscribeToMasterReceipts(
+      (allReceipts) => {
+        setMyMasterReceipts(allReceipts.filter((r) => r.payerId === activeMember.id));
+      },
+      (err) => {
+        console.warn('[MemberPortal] Master receipts listener error:', err);
+      }
+    );
+    return () => unsub();
   }, [activeMember?.id]);
 
   // STEP D: 12 ETHIOPIAN MONTHS STARTING FROM HAMLE 2018 (month 11, year 2018)
@@ -529,10 +554,95 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
     }, 100);
   };
 
-  // Submit Receipt / Payment claim
+  // Submit Receipt / Payment claim (supports both Single/Proxy and Batch Master Receipt)
   const handleClaimSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!claimedTxRef.trim() || !activeMember) return;
+
+    if (receiptUploadMode === 'batch') {
+      const parsedTotal = parseFloat(claimAmount);
+      if (!parsedTotal || parsedTotal <= 0) {
+        setFirestoreError(
+          isEn
+            ? 'Please enter a valid lump-sum amount greater than 0 ETB.'
+            : 'እባክዎ ከ0 በላይ የሆነ ትክክለኛ የጅምላ ክፍያ መጠን ያስገቡ።'
+        );
+        return;
+      }
+
+      setIsSubmittingPayment(true);
+      setFirestoreError(null);
+      try {
+        const masterId = `MR-${Date.now()}`;
+        const masterReceiptNumber = `M-RCPT-${Date.now().toString().slice(-6)}`;
+        const nowIso = new Date().toISOString();
+        const newMasterReceipt: MasterReceipt = {
+          id: masterId,
+          receiptNumber: masterReceiptNumber,
+          payerId: activeMember.id,
+          payerName: activeMember.fullName,
+          familyId: activeMember.familyId || 'FA001',
+          familyName: activeMember.familyName || 'የአበሩስ ቤተሰብ',
+          totalAmount: parsedTotal,
+          allocatedAmount: 0,
+          remainingBalance: parsedTotal,
+          paymentMethod: claimedMethod as PaymentMethod,
+          transactionRef: claimedTxRef.trim(),
+          slipPhoto: slipPhoto || null,
+          status: 'Pending',
+          walletCredited: false,
+          notes:
+            batchIntendedNotes.trim() ||
+            'በአባሉ የቀረበ የጅምላ ደረሰኝ (Submitted via Member Portal for Batch Allocation)',
+          createdAt: nowIso,
+          updatedAt: nowIso,
+          createdBy: 'member',
+          allocationsCount: 0,
+        };
+
+        await saveMasterReceiptToFirestore(newMasterReceipt);
+
+        try {
+          await triggerPaymentSummaryEmail({
+            memberId: activeMember.id,
+            memberName: activeMember.fullName,
+            recipientEmail: 'mesudnurga4830@gmail.com',
+            amount: parsedTotal,
+            month: 0,
+            monthName: 'የጅምላ ክፍያ ደረሰኝ (Batch)',
+            year: 2018,
+            type: 'የጅምላ ክፍያ ደረሰኝ (Master Receipt)',
+            paymentMethod: claimedMethod,
+            transactionRef: claimedTxRef.trim(),
+            receiptNumber: masterReceiptNumber,
+            notes: newMasterReceipt.notes,
+          });
+        } catch (notifErr) {
+          console.warn('[MemberPortal] Batch email notice fallback:', notifErr);
+        }
+
+        try {
+          confetti({
+            particleCount: 70,
+            spread: 75,
+            origin: { y: 0.6 },
+            colors: ['#1B5E20', '#FFD700', '#4CAF50'],
+          });
+        } catch {}
+
+        setClaimedTxRef('');
+        setClaimAmount('');
+        setBatchIntendedNotes('');
+        setSlipPhoto(null);
+        setSubmittedBatchAlert(true);
+        setTimeout(() => setSubmittedBatchAlert(false), 7000);
+      } catch (err: any) {
+        setFirestoreError(err?.message || 'Failed to submit batch receipt');
+      } finally {
+        setIsSubmittingPayment(false);
+      }
+      return;
+    }
 
     const isProxy = Boolean(payingForTargetId && activeMember && payingForTargetId !== activeMember.id);
     const targetMember = isProxy ? (activeBeneficiary || activeMember) : activeMember;
@@ -1167,6 +1277,78 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
           >
             <X className="w-3.5 h-3.5" />
           </button>
+        </div>
+      )}
+
+      {/* CREDIT WALLET & MASTER RECEIPTS SUMMARY CARD */}
+      {((activeMember.walletBalance || 0) > 0 || myMasterReceipts.length > 0) && (
+        <div className="card-abarrus bg-gradient-to-r from-amber-50 via-white to-emerald-50 border-2 border-amber-300 shadow-sm space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-amber-400 text-emerald-950 flex items-center justify-center shadow-xs shrink-0">
+                <Wallet className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="font-extrabold text-sm text-[#212121]">
+                  {isEn ? 'Member Credit Wallet & Batch Receipts' : 'የአባል ቀሪ ሂሳብ (Credit Wallet) እና የጅምላ ደረሰኞች'}
+                </h4>
+                <p className="text-[11px] text-[#757575]">
+                  {isEn
+                    ? 'Unallocated credit from your lump-sum receipts stays safely in your balance.'
+                    : 'ከትልቅ ደረሰኝዎ ያልተከፋፈለው ቀሪ ገንዘብ በቀጥታ በዚህ ሂሳብ ላይ ይጠበቃል።'}
+                </p>
+              </div>
+            </div>
+            <div className="px-4 py-2 rounded-xl bg-[#1B5E20] text-white flex items-center gap-3 shrink-0 shadow-xs">
+              <span className="text-[11px] text-[#FFD700] font-semibold">
+                {isEn ? 'Remaining Balance:' : 'ቀሪ ሂሳብ፡'}
+              </span>
+              <span className="font-mono font-black text-lg text-[#FFD700] tabular-nums">
+                {Number(activeMember.walletBalance || 0).toLocaleString()} ብር
+              </span>
+            </div>
+          </div>
+
+          {myMasterReceipts.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-2 border-t border-amber-200/80">
+              {myMasterReceipts.slice(0, 6).map((mr) => (
+                <div
+                  key={mr.id}
+                  className="p-2.5 rounded-xl bg-white border border-amber-200 text-xs space-y-1 shadow-2xs"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono font-bold text-[#1B5E20]">{mr.receiptNumber || mr.id}</span>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        mr.status === 'Fully Allocated'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : mr.status === 'Pending'
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-blue-100 text-blue-800'
+                      }`}
+                    >
+                      {mr.status === 'Fully Allocated'
+                        ? 'ሙሉ ተከፋፍሏል (Fully Allocated)'
+                        : mr.status === 'Partially Allocated'
+                        ? 'በከፊል ተከፋፍሏል (Partial)'
+                        : mr.status === 'Credited to Wallet'
+                        ? 'በሂሳብ ላይ (Credited)'
+                        : 'በመጠባበቅ ላይ (Pending)'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-[11px] text-[#616161]">
+                    <span>ጠቅላላ: <strong className="font-mono text-[#212121]">{mr.totalAmount.toLocaleString()} ብር</strong></span>
+                    <span>ቀሪ: <strong className="font-mono text-amber-800">{mr.remainingBalance.toLocaleString()} ብር</strong></span>
+                  </div>
+                  {mr.transactionRef && (
+                    <div className="text-[10px] font-mono text-[#757575] truncate">
+                      Ref: {mr.transactionRef}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -2025,180 +2207,271 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
             </div>
           )}
 
-          {/* PROXY PAYMENT SELECTOR: PAYING FOR (ለማን እየከፈሉ ነው?) */}
-          <div className="p-3 mb-3 bg-[#F5F5F5] rounded-xl border border-[#E0E0E0] space-y-2.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-[#212121] flex items-center gap-1.5">
-                <Users className="w-4 h-4 text-[#1B5E20]" />
-                <span>{isEn ? 'Paying For (ለማን እየከፈሉ ነው?):' : 'ለማን እየከፈሉ ነው? (Paying For):'}</span>
-              </label>
-              {isProxyPayment && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
-                  ተኪ ክፍያ (Proxy)
-                </span>
-              )}
+          {submittedBatchAlert && (
+            <div className="p-3 mb-3 bg-amber-50 border border-amber-400 text-amber-950 rounded-lg text-xs flex items-center gap-2">
+              <Wallet className="w-4 h-4 text-amber-700 shrink-0" />
+              <span>
+                {isEn
+                  ? 'Batch lump-sum receipt submitted! Once approved by Admin, the amount will be credited to your wallet and allocated.'
+                  : 'የጅምላ ክፍያ ደረሰኝዎ በተሳካ ሁኔታ ተልኳል! አስተዳዳሪው ሲያረጋግጠው ወደ ቀሪ ሂሳብዎ ገብቶ ለተመረጡ አባላት ይከፋፈላል።'}
+              </span>
             </div>
+          )}
 
-            {/* Mode Toggle: Myself vs Someone Else */}
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setPayingForTargetId(activeMember.id);
-                  setClaimAmount(`${monthlyRate}`);
-                  setProxyNoticeMessage(null);
-                }}
-                className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  !isProxyPayment
-                    ? 'bg-[#1B5E20] text-white shadow-xs'
-                    : 'bg-white border border-[#E0E0E0] text-[#616161] hover:bg-neutral-100'
-                }`}
-              >
-                <User className="w-3.5 h-3.5" />
-                <span>{isEn ? 'Myself' : 'ለእኔ (Myself)'}</span>
-              </button>
+          {/* SINGLE PAYMENT VS BATCH / LUMP-SUM RECEIPT MODE SWITCH */}
+          <div className="grid grid-cols-2 gap-2 p-1 mb-3 bg-[#F5F5F5] rounded-xl border border-[#E0E0E0]">
+            <button
+              type="button"
+              onClick={() => setReceiptUploadMode('single')}
+              className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                receiptUploadMode === 'single'
+                  ? 'bg-[#1B5E20] text-white shadow-xs'
+                  : 'text-[#616161] hover:text-[#212121]'
+              }`}
+            >
+              <CreditCard className="w-3.5 h-3.5" />
+              <span>{isEn ? 'Single Payment' : 'ነጠላ ክፍያ (Single)'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setReceiptUploadMode('batch');
+                if (!claimAmount || Number(claimAmount) <= 500) {
+                  setClaimAmount('');
+                }
+              }}
+              className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                receiptUploadMode === 'batch'
+                  ? 'bg-amber-500 text-emerald-950 shadow-xs'
+                  : 'text-[#616161] hover:text-[#212121]'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>{isEn ? 'Batch Receipt (Lump-Sum)' : 'የጅምላ ደረሰኝ (Batch)'}</span>
+            </button>
+          </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  // Default to first family member other than activeMember if available
-                  const otherFamily = familyMembersList.find((m) => m.id !== activeMember.id);
-                  const target = otherFamily || members.find((m) => m.id !== activeMember.id);
-                  if (target) {
-                    setPayingForTargetId(target.id);
-                    const targetRate = target.isMinor ? 0 : target.isSpouse ? (settings.spouseMonthlyRate || 100) : (settings.monthlyRate[target.generation] || 50);
-                    setClaimAmount(`${targetRate}`);
-                  }
-                }}
-                className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  isProxyPayment
-                    ? 'bg-[#1B5E20] text-white shadow-xs'
-                    : 'bg-white border border-[#E0E0E0] text-[#616161] hover:bg-neutral-100'
-                }`}
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span>{isEn ? 'Someone Else' : 'ለሌላ አባል / ቤተሰብ'}</span>
-              </button>
-            </div>
+          {receiptUploadMode === 'single' && (
+            <>
+              {/* PROXY PAYMENT SELECTOR: PAYING FOR (ለማን እየከፈሉ ነው?) */}
+              <div className="p-3 mb-3 bg-[#F5F5F5] rounded-xl border border-[#E0E0E0] space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-[#212121] flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-[#1B5E20]" />
+                    <span>{isEn ? 'Paying For (ለማን እየከፈሉ ነው?):' : 'ለማን እየከፈሉ ነው? (Paying For):'}</span>
+                  </label>
+                  {isProxyPayment && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                      ተኪ ክፍያ (Proxy)
+                    </span>
+                  )}
+                </div>
 
-            {/* When paying for someone else: Search & Dropdown Picker */}
-            {isProxyPayment && (
-              <div className="space-y-2 pt-1 border-t border-[#E0E0E0]">
-                <div>
-                  <div className="relative mb-2">
-                    <Search className="w-3.5 h-3.5 text-[#757575] absolute left-2.5 top-2.5" />
-                    <input
-                      type="text"
-                      placeholder={isEn ? 'Search by name or Member ID...' : 'በስም ወይም በአባል መለያ ፈልግ...'}
-                      value={proxySearchQuery}
-                      onChange={(e) => setProxySearchQuery(e.target.value)}
-                      className="w-full text-xs bg-white border border-[#E0E0E0] rounded-lg pl-8 pr-2 py-2 text-[#212121] focus:ring-2 focus:ring-[#1B5E20]"
-                    />
-                  </div>
+                {/* Mode Toggle: Myself vs Someone Else */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPayingForTargetId(activeMember.id);
+                      setClaimAmount(`${monthlyRate}`);
+                      setProxyNoticeMessage(null);
+                    }}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      !isProxyPayment
+                        ? 'bg-[#1B5E20] text-white shadow-xs'
+                        : 'bg-white border border-[#E0E0E0] text-[#616161] hover:bg-neutral-100'
+                    }`}
+                  >
+                    <User className="w-3.5 h-3.5" />
+                    <span>{isEn ? 'Myself' : 'ለእኔ (Myself)'}</span>
+                  </button>
 
-                  <select
-                    value={payingForTargetId}
-                    onChange={(e) => {
-                      const newId = e.target.value;
-                      setPayingForTargetId(newId);
-                      const target = members.find((m) => m.id === newId) || familyMembersList.find((m) => m.id === newId);
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Default to first family member other than activeMember if available
+                      const otherFamily = familyMembersList.find((m) => m.id !== activeMember.id);
+                      const target = otherFamily || members.find((m) => m.id !== activeMember.id);
                       if (target) {
-                        const targetRate = target.isMinor
-                          ? 0
-                          : target.isSpouse
-                          ? settings.spouseMonthlyRate || 100
-                          : settings.monthlyRate[target.generation] || 50;
+                        setPayingForTargetId(target.id);
+                        const targetRate = target.isMinor ? 0 : target.isSpouse ? (settings.spouseMonthlyRate || 100) : (settings.monthlyRate[target.generation] || 50);
                         setClaimAmount(`${targetRate}`);
                       }
                     }}
-                    className="w-full text-xs bg-white border border-[#E0E0E0] rounded-lg p-2.5 text-[#212121] font-semibold focus:ring-2 focus:ring-[#1B5E20]"
+                    className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      isProxyPayment
+                        ? 'bg-[#1B5E20] text-white shadow-xs'
+                        : 'bg-white border border-[#E0E0E0] text-[#616161] hover:bg-neutral-100'
+                    }`}
                   >
-                    <optgroup label={isEn ? 'Family Members (የቤተሰብ አባላት)' : '👨‍👩‍👧‍👦 የቤተሰብ አባላት (Family Members)'}>
-                      {familyMembersList
-                        .filter(
-                          (m) =>
-                            !proxySearchQuery.trim() ||
-                            m.fullName.toLowerCase().includes(proxySearchQuery.toLowerCase()) ||
-                            m.id.toLowerCase().includes(proxySearchQuery.toLowerCase())
-                        )
-                        .map((m) => (
-                          <option key={`fam-${m.id}`} value={m.id}>
-                            {m.fullName} ({m.id} · {m.generation}ኛ ትውልድ)
-                          </option>
-                        ))}
-                    </optgroup>
-                    <optgroup label={isEn ? 'All Other Members (ሌሎች አባላት)' : '👥 ሌሎች የአበሩስ አባላት'}>
-                      {members
-                        .filter(
-                          (m) =>
-                            m.id !== activeMember.id &&
-                            !familyMembersList.some((fm) => fm.id === m.id) &&
-                            (!proxySearchQuery.trim() ||
-                              m.fullName.toLowerCase().includes(proxySearchQuery.toLowerCase()) ||
-                              m.id.toLowerCase().includes(proxySearchQuery.toLowerCase()))
-                        )
-                        .map((m) => (
-                          <option key={`all-${m.id}`} value={m.id}>
-                            {m.fullName} ({m.id} · {m.generation}ኛ ትውልድ)
-                          </option>
-                        ))}
-                    </optgroup>
-                  </select>
+                    <Users className="w-3.5 h-3.5" />
+                    <span>{isEn ? 'Someone Else' : 'ለሌላ አባል / ቤተሰብ'}</span>
+                  </button>
                 </div>
 
-                {activeBeneficiary && (
-                  <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-200 text-xs text-amber-900 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold">{isEn ? 'Beneficiary:' : 'ተጠቃሚ አባል፦'}</span>
-                      <strong className="font-bold text-[#1B5E20]">
-                        {activeBeneficiary.fullName} ({activeBeneficiary.id})
-                      </strong>
+                {/* When paying for someone else: Search & Dropdown Picker */}
+                {isProxyPayment && (
+                  <div className="space-y-2 pt-1 border-t border-[#E0E0E0]">
+                    <div>
+                      <div className="relative mb-2">
+                        <Search className="w-3.5 h-3.5 text-[#757575] absolute left-2.5 top-2.5" />
+                        <input
+                          type="text"
+                          placeholder={isEn ? 'Search by name or Member ID...' : 'በስም ወይም በአባል መለያ ፈልግ...'}
+                          value={proxySearchQuery}
+                          onChange={(e) => setProxySearchQuery(e.target.value)}
+                          className="w-full text-xs bg-white border border-[#E0E0E0] rounded-lg pl-8 pr-2 py-2 text-[#212121] focus:ring-2 focus:ring-[#1B5E20]"
+                        />
+                      </div>
+
+                      <select
+                        value={payingForTargetId}
+                        onChange={(e) => {
+                          const newId = e.target.value;
+                          setPayingForTargetId(newId);
+                          const target = members.find((m) => m.id === newId) || familyMembersList.find((m) => m.id === newId);
+                          if (target) {
+                            const targetRate = target.isMinor
+                              ? 0
+                              : target.isSpouse
+                              ? settings.spouseMonthlyRate || 100
+                              : settings.monthlyRate[target.generation] || 50;
+                            setClaimAmount(`${targetRate}`);
+                          }
+                        }}
+                        className="w-full text-xs bg-white border border-[#E0E0E0] rounded-lg p-2.5 text-[#212121] font-semibold focus:ring-2 focus:ring-[#1B5E20]"
+                      >
+                        <optgroup label={isEn ? 'Family Members (የቤተሰብ አባላት)' : '👨‍👩‍👧‍👦 የቤተሰብ አባላት (Family Members)'}>
+                          {familyMembersList
+                            .filter(
+                              (m) =>
+                                !proxySearchQuery.trim() ||
+                                m.fullName.toLowerCase().includes(proxySearchQuery.toLowerCase()) ||
+                                m.id.toLowerCase().includes(proxySearchQuery.toLowerCase())
+                            )
+                            .map((m) => (
+                              <option key={`fam-${m.id}`} value={m.id}>
+                                {m.fullName} ({m.id} · {m.generation}ኛ ትውልድ)
+                              </option>
+                            ))}
+                        </optgroup>
+                        <optgroup label={isEn ? 'All Other Members (ሌሎች አባላት)' : '👥 ሌሎች የአበሩስ አባላት'}>
+                          {members
+                            .filter(
+                              (m) =>
+                                m.id !== activeMember.id &&
+                                !familyMembersList.some((fm) => fm.id === m.id) &&
+                                (!proxySearchQuery.trim() ||
+                                  m.fullName.toLowerCase().includes(proxySearchQuery.toLowerCase()) ||
+                                  m.id.toLowerCase().includes(proxySearchQuery.toLowerCase()))
+                            )
+                            .map((m) => (
+                              <option key={`all-${m.id}`} value={m.id}>
+                                {m.fullName} ({m.id} · {m.generation}ኛ ትውልድ)
+                              </option>
+                            ))}
+                        </optgroup>
+                      </select>
                     </div>
-                    <p className="text-[11px] text-amber-800 leading-relaxed">
-                      {isEn
-                        ? `This proxy payment will be submitted as Payer: "${activeMember.fullName}" for Beneficiary: "${activeBeneficiary.fullName}" with status "Pending" for Admin verification.`
-                        : `ይህ ተኪ ክፍያ በስምዎ (ከፋይ፦ "${activeMember.fullName}") ለ "${activeBeneficiary.fullName}" በ 'Pending' ሁኔታ ይላካል፤ አስተዳዳሪው ሲያጸድቀው የአባሉ መረጃ በቀጥታ ይዘመናል።`}
-                    </p>
+
+                    {activeBeneficiary && (
+                      <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-200 text-xs text-amber-900 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold">{isEn ? 'Beneficiary:' : 'ተጠቃሚ አባል፦'}</span>
+                          <strong className="font-bold text-[#1B5E20]">
+                            {activeBeneficiary.fullName} ({activeBeneficiary.id})
+                          </strong>
+                        </div>
+                        <p className="text-[11px] text-amber-800 leading-relaxed">
+                          {isEn
+                            ? `This proxy payment will be submitted as Payer: "${activeMember.fullName}" for Beneficiary: "${activeBeneficiary.fullName}" with status "Pending" for Admin verification.`
+                            : `ይህ ተኪ ክፍያ በስምዎ (ከፋይ፦ "${activeMember.fullName}") ለ "${activeBeneficiary.fullName}" በ 'Pending' ሁኔታ ይላካል፤ አስተዳዳሪው ሲያጸድቀው የአባሉ መረጃ በቀጥታ ይዘመናል።`}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-            )}
-          </div>
 
-          {/* Type Toggle: Monthly vs Generation */}
-          <div className="flex items-center gap-2 mb-3 bg-[#F5F5F5] p-1 rounded-xl border border-[#E0E0E0]">
-            <button
-              type="button"
-              onClick={() => {
-                setPaymentType('ወርሃዊ');
-                setClaimAmount(`${targetMonthlyRate}`);
-              }}
-              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                paymentType === 'ወርሃዊ'
-                  ? 'bg-[#1B5E20] text-white shadow-xs'
-                  : 'text-[#757575] hover:text-[#212121]'
-              }`}
-            >
-              {isEn ? `Monthly Dues (${targetMonthlyRate} ETB)` : `ወርሃዊ መዋጮ (${targetMonthlyRate} ብር)`}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setPaymentType('ትውልድ');
-                setClaimAmount(`${targetGenPaymentRate}`);
-              }}
-              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                paymentType === 'ትውልድ'
-                  ? 'bg-[#1B5E20] text-white shadow-xs'
-                  : 'text-[#757575] hover:text-[#212121]'
-              }`}
-            >
-              {isEn ? `Generation Fund (${targetGenPaymentRate} ETB)` : `የትውልድ መዋጮ (${targetGenPaymentRate} ብር)`}
-            </button>
-          </div>
+              {/* Type Toggle: Monthly vs Generation */}
+              <div className="flex items-center gap-2 mb-3 bg-[#F5F5F5] p-1 rounded-xl border border-[#E0E0E0]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPaymentType('ወርሃዊ');
+                    setClaimAmount(`${targetMonthlyRate}`);
+                  }}
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    paymentType === 'ወርሃዊ'
+                      ? 'bg-[#1B5E20] text-white shadow-xs'
+                      : 'text-[#757575] hover:text-[#212121]'
+                  }`}
+                >
+                  {isEn ? `Monthly Dues (${targetMonthlyRate} ETB)` : `ወርሃዊ መዋጮ (${targetMonthlyRate} ብር)`}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPaymentType('ትውልድ');
+                    setClaimAmount(`${targetGenPaymentRate}`);
+                  }}
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    paymentType === 'ትውልድ'
+                      ? 'bg-[#1B5E20] text-white shadow-xs'
+                      : 'text-[#757575] hover:text-[#212121]'
+                  }`}
+                >
+                  {isEn ? `Generation Fund (${targetGenPaymentRate} ETB)` : `የትውልድ መዋጮ (${targetGenPaymentRate} ብር)`}
+                </button>
+              </div>
+            </>
+          )}
 
           <form onSubmit={handleClaimSubmit} className="space-y-3">
-            {paymentType === 'ወርሃዊ' ? (
+            {receiptUploadMode === 'batch' ? (
+              <div className="space-y-3">
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-950 space-y-1">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <Wallet className="w-4 h-4 text-amber-700" />
+                    <span>{isEn ? 'Batch / Lump-Sum Deposit Receipt' : 'የጅምላ ክፍያ ደረሰኝ (ለብዙ አባላት የሚከፋፈል)'}</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    {isEn
+                      ? 'Upload one bank receipt (e.g. 10,000 ETB) covering multiple family members or months. Admin will credit your wallet balance and allocate across selected members and dues types.'
+                      : 'ትልቅ ክፍያ (ለምሳሌ 10,000 ብር) ለብዙ የቤተሰብ አባላት እና ለተለያዩ ወራት ወይም የትውልድ መዋጮ ለመክፈል ደረሰኙን እዚህ ይጫኑ። አስተዳዳሪው ሲያረጋግጠው በቀሪ ሂሳብዎ ላይ ተመዝግቦ ለተመረጡት አባላት ይከፋፈላል።'}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-[#212121] block mb-1">
+                    {isEn ? 'Total Lump-Sum Paid Amount (ETB):' : 'ጠቅላላ የተከፈለ የብር መጠን (ETB)፡'}
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    step="any"
+                    placeholder="ለምሳሌ፡ 10000"
+                    value={claimAmount}
+                    onChange={(e) => setClaimAmount(e.target.value)}
+                    className="w-full text-xs font-mono font-bold bg-[#F5F5F5] border border-[#E0E0E0] rounded-lg p-2.5 text-[#212121] focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-[#212121] block mb-1">
+                    {isEn ? 'Allocation Note / Family Instructions (Optional):' : 'የክፍፍል መመሪያ / ማስታወሻ (አማራጭ)፡'}
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="ለምሳሌ፦ ለ10 የቤተሰብ አባላት ወርሃዊና የትውልድ መዋጮ ይከፋፈል..."
+                    value={batchIntendedNotes}
+                    onChange={(e) => setBatchIntendedNotes(e.target.value)}
+                    className="w-full text-xs bg-[#F5F5F5] border border-[#E0E0E0] rounded-lg p-2 text-[#212121] focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+            ) : paymentType === 'ወርሃዊ' ? (
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-[#212121] block mb-1">
@@ -2331,8 +2604,16 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
               )}
               <span>
                 {isSubmittingPayment
-                  ? isEn ? 'Submitting Payment...' : 'ክፍያው እየተመዘገበ ነው...'
-                  : isEn ? 'Submit Payment Record' : 'ክፍያውን መዝግብ'}
+                  ? isEn
+                    ? 'Submitting...'
+                    : 'እየተመዘገበ ነው...'
+                  : receiptUploadMode === 'batch'
+                  ? isEn
+                    ? 'Submit Batch Receipt'
+                    : 'የጅምላ ደረሰኙን ላክ (Submit Batch)'
+                  : isEn
+                  ? 'Submit Payment Record'
+                  : 'ክፍያውን መዝግብ'}
               </span>
             </button>
           </form>
