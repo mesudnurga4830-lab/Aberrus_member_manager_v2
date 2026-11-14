@@ -65,6 +65,8 @@ import {
   saveMemberToFirestore,
   deleteMemberFromFirestore,
   subscribeToAllContributions,
+  subscribeToMembersWithMetadata,
+  subscribeToFamiliesWithMetadata,
 } from './firebase';
 import type { User as FirebaseUser } from 'firebase/auth';
 import {
@@ -91,6 +93,8 @@ export default function App() {
   const [lang, setLang] = useState<'am' | 'en'>('am');
   const [authFirebaseUser, setAuthFirebaseUser] = useState<FirebaseUser | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
+  const [isMembersLoading, setIsMembersLoading] = useState<boolean>(true);
+  const [isContributionsLoading, setIsContributionsLoading] = useState<boolean>(true);
   const [isLoginPage, setIsLoginPage] = useState<boolean>(true);
   const [userRole, setUserRole] = useState<UserRole>('member');
   const [currentTab, setCurrentTab] = useState<string>('portal');
@@ -258,40 +262,8 @@ export default function App() {
 
   const currentDate = getCurrentEthiopianDate();
 
-  // Listen for storage events, real-time Firestore sync, and PWA install prompt
+  // Listen for local storage sync events and PWA install prompt (no Firestore calls before auth)
   useEffect(() => {
-    // 1. Initial live fetch from Firestore
-    getMembersFromFirestore().then((live) => {
-      if (live && live.length > 0) setMembers(live);
-    });
-    getFamiliesFromFirestore().then((live) => {
-      if (live && live.length > 0) setFamilies(live);
-    });
-    getContributionsFromFirestore().then((live) => {
-      if (live && live.length > 0) setContributions(live);
-    });
-    getSettingsFromFirestore().then((live) => {
-      if (live) setSettings(live);
-    });
-
-    // 2. Real-time global subscription monitoring the 'contributions' collection in Firestore
-    const unsubscribeContribs = subscribeToAllContributions(
-      (live) => {
-        if (Array.isArray(live)) {
-          setContributions(live);
-          try {
-            localStorage.setItem('abarrus_contributions_v6', JSON.stringify(live));
-          } catch {}
-        }
-      },
-      (err) => {
-        console.warn('[App Global Subscription Error]:', err);
-      }
-    );
-
-    // Initial sync with backend server
-    syncWithBackendServer();
-
     const handleSync = () => {
       setMembers(getMembers());
       setFamilies(getFamilies());
@@ -310,11 +282,129 @@ export default function App() {
     window.addEventListener('beforeinstallprompt', handleBeforeInstall);
 
     return () => {
-      unsubscribeContribs();
       window.removeEventListener('abarrus_data_synced', handleSync);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
     };
   }, []);
+
+  // Requirement 2 & 3: Wait for onAuthStateChanged AND handle Firestore Offline Persistence empty-cache snapshots
+  useEffect(() => {
+    // Do NOT query Firestore until onAuthStateChanged confirms auth state and user is signed in
+    if (isAuthChecking) {
+      setIsMembersLoading(true);
+      setIsContributionsLoading(true);
+      return;
+    }
+
+    if (!authFirebaseUser) {
+      setIsMembersLoading(false);
+      setIsContributionsLoading(false);
+      return;
+    }
+
+    let isActive = true;
+    let offlineFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+    setIsMembersLoading(true);
+    setIsContributionsLoading(true);
+
+    // 1. Real-time metadata-aware listener for 'members'
+    const unsubscribeMembers = subscribeToMembersWithMetadata(
+      (liveMembers, meta) => {
+        if (!isActive) return;
+
+        // If IndexedDB offline cache emits an initial empty snapshot while waiting for server,
+        // keep loading state active until server snapshot (!meta.fromCache) or non-empty data arrives.
+        if (meta.fromCache && meta.empty) {
+          if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            if (!offlineFallbackTimer) {
+              offlineFallbackTimer = setTimeout(() => {
+                if (isActive) setIsMembersLoading(false);
+              }, 1200);
+            }
+          }
+          return;
+        }
+
+        if (offlineFallbackTimer) {
+          clearTimeout(offlineFallbackTimer);
+          offlineFallbackTimer = null;
+        }
+
+        if (liveMembers.length > 0 || !meta.fromCache) {
+          setMembers(liveMembers);
+          if (liveMembers.length > 0) {
+            try {
+              localStorage.setItem('abarrus_members_v6', JSON.stringify(liveMembers));
+            } catch {}
+          }
+        }
+        setIsMembersLoading(false);
+      },
+      (err) => {
+        console.warn('[App Members Subscription Error]:', err);
+        if (isActive) setIsMembersLoading(false);
+      }
+    );
+
+    // 2. Real-time metadata-aware listener for 'families'
+    const unsubscribeFamilies = subscribeToFamiliesWithMetadata(
+      (liveFamilies, meta) => {
+        if (!isActive) return;
+        if (meta.fromCache && meta.empty) return;
+        if (liveFamilies.length > 0 || !meta.fromCache) {
+          setFamilies(liveFamilies);
+          if (liveFamilies.length > 0) {
+            try {
+              localStorage.setItem('abarrus_families_v6', JSON.stringify(liveFamilies));
+            } catch {}
+          }
+        }
+      },
+      (err) => {
+        console.warn('[App Families Subscription Error]:', err);
+      }
+    );
+
+    // 3. Real-time global subscription monitoring the 'contributions' collection in Firestore
+    const unsubscribeContribs = subscribeToAllContributions(
+      (live, meta) => {
+        if (!isActive) return;
+        if (meta?.fromCache && meta?.empty) {
+          if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            setIsContributionsLoading(false);
+          }
+          return;
+        }
+        if (Array.isArray(live) && (live.length > 0 || !meta?.fromCache)) {
+          setContributions(live);
+          if (live.length > 0) {
+            try {
+              localStorage.setItem('abarrus_contributions_v6', JSON.stringify(live));
+            } catch {}
+          }
+        }
+        setIsContributionsLoading(false);
+      },
+      (err) => {
+        console.warn('[App Global Subscription Error]:', err);
+        if (isActive) setIsContributionsLoading(false);
+      }
+    );
+
+    // 4. Fetch settings & sync backend only after Firebase Auth session is verified
+    getSettingsFromFirestore().then((live) => {
+      if (isActive && live) setSettings(live);
+    });
+    syncWithBackendServer();
+
+    return () => {
+      isActive = false;
+      if (offlineFallbackTimer) clearTimeout(offlineFallbackTimer);
+      unsubscribeMembers();
+      unsubscribeFamilies();
+      unsubscribeContribs();
+    };
+  }, [isAuthChecking, authFirebaseUser]);
 
   // Parse deep-link query and hash params on mount (when opened via Telegram link on mobile)
   useEffect(() => {
@@ -797,6 +887,7 @@ export default function App() {
                 families={families}
                 contributions={contributions}
                 settings={settings}
+                isLoading={isMembersLoading}
                 onOpenAddMember={() => setIsAddMemberOpen(true)}
                 onOpenBulkImport={() => setIsBulkImportOpen(true)}
                 onOpenQR={(m) => setActiveQRMember(m)}

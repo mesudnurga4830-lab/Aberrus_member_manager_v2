@@ -1850,16 +1850,119 @@ export function subscribeToMemberContributions(
   );
 }
 
+export interface SnapshotMetadataInfo {
+  fromCache: boolean;
+  hasPendingWrites: boolean;
+  empty: boolean;
+}
+
+/**
+ * Helper to log structured Firestore snapshot errors without crashing offline UI flows.
+ */
+function logSnapshotError(err: any, operationType: OperationType, path: string): void {
+  const errInfo: FirestoreErrorInfo = {
+    error: err instanceof Error ? err.message : String(err),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo:
+        auth.currentUser?.providerData?.map((provider) => ({
+          providerId: provider.providerId,
+          email: provider.email,
+        })) || [],
+    },
+    operationType,
+    path,
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+}
+
+/**
+ * Real-time global listener for the 'members' collection in Firestore with cache/server metadata.
+ * Uses { includeMetadataChanges: true } so consumers can distinguish an empty IndexedDB cache
+ * snapshot (fromCache: true, empty: true) from an authoritative server snapshot (fromCache: false).
+ */
+export function subscribeToMembersWithMetadata(
+  onData: (members: Member[], meta: SnapshotMetadataInfo) => void,
+  onError?: (err: Error) => void
+): () => void {
+  return onSnapshot(
+    collection(db, MEMBERS_COLLECTION),
+    { includeMetadataChanges: true },
+    (snapshot) => {
+      const docs = snapshot.docs.map((d) => {
+        const data = d.data() as any;
+        const rawPhone = data.phone || data.phoneNumber || '';
+        const cleanPhone = rawPhone ? normalizePhoneNumber(String(rawPhone)) : '';
+        return {
+          ...data,
+          id: d.id,
+          fullName: String(data.fullName || ''),
+          familyId: String(data.familyId || ''),
+          familyName: String(data.familyName || ''),
+          generation: Number(data.generation || 4),
+          phone: cleanPhone || data.phone || '',
+          phoneNumber: cleanPhone || data.phoneNumber || '',
+        } as Member;
+      });
+
+      onData(docs, {
+        fromCache: snapshot.metadata.fromCache,
+        hasPendingWrites: snapshot.metadata.hasPendingWrites,
+        empty: snapshot.empty,
+      });
+    },
+    (err) => {
+      logSnapshotError(err, OperationType.LIST, MEMBERS_COLLECTION);
+      if (onError) onError(err);
+    }
+  );
+}
+
+/**
+ * Real-time global listener for the 'families' collection in Firestore with cache/server metadata.
+ */
+export function subscribeToFamiliesWithMetadata(
+  onData: (families: Family[], meta: SnapshotMetadataInfo) => void,
+  onError?: (err: Error) => void
+): () => void {
+  return onSnapshot(
+    collection(db, FAMILIES_COLLECTION),
+    { includeMetadataChanges: true },
+    (snapshot) => {
+      const docs = snapshot.docs.map((d) => ({
+        id: d.id,
+        ...(d.data() as any),
+      })) as Family[];
+
+      onData(docs, {
+        fromCache: snapshot.metadata.fromCache,
+        hasPendingWrites: snapshot.metadata.hasPendingWrites,
+        empty: snapshot.empty,
+      });
+    },
+    (err) => {
+      logSnapshotError(err, OperationType.LIST, FAMILIES_COLLECTION);
+      if (onError) onError(err);
+    }
+  );
+}
+
 /**
  * Real-time global listener for the 'contributions' collection in Firestore.
  * Notifies callbacks whenever any document is added, modified, or deleted by an Admin or through an API call.
+ * Uses { includeMetadataChanges: true } to expose fromCache / empty metadata.
  */
 export function subscribeToAllContributions(
-  onData: (contributions: Contribution[]) => void,
+  onData: (contributions: Contribution[], meta?: SnapshotMetadataInfo) => void,
   onError?: (err: Error) => void
 ): () => void {
   return onSnapshot(
     collection(db, CONTRIBUTIONS_COLLECTION),
+    { includeMetadataChanges: true },
     (snapshot) => {
       // Diagnostic change logging for status and amount updates
       snapshot.docChanges().forEach((change) => {
@@ -1904,10 +2007,14 @@ export function subscribeToAllContributions(
         } as Contribution;
       });
 
-      onData(docs);
+      onData(docs, {
+        fromCache: snapshot.metadata.fromCache,
+        hasPendingWrites: snapshot.metadata.hasPendingWrites,
+        empty: snapshot.empty,
+      });
     },
     (err) => {
-      console.error('[Firestore onSnapshot Error in subscribeToAllContributions]:', err);
+      logSnapshotError(err, OperationType.LIST, CONTRIBUTIONS_COLLECTION);
       if (onError) onError(err);
     }
   );
