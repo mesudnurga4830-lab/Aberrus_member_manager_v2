@@ -429,48 +429,156 @@ async function findOrRegisterTelegramMember(
   username?: string,
   senderName?: string,
   searchStr?: string,
-  allowAutoRegister: boolean = false
+  allowAutoRegister: boolean = false,
+  explicitChatId?: string
 ): Promise<any> {
   const cleanFromId = String(fromId || '').trim();
+  const cleanExplicitChatId = String(explicitChatId || '').trim();
+  const effectivePrivateChatId =
+    cleanExplicitChatId && !isGroupChatId(cleanExplicitChatId)
+      ? cleanExplicitChatId
+      : cleanFromId && !isGroupChatId(cleanFromId)
+      ? cleanFromId
+      : '';
   const cleanUser = (username || '').trim().replace(/^@/, '').toLowerCase();
-  const cleanSearch = (searchStr || '').trim().toLowerCase();
+  const rawSearch = (searchStr || '').trim();
+  const cleanSearch = rawSearch.toLowerCase();
+  const nowIso = new Date().toISOString();
 
   // If Firestore is available, use live database
   if (db) {
     try {
       const membersRef = collection(db, 'members');
 
-      // 1. If explicit ID searched (e.g. /start MEM-001)
-      if (cleanSearch && cleanSearch.startsWith('mem-')) {
-        const memDoc = await getDoc(doc(db, 'members', cleanSearch.toUpperCase()));
-        if (memDoc.exists()) {
-          const mData = memDoc.data();
-          const updates: Record<string, any> = {};
+      // 1. If explicit Member ID searched (e.g. /start MEM-123 or /start AB-001)
+      if (rawSearch) {
+        const candidateIds = Array.from(
+          new Set([rawSearch, rawSearch.toUpperCase(), rawSearch.toLowerCase()])
+        );
+        let matchedDocSnap: any = null;
+
+        for (const candidateId of candidateIds) {
+          const directSnap = await getDoc(doc(db, 'members', candidateId));
+          if (directSnap.exists()) {
+            matchedDocSnap = directSnap;
+            break;
+          }
+        }
+
+        if (!matchedDocSnap) {
+          for (const candidateId of candidateIds) {
+            const qById = await getDocs(query(membersRef, where('id', '==', candidateId), limit(1)));
+            if (!qById.empty) {
+              matchedDocSnap = qById.docs[0];
+              break;
+            }
+          }
+        }
+
+        if (matchedDocSnap) {
+          const mData = matchedDocSnap.data();
+          const updates: Record<string, any> = { updatedAt: nowIso };
           if (!mData.loginToken) {
             mData.loginToken = generateLoginToken();
             updates.loginToken = mData.loginToken;
           }
-          if (cleanFromId && !isGroupChatId(cleanFromId)) {
-            mData.telegramId = cleanFromId;
-            mData.telegramChatId = cleanFromId;
-            updates.telegramId = cleanFromId;
-            updates.telegramChatId = cleanFromId;
+          if (effectivePrivateChatId) {
+            mData.telegramId = effectivePrivateChatId;
+            mData.telegramChatId = effectivePrivateChatId;
+            updates.telegramId = effectivePrivateChatId;
+            updates.telegramChatId = effectivePrivateChatId;
           }
-          if (Object.keys(updates).length > 0) {
-            await safeFirestoreSetDoc(doc(db, 'members', memDoc.id), updates, { merge: true });
+          if (!mData.telegram && cleanUser) {
+            mData.telegram = `@${cleanUser}`;
+            updates.telegram = mData.telegram;
           }
-          return { id: memDoc.id, ...mData };
+          await safeFirestoreSetDoc(doc(db, 'members', matchedDocSnap.id), updates, { merge: true });
+
+          if (effectivePrivateChatId) {
+            await safeFirestoreSetDoc(
+              doc(db, 'telegramUsers', effectivePrivateChatId),
+              {
+                chatId: effectivePrivateChatId,
+                telegramChatId: effectivePrivateChatId,
+                fromId: cleanFromId || effectivePrivateChatId,
+                firstName: senderName || mData.fullName || '',
+                username: cleanUser || '',
+                memberId: matchedDocSnap.id,
+                loginToken: mData.loginToken,
+                updatedAt: nowIso,
+              },
+              { merge: true }
+            );
+          }
+
+          const storeIdx = (currentStore?.members || []).findIndex(
+            (m: any) => String(m.id).toLowerCase() === String(matchedDocSnap.id).toLowerCase()
+          );
+          if (storeIdx !== -1) {
+            currentStore.members[storeIdx] = {
+              ...currentStore.members[storeIdx],
+              ...(effectivePrivateChatId
+                ? { telegramId: effectivePrivateChatId, telegramChatId: effectivePrivateChatId }
+                : {}),
+              loginToken: mData.loginToken,
+            } as any;
+          }
+
+          return { id: matchedDocSnap.id, ...mData };
+        }
+
+        // If an explicit Member ID was provided via deep link and did not match any member,
+        // stop here when auto-register is disabled so we don't silently bind to an unrelated record.
+        if (!allowAutoRegister) {
+          // Check in-memory fallback before returning null
+          const memMatch = (currentStore?.members || []).find(
+            (m: any) => String(m.id).toLowerCase() === cleanSearch
+          );
+          if (memMatch) {
+            if (!memMatch.loginToken) memMatch.loginToken = generateLoginToken();
+            if (effectivePrivateChatId) {
+              (memMatch as any).telegramId = effectivePrivateChatId;
+              (memMatch as any).telegramChatId = effectivePrivateChatId;
+              await safeFirestoreSetDoc(
+                doc(db, 'members', memMatch.id),
+                {
+                  ...memMatch,
+                  telegramId: effectivePrivateChatId,
+                  telegramChatId: effectivePrivateChatId,
+                  updatedAt: nowIso,
+                },
+                { merge: true }
+              );
+              await safeFirestoreSetDoc(
+                doc(db, 'telegramUsers', effectivePrivateChatId),
+                {
+                  chatId: effectivePrivateChatId,
+                  telegramChatId: effectivePrivateChatId,
+                  fromId: cleanFromId || effectivePrivateChatId,
+                  firstName: senderName || memMatch.fullName || '',
+                  username: cleanUser || '',
+                  memberId: memMatch.id,
+                  loginToken: memMatch.loginToken,
+                  updatedAt: nowIso,
+                },
+                { merge: true }
+              );
+            }
+            return memMatch;
+          }
+          return null;
         }
       }
 
       // 2. Query by telegramChatId or telegramId in members collection
-      if (cleanFromId) {
-        let snap = await getDocs(query(membersRef, where('telegramChatId', '==', cleanFromId)));
+      if (effectivePrivateChatId || cleanFromId) {
+        const lookupId = effectivePrivateChatId || cleanFromId;
+        let snap = await getDocs(query(membersRef, where('telegramChatId', '==', lookupId)));
         if (snap.empty) {
-          snap = await getDocs(query(membersRef, where('telegramId', '==', cleanFromId)));
+          snap = await getDocs(query(membersRef, where('telegramId', '==', lookupId)));
         }
-        if (snap.empty && !isNaN(Number(cleanFromId))) {
-          snap = await getDocs(query(membersRef, where('telegramId', '==', Number(cleanFromId))));
+        if (snap.empty && !isNaN(Number(lookupId))) {
+          snap = await getDocs(query(membersRef, where('telegramId', '==', Number(lookupId))));
         }
         if (!snap.empty) {
           const docSnap = snap.docs[0];
@@ -480,9 +588,9 @@ async function findOrRegisterTelegramMember(
             mData.loginToken = generateLoginToken();
             updates.loginToken = mData.loginToken;
           }
-          if (!mData.telegramChatId && !isGroupChatId(cleanFromId)) {
-            mData.telegramChatId = cleanFromId;
-            updates.telegramChatId = cleanFromId;
+          if (!mData.telegramChatId && effectivePrivateChatId) {
+            mData.telegramChatId = effectivePrivateChatId;
+            updates.telegramChatId = effectivePrivateChatId;
           }
           if (Object.keys(updates).length > 0) {
             await safeFirestoreSetDoc(doc(db, 'members', docSnap.id), updates, { merge: true });
@@ -503,16 +611,16 @@ async function findOrRegisterTelegramMember(
           if (!mData.loginToken) {
             mData.loginToken = generateLoginToken();
           }
-          if (cleanFromId && !isGroupChatId(cleanFromId)) {
-            mData.telegramId = cleanFromId;
-            mData.telegramChatId = cleanFromId;
+          if (effectivePrivateChatId) {
+            mData.telegramId = effectivePrivateChatId;
+            mData.telegramChatId = effectivePrivateChatId;
           }
           await safeFirestoreSetDoc(
             doc(db, 'members', docSnap.id),
             {
               loginToken: mData.loginToken,
-              ...(cleanFromId && !isGroupChatId(cleanFromId)
-                ? { telegramId: cleanFromId, telegramChatId: cleanFromId }
+              ...(effectivePrivateChatId
+                ? { telegramId: effectivePrivateChatId, telegramChatId: effectivePrivateChatId }
                 : {}),
             },
             { merge: true }
@@ -522,8 +630,9 @@ async function findOrRegisterTelegramMember(
       }
 
       // 4. Check if registered in telegramUsers mapping collection
-      if (cleanFromId) {
-        const userDoc = await getDoc(doc(db, 'telegramUsers', cleanFromId));
+      if (effectivePrivateChatId || cleanFromId) {
+        const lookupId = effectivePrivateChatId || cleanFromId;
+        const userDoc = await getDoc(doc(db, 'telegramUsers', lookupId));
         if (userDoc.exists() && userDoc.data()?.memberId) {
           const mId = userDoc.data().memberId;
           const mDoc = await getDoc(doc(db, 'members', mId));
@@ -534,11 +643,11 @@ async function findOrRegisterTelegramMember(
               mData.loginToken = generateLoginToken();
               updates.loginToken = mData.loginToken;
             }
-            if (!isGroupChatId(cleanFromId)) {
-              mData.telegramId = cleanFromId;
-              mData.telegramChatId = cleanFromId;
-              updates.telegramId = cleanFromId;
-              updates.telegramChatId = cleanFromId;
+            if (effectivePrivateChatId) {
+              mData.telegramId = effectivePrivateChatId;
+              mData.telegramChatId = effectivePrivateChatId;
+              updates.telegramId = effectivePrivateChatId;
+              updates.telegramChatId = effectivePrivateChatId;
             }
             if (Object.keys(updates).length > 0) {
               await safeFirestoreSetDoc(doc(db, 'members', mId), updates, { merge: true });
@@ -549,16 +658,16 @@ async function findOrRegisterTelegramMember(
       }
 
       // 5. If member does not exist in Firestore yet, automatically register new member ONLY if allowAutoRegister is true
-      if (allowAutoRegister && cleanFromId && !isGroupChatId(cleanFromId)) {
-        const newMemberId = `MEM-${cleanFromId.slice(-4) || Math.floor(1000 + Math.random() * 9000)}`;
+      if (allowAutoRegister && effectivePrivateChatId) {
+        const newMemberId = `MEM-${effectivePrivateChatId.slice(-4) || Math.floor(1000 + Math.random() * 9000)}`;
         const newToken = generateLoginToken();
         const newMemberData = {
           id: newMemberId,
           fullName: senderName?.trim() || 'የአበሩስ አባል',
           phone: '',
           telegram: cleanUser ? `@${cleanUser}` : '',
-          telegramId: cleanFromId,
-          telegramChatId: cleanFromId,
+          telegramId: effectivePrivateChatId,
+          telegramChatId: effectivePrivateChatId,
           generation: 4,
           familyId: 'FA001',
           familyName: 'የአበሩስ ቤተሰብ',
@@ -566,22 +675,22 @@ async function findOrRegisterTelegramMember(
           isMinor: false,
           isSpouse: false,
           loginToken: newToken,
-          registeredAt: new Date().toISOString(),
+          registeredAt: nowIso,
         };
 
         await safeFirestoreSetDoc(doc(db, 'members', newMemberId), newMemberData);
-        await safeFirestoreSetDoc(doc(db, 'telegramUsers', cleanFromId), {
-          chatId: cleanFromId,
-          telegramChatId: cleanFromId,
-          fromId: cleanFromId,
+        await safeFirestoreSetDoc(doc(db, 'telegramUsers', effectivePrivateChatId), {
+          chatId: effectivePrivateChatId,
+          telegramChatId: effectivePrivateChatId,
+          fromId: cleanFromId || effectivePrivateChatId,
           firstName: senderName || '',
           username: cleanUser || '',
           memberId: newMemberId,
           loginToken: newToken,
-          updatedAt: new Date().toISOString(),
+          updatedAt: nowIso,
         });
 
-        console.log(`[Firestore] Registered new member ${newMemberId} with unique loginToken for Telegram ID ${cleanFromId}`);
+        console.log(`[Firestore] Registered new member ${newMemberId} with unique loginToken for Telegram Chat ID ${effectivePrivateChatId}`);
         return newMemberData;
       }
     } catch (dbErr) {
@@ -592,15 +701,22 @@ async function findOrRegisterTelegramMember(
   // Fallback to in-memory store if Firestore is unreachable
   const membersList = currentStore?.members || [];
   let match = membersList.find((m) => m.id.toLowerCase() === cleanSearch);
-  if (!match && cleanUser) {
+  if (!match && !rawSearch && cleanUser) {
     match = membersList.find((m) => (m.telegram || '').replace(/^@/, '').toLowerCase() === cleanUser);
   }
-  if (!match && cleanFromId) {
-    match = membersList.find((m) => String(m.telegramId) === cleanFromId);
+  if (!match && !rawSearch && (effectivePrivateChatId || cleanFromId)) {
+    const lookupId = effectivePrivateChatId || cleanFromId;
+    match = membersList.find(
+      (m: any) => String(m.telegramChatId || '') === lookupId || String(m.telegramId || '') === lookupId
+    );
   }
   if (match) {
     if (!match.loginToken) {
       match.loginToken = generateLoginToken();
+    }
+    if (effectivePrivateChatId) {
+      (match as any).telegramId = effectivePrivateChatId;
+      (match as any).telegramChatId = effectivePrivateChatId;
     }
     return match;
   }
@@ -974,12 +1090,15 @@ async function processTelegramUpdate(update: any) {
         return;
       }
 
-      // Non-reply admin message in private chat: do NOT trigger member welcome flow or leak into group
-      if (!isGroupChatId(chatId)) {
-        console.log(`[Telegram Admin] Admin sent non-reply message: "${text}".`);
-        await sendTelegramMessage(chatId, 'ይህ ትዕዛዝ አይታወቅም');
+      // Allow /start deep link commands from Admin to link their personal Member profile cleanly
+      if (!text.trim().startsWith('/start')) {
+        // Non-reply admin message in private chat: do NOT trigger member welcome flow or leak into group
+        if (!isGroupChatId(chatId)) {
+          console.log(`[Telegram Admin] Admin sent non-reply message: "${text}".`);
+          await sendTelegramMessage(chatId, 'ይህ ትዕዛዝ አይታወቅም');
+        }
+        return;
       }
-      return;
     }
 
     // 3. Handle Receipt Photo (Requirement 7)
@@ -1116,16 +1235,66 @@ async function processTelegramUpdate(update: any) {
       return;
     }
 
-    // 5. Handle /start command (Requirement 6 & BUG 2 Fix)
-    if (text.startsWith('/start')) {
-      const parts = text.split(/\s+/);
-      const startArg = parts[1] || ''; // e.g. /start MEM-022
+    // 5. Handle /start command & Deep Link (/start <MEMBER_ID>)
+    if (text.trim().startsWith('/start')) {
+      const parts = text.trim().split(/\s+/);
+      const startArg = (parts[1] || '').trim(); // e.g. /start MEM-123
+      const effectivePrivateChatId = !isGroupChatId(chatId)
+        ? chatId
+        : !isGroupChatId(fromId)
+        ? fromId
+        : '';
 
-      const matchedMember = await findOrRegisterTelegramMember(fromId, username, firstName, startArg, true);
+      if (startArg) {
+        const linkedMember = await findOrRegisterTelegramMember(
+          fromId,
+          username,
+          firstName,
+          startArg,
+          false,
+          effectivePrivateChatId
+        );
+
+        if (linkedMember) {
+          const loginUrl = `${APP_URL}/login?token=${linkedMember.loginToken || ''}`;
+          const linkedSuccessReply = `✅ <b>የቴሌግራም አካውንትዎ ከአፑ ጋር በተሳካ ሁኔታ ተገናኝቷል!</b>
+
+👤 <b>አባል፡</b> ${linkedMember.fullName} (<code>${linkedMember.id}</code>)
+💬 <b>Telegram Chat ID፡</b> <code>${effectivePrivateChatId || chatId}</code>
+
+ከአሁን ጀምሮ የክፍያ ማሳወቂያዎች እና የቅሬታ ምላሾች በቀጥታ በዚህ የቴሌግራም ቻት ይደርሱዎታል።`;
+          await sendTelegramMessage(
+            chatId,
+            linkedSuccessReply,
+            linkedMember.loginToken ? getMemberKeyboard(loginUrl) : getStandardKeyboard()
+          );
+          console.log(
+            `[Telegram Deep Link] Linked member ${linkedMember.id} -> telegramChatId=${effectivePrivateChatId || chatId}`
+          );
+        } else {
+          const notFoundReply = `⚠️ የተላከው የአባል መታወቂያ (<code>${startArg}</code>) በዳታቤዝ ውስጥ አልተገኘም።
+
+እባክዎ ወደ አፑ Profile ገጽ ተመልሰው "የቴሌግራም አካውንት አገናኝ (Connect Telegram)" የሚለውን ቁልፍ በድጋሚ ይጫኑ ወይም የአባል መታወቂያዎን ያረጋግጡ።`;
+          await sendTelegramMessage(chatId, notFoundReply, getStandardKeyboard());
+        }
+        return;
+      }
+
+      const matchedMember = await findOrRegisterTelegramMember(
+        fromId,
+        username,
+        firstName,
+        '',
+        true,
+        effectivePrivateChatId
+      );
 
       if (matchedMember && matchedMember.loginToken) {
         const loginUrl = `${APP_URL}/login?token=${matchedMember.loginToken}`;
-        const replyText = buildPersonalPaymentMessage(matchedMember, loginUrl);
+        const replyText = `✅ <b>የቴሌግራም አካውንትዎ ከአፑ ጋር በተሳካ ሁኔታ ተገናኝቷል!</b>\n\n${buildPersonalPaymentMessage(
+          matchedMember,
+          loginUrl
+        )}`;
         await sendTelegramMessage(chatId, replyText, getMemberKeyboard(loginUrl));
       } else {
         const replyText = buildGeneralWelcomeMessage(firstName);

@@ -955,109 +955,153 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
     `ABARRUS-MEMBER:${activeMember.id}|${activeMember.fullName}|GEN:${activeMember.generation}`,
     140
   );
+  const telegramDeepLinkUrl = `https://t.me/Aberrusadminpaymentinfo_bot?start=${encodeURIComponent(
+    activeMember.id
+  )}`;
+  const linkedTelegramChatId = activeMember.telegramChatId || activeMember.telegramId;
+  const isTelegramConnected = Boolean(linkedTelegramChatId);
 
   return (
     <div className="space-y-4 pb-16 page-fade-in max-w-7xl mx-auto">
       {/* 1. MEMBER PROFILE & BANNER CARD */}
-      <div className="card-abarrus flex flex-col md:flex-row md:items-center justify-between gap-4 border-l-4 border-l-[#1B5E20]">
-        <div className="flex items-center gap-3.5">
-          <div className="w-14 h-14 rounded-full bg-[#1B5E20] text-[#FFD700] font-black text-2xl flex items-center justify-center shrink-0 shadow-sm ring-2 ring-[#FFD700]/50">
-            {activeMember.fullName.charAt(0)}
-          </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-xl sm:text-2xl font-bold text-[#212121]">
-                {activeMember.fullName}
-              </h2>
-              <span className="text-xs font-mono font-bold bg-[#1B5E20]/10 text-[#1B5E20] px-2 py-0.5 rounded">
-                {activeMember.id}
-              </span>
-              {activeMember.isMinor && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-[#FFF9C4] text-[#FF9800] font-bold">
-                  {isEn ? 'Minor (Free)' : '18- (ነፃ)'}
-                </span>
-              )}
-              {activeMember.isSpouse && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-bold">
-                  {isEn ? 'Spouse' : 'የትዳር አጋር'}
-                </span>
-              )}
+      <div className="card-abarrus flex flex-col gap-3.5 border-l-4 border-l-[#1B5E20]">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-14 h-14 rounded-full bg-[#1B5E20] text-[#FFD700] font-black text-2xl flex items-center justify-center shrink-0 shadow-sm ring-2 ring-[#FFD700]/50">
+              {activeMember.fullName.charAt(0)}
             </div>
-            <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <p className="text-sm text-[#757575]">
-                {isEn ? 'Family:' : 'ቤተሰብ፡'}{' '}
-                <strong className="text-[#212121]">{activeMember.familyName || 'የአበሩስ ቤተሰብ'}</strong>{' '}
-                · {activeMember.generation}
-                {isEn ? 'th Gen' : 'ኛ ትውልድ'}
-              </p>
-              <div className="inline-flex items-center gap-1.5 bg-emerald-50 text-[#1B5E20] border border-[#1B5E20]/30 px-2.5 py-0.5 rounded-full text-xs font-bold shadow-2xs">
-                <Phone className="w-3.5 h-3.5 text-[#1B5E20]" />
-                <span className="font-mono">{activeMember.phone || (isEn ? 'No phone' : 'ስልክ የለም')}</span>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-xl sm:text-2xl font-bold text-[#212121]">
+                  {activeMember.fullName}
+                </h2>
+                <span className="text-xs font-mono font-bold bg-[#1B5E20]/10 text-[#1B5E20] px-2 py-0.5 rounded">
+                  {activeMember.id}
+                </span>
+                {activeMember.isMinor && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-[#FFF9C4] text-[#FF9800] font-bold">
+                    {isEn ? 'Minor (Free)' : '18- (ነፃ)'}
+                  </span>
+                )}
+                {activeMember.isSpouse && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-bold">
+                    {isEn ? 'Spouse' : 'የትዳር አጋር'}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <p className="text-sm text-[#757575]">
+                  {isEn ? 'Family:' : 'ቤተሰብ፡'}{' '}
+                  <strong className="text-[#212121]">{activeMember.familyName || 'የአበሩስ ቤተሰብ'}</strong>{' '}
+                  · {activeMember.generation}
+                  {isEn ? 'th Gen' : 'ኛ ትውልድ'}
+                </p>
+                <div className="inline-flex items-center gap-1.5 bg-emerald-50 text-[#1B5E20] border border-[#1B5E20]/30 px-2.5 py-0.5 rounded-full text-xs font-bold shadow-2xs">
+                  <Phone className="w-3.5 h-3.5 text-[#1B5E20]" />
+                  <span className="font-mono">{activeMember.phone || (isEn ? 'No phone' : 'ስልክ የለም')}</span>
+                </div>
               </div>
             </div>
+          </div>
+
+          {/* Action Switcher for Admin only, or Sub-tabs for Member */}
+          <div className="flex items-center gap-2 self-start md:self-center flex-wrap">
+            {userRole === 'admin' ? (
+              <div className="flex items-center gap-2 bg-[#F5F5F5] p-2 rounded-lg border border-[#E0E0E0]">
+                <label className="text-xs font-semibold text-[#757575] whitespace-nowrap">
+                  {isEn ? 'Switch Member:' : 'አባል ቀይር፡'}
+                </label>
+                <select
+                  value={activeMember.id}
+                  onChange={(e) => onSelectMember(e.target.value)}
+                  className="text-xs font-semibold bg-white border border-[#E0E0E0] rounded-md px-2 py-1.5 text-[#212121] focus:ring-2 focus:ring-[#1B5E20]"
+                >
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.fullName} ({m.generation}ኛ · {m.id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTabSubView('password');
+                    setTimeout(() => {
+                      document.getElementById('change-password-section')?.scrollIntoView({ behavior: 'smooth' });
+                    }, 50);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold shadow-xs transition-all cursor-pointer border border-emerald-600/30"
+                  title={isEn ? 'Change Password' : 'የይለፍ ቃል ቀይር'}
+                >
+                  <KeyRound className="w-3.5 h-3.5 text-[#FFD700]" />
+                  <span>{isEn ? 'Change Password' : 'የይለፍ ቃል ቀይር'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsDigitalIdModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FFD700] hover:bg-[#ffea00] text-[#1B5E20] text-xs font-bold shadow-xs transition-all cursor-pointer"
+                >
+                  <QrCode className="w-4 h-4" />
+                  <span>{isEn ? 'Export Digital ID' : 'ዲጂታል መታወቂያ'}</span>
+                </button>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1B5E20]/10 border border-[#1B5E20]/20 text-[#1B5E20] text-xs font-bold">
+                  <ShieldCheck className="w-4 h-4 text-[#1B5E20]" />
+                  <span>{isEn ? 'Verified Member' : 'የተረጋገጠ አባል'}</span>
+                </div>
+                {onLogout && (
+                  <button
+                    type="button"
+                    onClick={onLogout}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+                    title={isEn ? 'Sign Out' : 'ውጣ (Logout)'}
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>{isEn ? 'Logout' : 'ውጣ'}</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Action Switcher for Admin only, or Sub-tabs for Member */}
-        <div className="flex items-center gap-2 self-start md:self-center flex-wrap">
-          {userRole === 'admin' ? (
-            <div className="flex items-center gap-2 bg-[#F5F5F5] p-2 rounded-lg border border-[#E0E0E0]">
-              <label className="text-xs font-semibold text-[#757575] whitespace-nowrap">
-                {isEn ? 'Switch Member:' : 'አባል ቀይር፡'}
-              </label>
-              <select
-                value={activeMember.id}
-                onChange={(e) => onSelectMember(e.target.value)}
-                className="text-xs font-semibold bg-white border border-[#E0E0E0] rounded-md px-2 py-1.5 text-[#212121] focus:ring-2 focus:ring-[#1B5E20]"
-              >
-                {members.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.fullName} ({m.generation}ኛ · {m.id})
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 flex-wrap">
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTabSubView('password');
-                  setTimeout(() => {
-                    document.getElementById('change-password-section')?.scrollIntoView({ behavior: 'smooth' });
-                  }, 50);
-                }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold shadow-xs transition-all cursor-pointer border border-emerald-600/30"
-                title={isEn ? 'Change Password' : 'የይለፍ ቃል ቀይር'}
-              >
-                <KeyRound className="w-3.5 h-3.5 text-[#FFD700]" />
-                <span>{isEn ? 'Change Password' : 'የይለፍ ቃል ቀይር'}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsDigitalIdModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FFD700] hover:bg-[#ffea00] text-[#1B5E20] text-xs font-bold shadow-xs transition-all cursor-pointer"
-              >
-                <QrCode className="w-4 h-4" />
-                <span>{isEn ? 'Export Digital ID' : 'ዲጂታል መታወቂያ'}</span>
-              </button>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1B5E20]/10 border border-[#1B5E20]/20 text-[#1B5E20] text-xs font-bold">
-                <ShieldCheck className="w-4 h-4 text-[#1B5E20]" />
-                <span>{isEn ? 'Verified Member' : 'የተረጋገጠ አባል'}</span>
-              </div>
-              {onLogout && (
-                <button
-                  type="button"
-                  onClick={onLogout}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
-                  title={isEn ? 'Sign Out' : 'ውጣ (Logout)'}
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>{isEn ? 'Logout' : 'ውጣ'}</span>
-                </button>
-              )}
-            </div>
-          )}
+        {/* Telegram Deep Link Account Connection Bar */}
+        <div className="pt-3 border-t border-[#E0E0E0] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            {isTelegramConnected ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-[#1B5E20] border border-emerald-300 text-xs font-bold">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>
+                  {isEn
+                    ? `Telegram Connected (Chat ID: ${linkedTelegramChatId})`
+                    : `ቴሌግራም ተገናኝቷል (Chat ID: ${linkedTelegramChatId})`}
+                </span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-50 text-sky-900 border border-sky-200 text-xs font-semibold">
+                <Send className="w-3.5 h-3.5 text-[#0088cc] shrink-0" />
+                <span>
+                  {isEn
+                    ? 'Link your Telegram account to receive personal payment & complaint updates.'
+                    : 'የግል የክፍያ ማሳወቂያ እና የቅሬታ ምላሽ ለማግኘት የቴሌግራም አካውንትዎን ያገናኙ።'}
+                </span>
+              </span>
+            )}
+          </div>
+
+          <a
+            href={telegramDeepLinkUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#0088cc] hover:bg-[#0077b5] text-white text-xs font-bold shadow-sm transition-all cursor-pointer self-start sm:self-auto shrink-0"
+            title={telegramDeepLinkUrl}
+          >
+            <Send className="w-3.5 h-3.5" />
+            <span>የቴሌግራም አካውንት አገናኝ (Connect Telegram)</span>
+            <ExternalLink className="w-3.5 h-3.5 opacity-85" />
+          </a>
         </div>
       </div>
 
