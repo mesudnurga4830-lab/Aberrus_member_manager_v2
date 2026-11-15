@@ -37,7 +37,11 @@ import {
 } from '../types';
 import { ETHIOPIAN_MONTHS, getEthiopianMonthName, getCurrentEthiopianDate } from '../utils/ethiopianCalendar';
 import { getEffectiveMonthlyRate, getEffectiveGenRate } from '../utils/storage';
-import { formatBulkPaymentTelegramReport, getAppUrl } from '../utils/telegramShare';
+import {
+  formatBulkPaymentTelegramReport,
+  dispatchApprovedPaymentReportToGroup,
+  getAppUrl,
+} from '../utils/telegramShare';
 import {
   subscribeToMasterReceipts,
   saveMasterReceiptToFirestore,
@@ -476,12 +480,36 @@ export const BatchPaymentManagerModal: React.FC<BatchPaymentManagerModalProps> =
           title: 'የጅምላ ደረሰኝ ክፍፍል ሪፖርት (Batch Allocation)',
         });
         setLastBatchTelegramPayload({
-          name: selectedPayer.fullName,
-          role: `የጅምላ ደረሰኝ ${selectedReceipt.receiptNumber}`,
+          name: 'የማህበሩ Telegram Group',
+          role: `የጅምላ ደረሰኝ ${selectedReceipt.receiptNumber} (Group Report)`,
           phone: selectedPayer.phone || '',
           telegram: selectedPayer.telegram || '',
           messageText: reportText,
           directUrl: getAppUrl(),
+        });
+
+        // Rule 3: Automatically dispatch approved bulk payment report ONLY to VITE_TELEGRAM_GROUP_CHAT_ID
+        void dispatchApprovedPaymentReportToGroup({
+          target: 'bulk_payment',
+          payerName: selectedPayer.fullName,
+          masterReceiptNumber: selectedReceipt.receiptNumber,
+          bulkItems: res.createdContributions.map((c) => {
+            const mem = members.find((m) => m.id === c.memberId);
+            return {
+              memberId: c.memberId,
+              memberName: c.memberName,
+              generation: c.generation,
+              isMinor: mem?.isMinor,
+              isSpouse: mem?.isSpouse,
+              type: c.type,
+              amount: Number(c.paidAmount ?? c.amount ?? 0),
+              ethiopianMonth: c.ethiopianMonth,
+              ethiopianMonthName: c.ethiopianMonthName,
+              ethiopianYear: c.ethiopianYear,
+              datePaid: c.datePaid,
+            };
+          }),
+          reportText,
         });
       }
 

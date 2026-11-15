@@ -280,6 +280,64 @@ ${lines.join('\n') || '• ምንም ክፍያ አልተመዘገበም'}
 }
 
 /**
+ * Sends an approved single or bulk payment report exclusively to the official
+ * Telegram Group (VITE_TELEGRAM_GROUP_CHAT_ID) via server-side /api/reports/send.
+ */
+export async function dispatchApprovedPaymentReportToGroup(params: {
+  target: 'payment' | 'bulk_payment';
+  payment?: Partial<Contribution>;
+  payerName?: string;
+  masterReceiptNumber?: string;
+  bulkItems?: Array<{
+    memberId: string;
+    memberName: string;
+    generation?: number;
+    isMinor?: boolean;
+    isSpouse?: boolean;
+    type: Contribution['type'];
+    amount: number;
+    ethiopianMonth?: number;
+    ethiopianMonthName?: string;
+    ethiopianYear?: number;
+    datePaid?: string;
+  }>;
+  reportText?: string;
+}): Promise<{
+  success: boolean;
+  telegramDispatched: boolean;
+  targetChatId?: string | null;
+  reportText?: string;
+}> {
+  try {
+    const res = await fetch('/api/reports/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        target: params.target,
+        payment: params.payment,
+        payerName: params.payerName,
+        masterReceiptNumber: params.masterReceiptNumber,
+        items: params.bulkItems,
+        reportText: params.reportText,
+      }),
+    });
+    if (!res.ok) {
+      return { success: false, telegramDispatched: false };
+    }
+    const data = await res.json();
+    return {
+      success: Boolean(data?.success),
+      telegramDispatched: Boolean(data?.telegramDispatched),
+      targetChatId: data?.targetChatId || null,
+      reportText: data?.reportText,
+    };
+  } catch (err) {
+    console.warn('[Telegram Group Dispatch Notice]:', err);
+    return { success: false, telegramDispatched: false };
+  }
+}
+
+/**
  * Generates an up-to-date shareable message and deep-link for a member.
  * Includes monthly payments (no remaining balance) and generation stats (Total Paid + Remaining Balance).
  */

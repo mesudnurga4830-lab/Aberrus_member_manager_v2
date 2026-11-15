@@ -49,6 +49,11 @@ import { BatchPaymentManagerModal } from './components/BatchPaymentManagerModal'
 import { NetworkStatusIndicator } from './components/NetworkStatusIndicator';
 import { getCurrentEthiopianDate, getEthiopianMonthName } from './utils/ethiopianCalendar';
 import {
+  formatSinglePaymentTelegramReport,
+  formatBulkPaymentTelegramReport,
+  dispatchApprovedPaymentReportToGroup,
+} from './utils/telegramShare';
+import {
   auth,
   onAuthStateChanged,
   signOut,
@@ -479,15 +484,80 @@ export default function App() {
 
   const handleSavePayment = async (conData: Omit<Contribution, 'id'>) => {
     const newCon = addContribution(conData);
-    setContributions(getContributions());
+    const allContribs = getContributions();
+    setContributions(allContribs);
     await saveContributionToFirestore(newCon);
+    if (newCon.status === 'ተከፍሏል' || newCon.status === 'Paid' || newCon.status === 'ከፊል') {
+      const m = members.find((mem) => mem.id === newCon.memberId);
+      const reportText = formatSinglePaymentTelegramReport(newCon, m, allContribs, settings);
+      void dispatchApprovedPaymentReportToGroup({
+        target: 'payment',
+        payment: newCon,
+        reportText,
+      });
+    }
   };
 
   const handleSavePaymentsBatch = async (conList: Omit<Contribution, 'id'>[]) => {
     const newCons = addContributionsBatch(conList);
-    setContributions(getContributions());
+    const allContribs = getContributions();
+    setContributions(allContribs);
     for (const c of newCons) {
       await saveContributionToFirestore(c);
+    }
+    const approvedCons = newCons.filter(
+      (c) => c.status === 'ተከፍሏል' || c.status === 'Paid' || c.status === 'ከፊል'
+    );
+    if (approvedCons.length === 1) {
+      const single = approvedCons[0];
+      const m = members.find((mem) => mem.id === single.memberId);
+      const reportText = formatSinglePaymentTelegramReport(single, m, allContribs, settings);
+      void dispatchApprovedPaymentReportToGroup({
+        target: 'payment',
+        payment: single,
+        reportText,
+      });
+    } else if (approvedCons.length > 1) {
+      const bulkText = formatBulkPaymentTelegramReport({
+        items: approvedCons.map((c) => ({
+          member: members.find((mem) => mem.id === c.memberId) || {
+            id: c.memberId,
+            fullName: c.memberName,
+            generation: c.generation,
+            familyId: c.familyId,
+            familyName: c.familyName,
+            phone: '',
+          },
+          type: c.type,
+          amount: Number(c.paidAmount ?? c.amount ?? 0),
+          ethiopianMonth: c.ethiopianMonth,
+          ethiopianMonthName: c.ethiopianMonthName,
+          ethiopianYear: c.ethiopianYear,
+          datePaid: c.datePaid,
+        })),
+        allContributions: allContribs,
+        settings,
+      });
+      void dispatchApprovedPaymentReportToGroup({
+        target: 'bulk_payment',
+        bulkItems: approvedCons.map((c) => {
+          const m = members.find((mem) => mem.id === c.memberId);
+          return {
+            memberId: c.memberId,
+            memberName: c.memberName,
+            generation: c.generation,
+            isMinor: m?.isMinor,
+            isSpouse: m?.isSpouse,
+            type: c.type,
+            amount: Number(c.paidAmount ?? c.amount ?? 0),
+            ethiopianMonth: c.ethiopianMonth,
+            ethiopianMonthName: c.ethiopianMonthName,
+            ethiopianYear: c.ethiopianYear,
+            datePaid: c.datePaid,
+          };
+        }),
+        reportText: bulkText,
+      });
     }
   };
 
@@ -566,6 +636,7 @@ export default function App() {
     );
 
     if (markPaid) {
+      let targetCon: Contribution | undefined;
       if (existingCon) {
         const updated = updateContribution(existingCon.id, {
           status: 'ተከፍሏል',
@@ -577,6 +648,7 @@ export default function App() {
         setContributions(getContributions());
         if (updated) {
           await saveContributionToFirestore(updated);
+          targetCon = updated;
         }
       } else {
         const newCon = addContribution({
@@ -598,6 +670,16 @@ export default function App() {
         });
         setContributions(getContributions());
         await saveContributionToFirestore(newCon);
+        targetCon = newCon;
+      }
+      if (targetCon) {
+        const allContribs = getContributions();
+        const reportText = formatSinglePaymentTelegramReport(targetCon, member, allContribs, settings);
+        void dispatchApprovedPaymentReportToGroup({
+          target: 'payment',
+          payment: targetCon,
+          reportText,
+        });
       }
     } else {
       if (existingCon) {
@@ -618,6 +700,7 @@ export default function App() {
     );
 
     if (markPaid) {
+      let targetCon: Contribution | undefined;
       if (existingCon) {
         const updated = updateContribution(existingCon.id, {
           status: 'ተከፍሏል',
@@ -629,6 +712,7 @@ export default function App() {
         setContributions(getContributions());
         if (updated) {
           await saveContributionToFirestore(updated);
+          targetCon = updated;
         }
       } else {
         const newCon = addContribution({
@@ -650,6 +734,16 @@ export default function App() {
         });
         setContributions(getContributions());
         await saveContributionToFirestore(newCon);
+        targetCon = newCon;
+      }
+      if (targetCon) {
+        const allContribs = getContributions();
+        const reportText = formatSinglePaymentTelegramReport(targetCon, member, allContribs, settings);
+        void dispatchApprovedPaymentReportToGroup({
+          target: 'payment',
+          payment: targetCon,
+          reportText,
+        });
       }
     } else {
       if (existingCon) {

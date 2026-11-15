@@ -15,6 +15,7 @@
         "authUid": { "type": "string", "description": "Firebase Authentication UID" },
         "telegram": { "type": "string", "description": "Telegram username" },
         "telegramId": { "type": "string", "description": "Telegram numeric Chat/User ID" },
+        "telegramChatId": { "type": "string", "description": "Member personal Telegram Chat ID for private complaint replies" },
         "loginToken": { "type": "string", "description": "Unique secure member login token" },
         "isHead": { "type": "boolean", "description": "Whether member is family representative" },
         "isMinor": { "type": "boolean", "description": "Whether member is under 18" },
@@ -136,17 +137,20 @@
     },
     "Complaint": {
       "title": "Complaint",
-      "description": "Complaints submitted by community members via Telegram",
+      "description": "Complaints submitted by community members via Telegram or Member Portal",
       "type": "object",
       "properties": {
+        "memberId": { "type": "string", "description": "Optional Member ID of complainant" },
+        "telegramChatId": { "type": "string", "description": "Member personal Telegram Chat ID for private reply routing" },
         "chatId": { "type": "string", "description": "Telegram chat identifier" },
         "fromId": { "type": "string", "description": "Telegram sender user identifier" },
         "firstName": { "type": "string", "description": "First name of complainant", "maxLength": 100 },
         "complaintText": { "type": "string", "description": "Full complaint description text", "maxLength": 4096 },
-        "status": { "type": "string", "description": "Review status (open, under_review, resolved)", "enum": ["open", "under_review", "resolved"] },
+        "adminResponse": { "type": "string", "description": "Admin reply sent privately to member", "maxLength": 4096 },
+        "status": { "type": "string", "description": "Review status (open, under_review, resolved, Resolved)", "enum": ["open", "under_review", "resolved", "Resolved"] },
         "createdAt": { "type": "string", "description": "ISO timestamp of complaint submission" }
       },
-      "required": ["chatId", "fromId", "complaintText", "status", "createdAt"]
+      "required": ["complaintText", "status", "createdAt"]
     },
     "Receipt": {
       "title": "Receipt",

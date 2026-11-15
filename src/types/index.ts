@@ -37,6 +37,7 @@ export interface Member {
   spouseOfMemberId?: string;
   loginToken?: string; // Unique secure token for member login
   telegramId?: string | number; // Telegram Chat/User ID for notifications
+  telegramChatId?: string | number; // Member personal private Telegram Chat ID for complaint replies
   authUid?: string; // Firebase Authentication UID
   walletBalance?: number; // የአባሉ የቀሪ ሂሳብ (Remaining Credit Balance from Batch Payments in ETB)
 }

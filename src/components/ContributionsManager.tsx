@@ -43,7 +43,11 @@ import {
   Link2,
   Send,
 } from 'lucide-react';
-import { formatSinglePaymentTelegramReport, getAppUrl } from '../utils/telegramShare';
+import {
+  formatSinglePaymentTelegramReport,
+  dispatchApprovedPaymentReportToGroup,
+  getAppUrl,
+} from '../utils/telegramShare';
 
 interface ContributionsManagerProps {
   contributions: Contribution[];
@@ -148,6 +152,28 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
     } finally {
       setIsDeletingPayment(false);
     }
+  };
+
+  // Approve payment & dispatch report ONLY to VITE_TELEGRAM_GROUP_CHAT_ID
+  const handleApproveContribution = async (c: Contribution): Promise<Contribution> => {
+    const updated: Contribution = { ...c, status: 'ተከፍሏል' };
+    onUpdateStatus(c.id, 'ተከፍሏል');
+    await saveContributionToFirestore(updated);
+    const nextContribs = liveContributions.map((item) => (item.id === c.id ? updated : item));
+    const memberObj = members.find((mem) => mem.id === c.memberId);
+    const reportText = formatSinglePaymentTelegramReport(updated, memberObj, nextContribs, settings);
+    const dispatchRes = await dispatchApprovedPaymentReportToGroup({
+      target: 'payment',
+      payment: updated,
+      reportText,
+    });
+    setDeleteNotice(
+      dispatchRes.telegramDispatched
+        ? `የ${c.memberName} ክፍያ ጸድቋል፤ የክፍያ ሪፖርቱ ወደ Telegram Group ተልኳል!`
+        : `የ${c.memberName} ክፍያ ጸድቋል፤ የክፍያ ሪፖርቱ ወደ Telegram Group መስመር ተዘጋጅቷል።`
+    );
+    setTimeout(() => setDeleteNotice(null), 5000);
+    return updated;
   };
 
   useEffect(() => {
@@ -313,6 +339,15 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
       await saveContributionToFirestore(updatedDoc);
       // Also update local parent if callback exists
       onUpdateStatus(docId, newStatus);
+      if (newStatus === 'ተከፍሏል') {
+        const nextContribs = [updatedDoc, ...liveContributions.filter((c) => c.id !== docId)];
+        const reportText = formatSinglePaymentTelegramReport(updatedDoc, member, nextContribs, settings);
+        void dispatchApprovedPaymentReportToGroup({
+          target: 'payment',
+          payment: updatedDoc,
+          reportText,
+        });
+      }
     } catch (err) {
       console.error('[Matrix Quick Toggle Error]:', err);
     } finally {
@@ -1198,11 +1233,15 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
                               value={c.status}
                               onChange={async (e) => {
                                 const newSt = e.target.value as ContributionStatus;
-                                onUpdateStatus(c.id, newSt);
-                                await saveContributionToFirestore({
-                                  ...c,
-                                  status: newSt,
-                                });
+                                if ((newSt === 'ተከፍሏል' || newSt === 'Paid') && c.status !== 'ተከፍሏል' && c.status !== 'Paid') {
+                                  await handleApproveContribution(c);
+                                } else {
+                                  onUpdateStatus(c.id, newSt);
+                                  await saveContributionToFirestore({
+                                    ...c,
+                                    status: newSt,
+                                  });
+                                }
                               }}
                               className={`text-[11px] font-bold rounded-lg px-2 py-1 border transition-colors ${
                                 c.status === 'ተከፍሏል'
@@ -1223,14 +1262,10 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
                               <button
                                 type="button"
                                 onClick={async () => {
-                                  onUpdateStatus(c.id, 'ተከፍሏል');
-                                  await saveContributionToFirestore({
-                                    ...c,
-                                    status: 'ተከፍሏል',
-                                  });
+                                  await handleApproveContribution(c);
                                 }}
-                                className="px-2 py-1 bg-[#1B5E20] hover:bg-[#154a19] text-white text-[10px] font-bold rounded-md shadow-2xs flex items-center gap-1"
-                                title="ደረሰኙን አጽድቅ (Approve)"
+                                className="px-2 py-1 bg-[#1B5E20] hover:bg-[#154a19] text-white text-[10px] font-bold rounded-md shadow-2xs flex items-center gap-1 cursor-pointer"
+                                title="ደረሰኙን አጽድቅና ወደ Telegram Group ላክ (Approve)"
                               >
                                 <Check className="w-3 h-3" />
                                 <span>አጽድቅ</span>
@@ -1555,15 +1590,13 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
                 <button
                   type="button"
                   onClick={async () => {
-                    const updated = { ...selectedReceipt, status: 'ተከፍሏል' as ContributionStatus };
+                    const updated = await handleApproveContribution(selectedReceipt);
                     setSelectedReceipt(updated);
-                    onUpdateStatus(selectedReceipt.id, 'ተከፍሏል');
-                    await saveContributionToFirestore(updated);
                   }}
                   className="px-3 py-1.5 rounded-lg bg-[#1B5E20] hover:bg-[#154a19] text-white text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer"
                 >
                   <Check className="w-3.5 h-3.5" />
-                  <span>ደረሰኙን አጽድቅ (Approve)</span>
+                  <span>ደረሰኙን አጽድቅና ወደ ግሩፕ ላክ (Approve)</span>
                 </button>
               </div>
             )}

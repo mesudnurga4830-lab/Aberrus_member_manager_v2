@@ -779,29 +779,36 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
 
     setIsSubmittingComplaint(true);
     const phoneToUse = complaintPhone.trim() || activeMember.phone || '';
+    const memberTgChatId = String(activeMember.telegramChatId || activeMember.telegramId || '').trim();
+    const cleanMemberKey = String(activeMember.id || 'MEM').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const unifiedComplaintId = `comp_${Date.now()}_${cleanMemberKey}`;
 
-    // 1. Direct Firestore persistence
+    // 1. Direct Firestore persistence (uses unified ID so server call merges cleanly)
     try {
       await saveComplaintToFirestore({
+        id: unifiedComplaintId,
         memberId: activeMember.id,
         memberName: activeMember.fullName,
         category: complaintCategory,
         message: complaintText.trim(),
         phone: phoneToUse,
+        telegramChatId: memberTgChatId,
       });
     } catch (err) {
       console.warn('[MemberPortal] Could not save complaint to Firestore directly:', err);
     }
 
-    // 2. Server API call (persists + notifies admin / Telegram)
+    // 2. Server API call (persists + routes complaint privately ONLY to VITE_ADMIN_TELEGRAM_CHAT_ID)
     try {
       await fetch('/api/complaints', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          id: unifiedComplaintId,
           memberId: activeMember.id,
           memberName: activeMember.fullName,
           phone: phoneToUse,
+          telegramChatId: memberTgChatId,
           category: complaintCategory,
           message: complaintText.trim(),
         }),

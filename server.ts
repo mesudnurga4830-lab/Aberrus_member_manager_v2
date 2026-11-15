@@ -171,7 +171,7 @@ function isValidTelegramBotToken(token: string): boolean {
   return true;
 }
 
-function sanitizeChatId(raw?: string | number): string {
+function sanitizeChatId(raw?: string | number | null): string {
   if (raw === undefined || raw === null) return '';
   const str = String(raw).trim();
   if (!str) return '';
@@ -187,7 +187,14 @@ const RAW_TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_BOT_TOKEN = sanitizeTelegramToken(RAW_TELEGRAM_BOT_TOKEN);
 let isTelegramBotActive = isValidTelegramBotToken(TELEGRAM_BOT_TOKEN);
 
-const ADMIN_TELEGRAM_CHAT_ID = sanitizeChatId(process.env.ADMIN_TELEGRAM_CHAT_ID) || '5100488512';
+const ADMIN_TELEGRAM_CHAT_ID =
+  sanitizeChatId(process.env.VITE_ADMIN_TELEGRAM_CHAT_ID) ||
+  sanitizeChatId(process.env.ADMIN_TELEGRAM_CHAT_ID) ||
+  '5100488512';
+const TELEGRAM_GROUP_CHAT_ID =
+  sanitizeChatId(process.env.VITE_TELEGRAM_GROUP_CHAT_ID) ||
+  sanitizeChatId(process.env.TELEGRAM_GROUP_CHAT_ID) ||
+  '';
 const EXECUTIVE_CHAT_ID = sanitizeChatId(process.env.EXECUTIVE_CHAT_ID) || ADMIN_TELEGRAM_CHAT_ID;
 const FINANCE_CHAT_ID = sanitizeChatId(process.env.FINANCE_CHAT_ID) || ADMIN_TELEGRAM_CHAT_ID;
 const SECRETARY_CHAT_ID = sanitizeChatId(process.env.SECRETARY_CHAT_ID) || ADMIN_TELEGRAM_CHAT_ID;
@@ -262,6 +269,150 @@ async function sendTelegramPhoto(chatId: string | number, photoFileId: string, c
   });
 }
 
+// ==========================================
+// STRICT TELEGRAM ROUTING GUARDS (3 RULES)
+// ==========================================
+function isGroupChatId(chatId?: string | number | null): boolean {
+  const clean = String(chatId ?? '').trim();
+  return clean.startsWith('-');
+}
+
+// Rule 1 Helper: Private Admin Chat ID ONLY (VITE_ADMIN_TELEGRAM_CHAT_ID). Never routes to a group.
+function resolveAdminPrivateChatId(): string {
+  const rawAdmin =
+    sanitizeChatId(process.env.VITE_ADMIN_TELEGRAM_CHAT_ID) ||
+    sanitizeChatId(process.env.ADMIN_TELEGRAM_CHAT_ID) ||
+    ADMIN_TELEGRAM_CHAT_ID;
+  if (!rawAdmin || isGroupChatId(rawAdmin)) {
+    return '';
+  }
+  if (TELEGRAM_GROUP_CHAT_ID && rawAdmin === TELEGRAM_GROUP_CHAT_ID) {
+    return '';
+  }
+  return rawAdmin;
+}
+
+// Rule 3 Helper: Official Telegram Group Chat ID ONLY (VITE_TELEGRAM_GROUP_CHAT_ID).
+function resolveTelegramGroupChatId(): string {
+  const rawGroup =
+    sanitizeChatId(process.env.VITE_TELEGRAM_GROUP_CHAT_ID) ||
+    sanitizeChatId(process.env.TELEGRAM_GROUP_CHAT_ID) ||
+    TELEGRAM_GROUP_CHAT_ID;
+  return rawGroup || '';
+}
+
+// Rule 1: Complaints must NEVER go to a group — ONLY privately to VITE_ADMIN_TELEGRAM_CHAT_ID
+async function sendComplaintAlertToAdmin(text: string, replyMarkup?: any) {
+  const adminPrivateChat = resolveAdminPrivateChatId();
+  if (!adminPrivateChat || !isTelegramBotActive) {
+    console.warn('[Telegram Routing Rule 1] Private Admin chat ID (VITE_ADMIN_TELEGRAM_CHAT_ID) unavailable or bot inactive; skipping complaint alert.');
+    return { ok: false, targetChatId: null };
+  }
+  const res = await sendTelegramMessage(adminPrivateChat, text, replyMarkup);
+  return { ok: Boolean(res?.ok), targetChatId: adminPrivateChat, result: res };
+}
+
+// Rule 2: Admin replies to complaints must NEVER go to a group OR back to Admin — ONLY to member's personal telegramChatId
+async function sendComplaintReplyToMember(
+  memberTelegramChatId: string | number | undefined | null,
+  text: string,
+  replyMarkup?: any
+) {
+  const cleanMemberChat = sanitizeChatId(memberTelegramChatId);
+  const adminPrivateChat = resolveAdminPrivateChatId();
+  const groupChat = resolveTelegramGroupChatId();
+
+  if (!cleanMemberChat) {
+    return { ok: false, targetChatId: null, reason: 'missing_member_telegram_chat_id' };
+  }
+  if (isGroupChatId(cleanMemberChat) || (groupChat && cleanMemberChat === groupChat)) {
+    console.warn(`[Telegram Routing Rule 2 Blocked] Refused to send admin reply to group chat ID: ${cleanMemberChat}`);
+    return { ok: false, targetChatId: null, reason: 'group_blocked' };
+  }
+  if ((adminPrivateChat && cleanMemberChat === adminPrivateChat) || (ADMIN_TELEGRAM_CHAT_ID && cleanMemberChat === ADMIN_TELEGRAM_CHAT_ID)) {
+    console.warn(`[Telegram Routing Rule 2 Blocked] Refused to bounce admin reply back to Admin chat ID: ${cleanMemberChat}`);
+    return { ok: false, targetChatId: null, reason: 'admin_bounce_blocked' };
+  }
+  if (!isTelegramBotActive) {
+    return { ok: false, targetChatId: cleanMemberChat, reason: 'bot_inactive' };
+  }
+  const res = await sendTelegramMessage(cleanMemberChat, text, replyMarkup);
+  return { ok: Boolean(res?.ok), targetChatId: cleanMemberChat, result: res };
+}
+
+// Rule 3: Approved single & bulk payment reports must go ONLY to VITE_TELEGRAM_GROUP_CHAT_ID (never to admin/member DM)
+async function sendApprovedPaymentReportToGroup(text: string, replyMarkup?: any) {
+  const groupChat = resolveTelegramGroupChatId();
+  if (!groupChat) {
+    console.warn('[Telegram Routing Rule 3] VITE_TELEGRAM_GROUP_CHAT_ID is not configured; payment report prepared without DM fallback.');
+    return { ok: false, targetChatId: null, reason: 'missing_group_chat_id' };
+  }
+  if (!isTelegramBotActive) {
+    return { ok: false, targetChatId: groupChat, reason: 'bot_inactive' };
+  }
+  const res = await sendTelegramMessage(groupChat, text, replyMarkup);
+  return { ok: Boolean(res?.ok), targetChatId: groupChat, result: res };
+}
+
+// Helper: Resolve a complaining member's private personal telegramChatId (never returns a group or admin ID)
+async function resolveComplaintMemberTelegramChatId(complaint: any, fallbackFromId?: string): Promise<string> {
+  const adminPrivateChat = resolveAdminPrivateChatId();
+  const groupChat = resolveTelegramGroupChatId();
+
+  const isValidPersonalMemberChat = (candidate?: string | number | null): string => {
+    const clean = sanitizeChatId(candidate);
+    if (!clean) return '';
+    if (isGroupChatId(clean)) return '';
+    if (groupChat && clean === groupChat) return '';
+    if (adminPrivateChat && clean === adminPrivateChat) return '';
+    if (ADMIN_TELEGRAM_CHAT_ID && clean === ADMIN_TELEGRAM_CHAT_ID) return '';
+    return clean;
+  };
+
+  // 1. Direct fields on complaint doc
+  const directCandidates = [
+    complaint?.telegramChatId,
+    complaint?.fromId,
+    complaint?.chatId,
+    complaint?.telegramId,
+    fallbackFromId,
+  ];
+  for (const cand of directCandidates) {
+    const valid = isValidPersonalMemberChat(cand);
+    if (valid) return valid;
+  }
+
+  // 2. Lookup by memberId in Firestore members / telegramUsers / in-memory store
+  const memId = String(complaint?.memberId || '').trim();
+  if (memId) {
+    try {
+      if (db) {
+        const mDoc = await getDoc(doc(db, 'members', memId));
+        if (mDoc.exists()) {
+          const mData: any = mDoc.data();
+          const valid = isValidPersonalMemberChat(mData.telegramChatId || mData.telegramId);
+          if (valid) return valid;
+        }
+        const tgSnap = await getDocs(query(collection(db, 'telegramUsers'), where('memberId', '==', memId), limit(3)));
+        for (const d of tgSnap.docs) {
+          const uData: any = d.data();
+          const valid = isValidPersonalMemberChat(uData.telegramChatId || uData.chatId || uData.fromId || d.id);
+          if (valid) return valid;
+        }
+      }
+      const storeMatch = (currentStore?.members || []).find((m: any) => m.id === memId);
+      if (storeMatch) {
+        const valid = isValidPersonalMemberChat((storeMatch as any).telegramChatId || storeMatch.telegramId);
+        if (valid) return valid;
+      }
+    } catch (lookupErr) {
+      console.warn('[Complaint Member Telegram Lookup Notice]:', lookupErr);
+    }
+  }
+
+  return '';
+}
+
 // Answer callback query
 async function answerCallbackQuery(callbackQueryId: string, text?: string) {
   if (!callbackQueryId || !isTelegramBotActive) return null;
@@ -294,28 +445,47 @@ async function findOrRegisterTelegramMember(
         const memDoc = await getDoc(doc(db, 'members', cleanSearch.toUpperCase()));
         if (memDoc.exists()) {
           const mData = memDoc.data();
+          const updates: Record<string, any> = {};
           if (!mData.loginToken) {
             mData.loginToken = generateLoginToken();
+            updates.loginToken = mData.loginToken;
+          }
+          if (cleanFromId && !isGroupChatId(cleanFromId)) {
             mData.telegramId = cleanFromId;
-            await safeFirestoreSetDoc(doc(db, 'members', memDoc.id), mData, { merge: true });
+            mData.telegramChatId = cleanFromId;
+            updates.telegramId = cleanFromId;
+            updates.telegramChatId = cleanFromId;
+          }
+          if (Object.keys(updates).length > 0) {
+            await safeFirestoreSetDoc(doc(db, 'members', memDoc.id), updates, { merge: true });
           }
           return { id: memDoc.id, ...mData };
         }
       }
 
-      // 2. Query by telegramId in members collection
+      // 2. Query by telegramChatId or telegramId in members collection
       if (cleanFromId) {
-        const qTgId = query(membersRef, where('telegramId', '==', cleanFromId));
-        let snap = await getDocs(qTgId);
+        let snap = await getDocs(query(membersRef, where('telegramChatId', '==', cleanFromId)));
+        if (snap.empty) {
+          snap = await getDocs(query(membersRef, where('telegramId', '==', cleanFromId)));
+        }
         if (snap.empty && !isNaN(Number(cleanFromId))) {
           snap = await getDocs(query(membersRef, where('telegramId', '==', Number(cleanFromId))));
         }
         if (!snap.empty) {
           const docSnap = snap.docs[0];
           const mData = docSnap.data();
+          const updates: Record<string, any> = {};
           if (!mData.loginToken) {
             mData.loginToken = generateLoginToken();
-            await safeFirestoreSetDoc(doc(db, 'members', docSnap.id), { loginToken: mData.loginToken }, { merge: true });
+            updates.loginToken = mData.loginToken;
+          }
+          if (!mData.telegramChatId && !isGroupChatId(cleanFromId)) {
+            mData.telegramChatId = cleanFromId;
+            updates.telegramChatId = cleanFromId;
+          }
+          if (Object.keys(updates).length > 0) {
+            await safeFirestoreSetDoc(doc(db, 'members', docSnap.id), updates, { merge: true });
           }
           return { id: docSnap.id, ...mData };
         }
@@ -333,8 +503,20 @@ async function findOrRegisterTelegramMember(
           if (!mData.loginToken) {
             mData.loginToken = generateLoginToken();
           }
-          mData.telegramId = cleanFromId;
-          await safeFirestoreSetDoc(doc(db, 'members', docSnap.id), { loginToken: mData.loginToken, telegramId: cleanFromId }, { merge: true });
+          if (cleanFromId && !isGroupChatId(cleanFromId)) {
+            mData.telegramId = cleanFromId;
+            mData.telegramChatId = cleanFromId;
+          }
+          await safeFirestoreSetDoc(
+            doc(db, 'members', docSnap.id),
+            {
+              loginToken: mData.loginToken,
+              ...(cleanFromId && !isGroupChatId(cleanFromId)
+                ? { telegramId: cleanFromId, telegramChatId: cleanFromId }
+                : {}),
+            },
+            { merge: true }
+          );
           return { id: docSnap.id, ...mData };
         }
       }
@@ -347,9 +529,19 @@ async function findOrRegisterTelegramMember(
           const mDoc = await getDoc(doc(db, 'members', mId));
           if (mDoc.exists()) {
             const mData = mDoc.data();
+            const updates: Record<string, any> = {};
             if (!mData.loginToken) {
               mData.loginToken = generateLoginToken();
-              await safeFirestoreSetDoc(doc(db, 'members', mId), { loginToken: mData.loginToken, telegramId: cleanFromId }, { merge: true });
+              updates.loginToken = mData.loginToken;
+            }
+            if (!isGroupChatId(cleanFromId)) {
+              mData.telegramId = cleanFromId;
+              mData.telegramChatId = cleanFromId;
+              updates.telegramId = cleanFromId;
+              updates.telegramChatId = cleanFromId;
+            }
+            if (Object.keys(updates).length > 0) {
+              await safeFirestoreSetDoc(doc(db, 'members', mId), updates, { merge: true });
             }
             return { id: mDoc.id, ...mData };
           }
@@ -357,7 +549,7 @@ async function findOrRegisterTelegramMember(
       }
 
       // 5. If member does not exist in Firestore yet, automatically register new member ONLY if allowAutoRegister is true
-      if (allowAutoRegister && cleanFromId) {
+      if (allowAutoRegister && cleanFromId && !isGroupChatId(cleanFromId)) {
         const newMemberId = `MEM-${cleanFromId.slice(-4) || Math.floor(1000 + Math.random() * 9000)}`;
         const newToken = generateLoginToken();
         const newMemberData = {
@@ -366,6 +558,7 @@ async function findOrRegisterTelegramMember(
           phone: '',
           telegram: cleanUser ? `@${cleanUser}` : '',
           telegramId: cleanFromId,
+          telegramChatId: cleanFromId,
           generation: 4,
           familyId: 'FA001',
           familyName: 'የአበሩስ ቤተሰብ',
@@ -379,6 +572,7 @@ async function findOrRegisterTelegramMember(
         await safeFirestoreSetDoc(doc(db, 'members', newMemberId), newMemberData);
         await safeFirestoreSetDoc(doc(db, 'telegramUsers', cleanFromId), {
           chatId: cleanFromId,
+          telegramChatId: cleanFromId,
           fromId: cleanFromId,
           firstName: senderName || '',
           username: cleanUser || '',
@@ -606,25 +800,22 @@ async function processTelegramUpdate(update: any) {
     }
 
     // =========================================================================
-    // CRITICAL BUG FIX: IDENTIFY ADMIN REPLIES & STOP THE MEMBER WELCOME BUG
+    // CRITICAL ROUTING: ADMIN REPLIES -> STRICTLY ONLY TO MEMBER telegramChatId
     // =========================================================================
     const replyToMessage = message?.reply_to_message || update.reply_to_message;
-    const effectiveAdminChatId = sanitizeChatId(process.env.ADMIN_TELEGRAM_CHAT_ID) || ADMIN_TELEGRAM_CHAT_ID;
+    const effectiveAdminChatId = resolveAdminPrivateChatId();
     const isFromAdmin = Boolean(
       update.isAdmin === true ||
-      (effectiveAdminChatId && (chatId === effectiveAdminChatId || fromId === effectiveAdminChatId)) ||
-      (ADMIN_TELEGRAM_CHAT_ID && (chatId === ADMIN_TELEGRAM_CHAT_ID || fromId === ADMIN_TELEGRAM_CHAT_ID))
+      (effectiveAdminChatId && (fromId === effectiveAdminChatId || (!isGroupChatId(chatId) && chatId === effectiveAdminChatId)))
     );
 
     if (isFromAdmin) {
       console.log(`[Telegram Admin Handler] Incoming message from Admin (chatId: ${chatId}, fromId: ${fromId}, hasReply: ${Boolean(replyToMessage)})`);
 
-      // 1. IDENTIFY ADMIN REPLIES: Check if message.reply_to_message exists
       if (replyToMessage) {
         const repliedText = String(replyToMessage.text || replyToMessage.caption || '');
         console.log(`[Telegram Admin Reply] Admin replied to message: "${repliedText.slice(0, 100)}" with text: "${text}"`);
 
-        // Check if the Admin is replying to a complaint notification
         const isComplaintNotification =
           repliedText.includes('ቅሬታ') ||
           repliedText.includes('አቤቱታ') ||
@@ -633,10 +824,8 @@ async function processTelegramUpdate(update: any) {
           /የቅሬታ መለያ/i.test(repliedText);
 
         if (isComplaintNotification) {
-          // 3. PROCESS THE REPLY:
           const adminReplyText = text.trim();
           if (!adminReplyText) {
-            await sendTelegramMessage(chatId, '⚠️ እባክዎ ለአባሉ የሚላክ የመልስ ጽሑፍ ይጻፉ።');
             return;
           }
 
@@ -657,7 +846,6 @@ async function processTelegramUpdate(update: any) {
           let targetComplaint: any = null;
 
           if (db) {
-            // A. Query by exact complaint document ID
             if (complaintId) {
               try {
                 const cDoc = await getDoc(doc(db, 'complaints', complaintId));
@@ -669,7 +857,6 @@ async function processTelegramUpdate(update: any) {
               }
             }
 
-            // B. Query by targetFromId
             if (!targetComplaint && targetFromId) {
               try {
                 const qFrom = query(
@@ -689,7 +876,6 @@ async function processTelegramUpdate(update: any) {
               }
             }
 
-            // C. Query by targetMemberId
             if (!targetComplaint && targetMemberId) {
               try {
                 const qMem = query(
@@ -709,7 +895,6 @@ async function processTelegramUpdate(update: any) {
               }
             }
 
-            // D. Query by latest open complaint
             if (!targetComplaint) {
               try {
                 const qOpen = query(
@@ -727,7 +912,6 @@ async function processTelegramUpdate(update: any) {
             }
           }
 
-          // In-memory store fallback
           if (!targetComplaint) {
             const memComplaints = (currentStore as any)?.complaints || [];
             targetComplaint = memComplaints.find((c: any) =>
@@ -740,42 +924,21 @@ async function processTelegramUpdate(update: any) {
           if (targetComplaint) {
             const compDocId = targetComplaint.id;
             const memberName = targetComplaint.firstName || targetComplaint.memberName || 'አባል';
-            let memberTelegramId = targetComplaint.chatId || targetComplaint.fromId || targetComplaint.telegramId || targetFromId;
+            const memberTelegramChatId = await resolveComplaintMemberTelegramChatId(targetComplaint, targetFromId);
 
-            // Look up member's telegramId if not directly on the complaint
-            if (!memberTelegramId && targetComplaint.memberId) {
-              try {
-                if (db) {
-                  const mDoc = await getDoc(doc(db, 'members', targetComplaint.memberId));
-                  if (mDoc.exists()) {
-                    const mData: any = mDoc.data();
-                    memberTelegramId = mData.telegramId || (mData.telegram ? String(mData.telegram).replace(/^@/, '') : '');
-                  }
-                }
-                if (!memberTelegramId) {
-                  const mMatch = (currentStore?.members || []).find((m) => m.id === targetComplaint.memberId);
-                  if (mMatch) {
-                    memberTelegramId = mMatch.telegramId || (mMatch.telegram ? String(mMatch.telegram).replace(/^@/, '') : '');
-                  }
-                }
-              } catch (mErr) {
-                console.warn('[Member Telegram Lookup Notice]:', mErr);
-              }
-            }
-
-            // Update Firestore 'complaints' document:
-            // set adminResponse to the Admin's text and status to "Resolved"
+            // Update Firestore 'complaints' document
             const updateData = {
               adminResponse: adminReplyText,
               status: 'Resolved',
               resolvedAt: nowIso,
               resolvedBy: 'Admin',
               updatedAt: nowIso,
+              ...(memberTelegramChatId ? { telegramChatId: memberTelegramChatId } : {}),
             };
 
             if (db) {
               await safeFirestoreSetDoc(doc(db, 'complaints', compDocId), updateData, { merge: true });
-              console.log(`[Firestore] Updated complaint ${compDocId} to Resolved with adminResponse: "${adminReplyText}"`);
+              console.log(`[Firestore] Updated complaint ${compDocId} to Resolved with adminResponse.`);
             }
 
             if ((currentStore as any).complaints) {
@@ -785,48 +948,37 @@ async function processTelegramUpdate(update: any) {
               }
             }
 
-            // Send Admin's response to the complaining member's telegramId:
-            // Requirement 3: "ውድ [Member Name], ለቅሬታዎ የተሰጠ መልስ፦ [Admin Reply]"
-            let memberNotified = false;
-            if (memberTelegramId) {
-              const memberMsg = `ውድ ${memberName}, ለቅሬታዎ የተሰጠ መልስ፦ ${adminReplyText}`;
-              const sendRes = await sendTelegramMessage(memberTelegramId, memberMsg, getStandardKeyboard());
-              memberNotified = Boolean(sendRes && sendRes.ok);
-            }
-
-            // Send confirmation back to the Admin:
-            // Requirement 3: "መልስዎ ለአባሉ በተሳካ ሁኔታ ተልኳል።"
-            if (memberNotified) {
-              const adminConfirm = `መልስዎ ለአባሉ በተሳካ ሁኔታ ተልኳል።\n\n` +
-                `👤 <b>አባል፦</b> ${memberName} (<code>${targetComplaint.memberId || targetFromId || 'N/A'}</code>)\n` +
-                `📝 <b>የአባል ቅሬታ፦</b> ${targetComplaint.complaintText || '—'}\n` +
-                `💬 <b>የተላከው መልስ፦</b> ${adminReplyText}\n` +
-                `📌 <b>ሁኔታ፦</b> Resolved ✅`;
-              await sendTelegramMessage(chatId, adminConfirm);
+            // RULE 2: Send Admin's response STRICTLY AND ONLY to the complaining member's personal telegramChatId.
+            // NEVER bounce back to Admin chat and NEVER send to Telegram Group.
+            if (memberTelegramChatId) {
+              const memberMsg = `ውድ ${memberName}፤ ለቅሬታዎ የተሰጠ ምላሽ፦\n\n${adminReplyText}`;
+              const delivery = await sendComplaintReplyToMember(
+                memberTelegramChatId,
+                memberMsg,
+                getStandardKeyboard()
+              );
+              console.log(
+                `[Telegram Routing Rule 2] Reply for complaint ${compDocId} routed ONLY to member telegramChatId=${memberTelegramChatId} (ok=${delivery.ok})`
+              );
             } else {
-              const adminNotice = `መልስዎ በመዝገቡ ላይ ተመዝግቧል (ሁኔታ፡ Resolved)።\n\n` +
-                `💬 <b>የእርስዎ መልስ፦</b> ${adminReplyText}\n` +
-                `ℹ️ <i>ማስታወሻ፦ አባሉ በቴሌግራም መለያ ስላልተገናኙ ወይም የቴሌግራም መለያቸው ስላልተገኘ በስልክ ቁጥራቸው (${targetComplaint.phone || 'የለም'}) ማሳወቅ ይችላሉ።</i>`;
-              await sendTelegramMessage(chatId, adminNotice);
+              console.warn(`[Telegram Routing Rule 2] No private telegramChatId found for complaint ${compDocId}; stored adminResponse in Firestore without bouncing to admin or group.`);
             }
             return;
           } else {
             console.warn('[Telegram Admin Reply] Complaint not found for this reply.');
-            await sendTelegramMessage(chatId, 'ይህ ትዕዛዝ አይታወቅም');
             return;
           }
         }
 
-        // 4. If the Admin replies to something else: send safe error message
-        console.log('[Telegram Admin Reply] Admin replied to non-complaint message. Sending safe error.');
-        await sendTelegramMessage(chatId, 'ይህ ትዕዛዝ አይታወቅም');
+        console.log('[Telegram Admin Reply] Admin replied to non-complaint message; ignoring without bouncing.');
         return;
       }
 
-      // 4. If the Admin sends a random command or non-reply text:
-      // STOP THE WELCOME BUG: DO NOT trigger member welcome flow, send safe error message
-      console.log(`[Telegram Admin] Admin sent non-reply message: "${text}". Sending safe error.`);
-      await sendTelegramMessage(chatId, 'ይህ ትዕዛዝ አይታወቅም');
+      // Non-reply admin message in private chat: do NOT trigger member welcome flow or leak into group
+      if (!isGroupChatId(chatId)) {
+        console.log(`[Telegram Admin] Admin sent non-reply message: "${text}".`);
+        await sendTelegramMessage(chatId, 'ይህ ትዕዛዝ አይታወቅም');
+      }
       return;
     }
 
@@ -849,8 +1001,8 @@ async function processTelegramUpdate(update: any) {
         console.log(`[Firestore] Saved receipt to receipts collection: ${receiptDocId}`);
       }
 
-      // Notify Admin
-      const adminChat = ADMIN_TELEGRAM_CHAT_ID;
+      // Notify Admin privately (never group)
+      const adminChat = resolveAdminPrivateChatId();
       if (adminChat) {
         const adminAlertText = `🚨 <b>አዲስ የክፍያ ደረሰኝ ፎቶ ተልኳል!</b>
 ━━━━━━━━━━━━━━━━━━━━
@@ -862,10 +1014,9 @@ async function processTelegramUpdate(update: any) {
 💡 <i>እባክዎ ደረሰኙን በማረጋገጥ በአበሩስ አባል ማኔጀር መተግበሪያ ላይ የክፍያ ምዝገባ ያከናውኑ።</i>`;
 
         await sendTelegramMessage(adminChat, adminAlertText);
-        // Also send photo to admin
         await sendTelegramPhoto(adminChat, photoFileId, `ደረሰኝ ከ፡ ${firstName} (ID: ${fromId})`);
       } else {
-        console.log('[Telegram Admin Alert] (ADMIN_TELEGRAM_CHAT_ID not configured; receipt logged to Firestore and console)');
+        console.log('[Telegram Admin Alert] (VITE_ADMIN_TELEGRAM_CHAT_ID not configured; receipt logged to Firestore)');
       }
 
       // Reply confirmation to sender
@@ -897,11 +1048,13 @@ async function processTelegramUpdate(update: any) {
         .replace(/^\/(complaint|ቅሬታ|claim|አቤቱታ)/i, '')
         .trim();
 
+      const memberPrivateChatId = !isGroupChatId(chatId) ? chatId : (!isGroupChatId(fromId) ? fromId : '');
+
       if (!cleanComplaint || cleanComplaint === 'cmd_complaint_guide') {
-        // User clicked the complaint button or sent empty /complaint command
-        await sendTelegramMessage(
-          chatId,
-          `✍️ <b>ቅሬታ ወይም አስተያየት ለመላክ፦</b>
+        if (memberPrivateChatId) {
+          await sendTelegramMessage(
+            memberPrivateChatId,
+            `✍️ <b>ቅሬታ ወይም አስተያየት ለመላክ፦</b>
 
 እባክዎ ቅሬታዎን በሚከተለው መልኩ ይላኩልን፦
 <code>/complaint &lt;ቅሬታዎ ወይም አስተያየትዎ&gt;</code>
@@ -909,51 +1062,57 @@ async function processTelegramUpdate(update: any) {
 ለምሳሌ፦
 <code>/complaint የመስከረም ወር ክፍያ ከፍዬ እስካሁን ያልተከፈለ ይላል፣ እባክዎ ይስተካከልልኝ።</code>
 
-የላኩት ቅሬታ ወዲያውኑ ወደ አመራሮች መዝገብ ይገባል።`,
-          getStandardKeyboard()
-        );
+የላኩት ቅሬታ ወዲያውኑ ወደ አስተዳዳሪው በግል ይላካል።`,
+            getStandardKeyboard()
+          );
+        }
         return;
       }
 
       console.log(`[Telegram Complaint] Received from ${firstName} (${fromId}): "${cleanComplaint}"`);
 
+      const matchedMember = await findOrRegisterTelegramMember(fromId, username, firstName, '', false);
       const complaintDocId = `comp_${Date.now()}_${fromId}`;
 
-      // Save to "complaints" collection in Firestore (Requirement 8)
+      const complaintPayload = {
+        id: complaintDocId,
+        memberId: matchedMember?.id || '',
+        telegramChatId: memberPrivateChatId || fromId,
+        chatId: memberPrivateChatId || fromId,
+        fromId,
+        firstName: firstName.slice(0, 100),
+        complaintText: cleanComplaint.slice(0, 4000),
+        status: 'open',
+        createdAt: nowIso,
+        source: 'telegram_bot',
+      };
+
+      // Save to "complaints" collection in Firestore
       if (db) {
-        await safeFirestoreSetDoc(doc(db, 'complaints', complaintDocId), {
-          chatId,
-          fromId,
-          firstName: firstName.slice(0, 100),
-          complaintText: cleanComplaint.slice(0, 4000),
-          status: 'open',
-          createdAt: nowIso,
-        });
+        await safeFirestoreSetDoc(doc(db, 'complaints', complaintDocId), complaintPayload);
         console.log(`[Firestore] Saved complaint: ${complaintDocId}`);
       }
 
-      // Notify Admin
-      const adminChat = ADMIN_TELEGRAM_CHAT_ID;
-      if (adminChat) {
-        const adminComplaintAlert = `⚠️ <b>አዲስ አባል ቅሬታ/አስተያየት ተመዝግቧል!</b>
+      // RULE 1: Complaints MUST NEVER go to any group chat — ONLY privately to VITE_ADMIN_TELEGRAM_CHAT_ID
+      const adminComplaintAlert = `⚠️ <b>አዲስ አባል ቅሬታ/አስተያየት ተመዝግቧል!</b>
 ━━━━━━━━━━━━━━━━━━━━
 🆔 <b>የቅሬታ መለያ፦</b> <code>${complaintDocId}</code>
-👤 <b>ከላኪ፡</b> ${firstName} (ID: <code>${fromId}</code>${username ? ` / @${username}` : ''})
+👤 <b>ከላኪ፡</b> ${firstName}${matchedMember?.id ? ` (${matchedMember.id})` : ''} (ID: <code>${fromId}</code>${username ? ` / @${username}` : ''})
 📝 <b>ቅሬታ፡</b> ${cleanComplaint}
 ⏰ <b>ሰዓት፡</b> ${new Date().toLocaleString('am-ET')}
 
-💬 <i>መልስ ለመስጠት ይህንን መልዕክት በቀጥታ Reply ያድርጉ (Reply to this message to send response)</i>`;
-        await sendTelegramMessage(adminChat, adminComplaintAlert);
-      }
+💬 <i>መልስ ለመስጠት ይህንን መልዕክት በቀጥታ Reply ያድርጉ (መልስዎ ወደ አባሉ በግል ብቻ ይላካል)</i>`;
+      await sendComplaintAlertToAdmin(adminComplaintAlert);
 
-      // Reply confirmation to sender
-      const complaintReply = `📩 <b>ቅሬታዎ/አስተያየትዎ በተሳካ ሁኔታ ተመዝግቧል!</b>
+      // Acknowledge to sender in private chat ONLY (never broadcast into a group)
+      if (memberPrivateChatId) {
+        const complaintReply = `📩 <b>ቅሬታዎ/አስተያየትዎ በተሳካ ሁኔታ ተመዝግቧል!</b>
 
-የአበሩስ አንድነት ማህበር አመራሮች የላኩትን ጉዳይ ተመልክተው ተገቢውን ማስተካከያ እና ምላሽ ይሰጡዎታል።
+ቅሬታዎ ወደ አስተዳዳሪው በግል ተልኳል። አስተዳዳሪው ሲመልሱ በዚሁ የግል ቻት ምላሽ ይደርስዎታል።
 
 ስለ ማሳሰቢያዎ እናመሰግናለን! 🙏`;
-
-      await sendTelegramMessage(chatId, complaintReply, getStandardKeyboard());
+        await sendTelegramMessage(memberPrivateChatId, complaintReply, getStandardKeyboard());
+      }
       return;
     }
 
@@ -2032,36 +2191,50 @@ app.post('/api/reports/send', async (req: Request, res: Response) => {
       };
     };
 
-    // 0. SINGLE PAYMENT OR BULK PAYMENT CONDITIONAL TELEGRAM REPORT
-    if (target === 'payment' || target === 'bulk_payment') {
-      const { payment, items: bulkItems, payerName: reqPayerName, masterReceiptNumber } = req.body || {};
-      let membersList: any[] = [];
-      let contribsList: any[] = [];
-      if (db) {
-        const [mSnap, cSnap] = await Promise.all([
-          getDocs(collection(db, 'members')),
-          getDocs(collection(db, 'contributions')),
-        ]);
-        membersList = mSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        contribsList = cSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      } else {
-        membersList = currentStore.members || [];
-        contribsList = currentStore.contributions || [];
-      }
+    // 0. RULE 3: APPROVED SINGLE & BULK PAYMENT REPORTS -> ONLY TO VITE_TELEGRAM_GROUP_CHAT_ID
+    if (target === 'payment' || target === 'bulk_payment' || target === 'approved_payment') {
+      const {
+        payment,
+        items: bulkItems,
+        payerName: reqPayerName,
+        masterReceiptNumber,
+        reportText: customReportText,
+      } = req.body || {};
 
-      let preparedReportText = '';
-      if (target === 'payment' && payment) {
-        const m = membersList.find((mem) => mem.id === payment.memberId);
-        const mName = m?.fullName || payment.memberName || 'አባል';
-        const paidAmt = Number(payment.paidAmount ?? payment.amount ?? 0);
-        const datePaid = payment.datePaid || new Date().toLocaleDateString('am-ET');
+      let preparedReportText = typeof customReportText === 'string' && customReportText.trim()
+        ? customReportText.trim()
+        : '';
 
-        if (payment.type === 'ትውልድ') {
-          const genStats = computeMemberGenStats(
-            m || { id: payment.memberId, generation: payment.generation || 4 },
-            contribsList
-          );
-          preparedReportText = `🏛️ <b>የአበሩስ አንድነት ማህበር — የትውልድ መዋጮ የክፍያ ሪፖርት</b>
+      if (!preparedReportText) {
+        let membersList: any[] = [];
+        let contribsList: any[] = [];
+        if (db) {
+          const [mSnap, cSnap] = await Promise.all([
+            getDocs(collection(db, 'members')),
+            getDocs(collection(db, 'contributions')),
+          ]);
+          membersList = mSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          contribsList = cSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        } else {
+          membersList = currentStore.members || [];
+          contribsList = currentStore.contributions || [];
+        }
+
+        if ((target === 'payment' || target === 'approved_payment') && payment) {
+          if (payment.id && !contribsList.some((c: any) => c.id === payment.id)) {
+            contribsList = [{ ...payment, status: 'ተከፍሏል' }, ...contribsList];
+          }
+          const m = membersList.find((mem) => mem.id === payment.memberId);
+          const mName = m?.fullName || payment.memberName || 'አባል';
+          const paidAmt = Number(payment.paidAmount ?? payment.amount ?? 0);
+          const datePaid = payment.datePaid || new Date().toLocaleDateString('am-ET');
+
+          if (payment.type === 'ትውልድ') {
+            const genStats = computeMemberGenStats(
+              m || { id: payment.memberId, generation: payment.generation || 4 },
+              contribsList
+            );
+            preparedReportText = `🏛️ <b>የአበሩስ አንድነት ማህበር — የትውልድ መዋጮ የክፍያ ሪፖርት</b>
 ━━━━━━━━━━━━━━━━━━━━
 👤 <b>አባል፦</b> ${mName} (<code>${payment.memberId || 'N/A'}</code>)
 🏷️ <b>የክፍያ ዓይነት፦</b> የትውልድ መዋጮ
@@ -2071,47 +2244,47 @@ app.post('/api/reports/send', async (req: Request, res: Response) => {
 📊 <b>የትውልድ መዋጮ ማጠቃለያ፦</b>
 • Total Paid (ጠቅላላ የተከፈለ)፦ <b>${genStats.paidSoFar.toLocaleString()} ብር</b>
 • Remaining Balance (ቀሪ መዋጮ)፦ <b>${genStats.remainingBalance.toLocaleString()} ብር</b>`;
-        } else {
-          const pMonthName =
-            payment.ethiopianMonthName ||
-            monthNames[Number(payment.ethiopianMonth || effectiveMonth)] ||
-            monthName;
-          const pYear = Number(payment.ethiopianYear || effectiveYear);
-          preparedReportText = `🏛️ <b>የአበሩስ አንድነት ማህበር — የወርሃዊ መዋጮ የክፍያ ሪፖርት</b>
+          } else {
+            const pMonthName =
+              payment.ethiopianMonthName ||
+              monthNames[Number(payment.ethiopianMonth || effectiveMonth)] ||
+              monthName;
+            const pYear = Number(payment.ethiopianYear || effectiveYear);
+            preparedReportText = `🏛️ <b>የአበሩስ አንድነት ማህበር — የወርሃዊ መዋጮ የክፍያ ሪፖርት</b>
 ━━━━━━━━━━━━━━━━━━━━
 👤 <b>አባል፦</b> ${mName} (<code>${payment.memberId || 'N/A'}</code>)
 🏷️ <b>የክፍያ ዓይነት፦</b> ወርሃዊ መዋጮ
 💵 <b>የተከፈለው መጠን፦</b> ${paidAmt.toLocaleString()} ብር
 📅 <b>የወሩ ስም፦</b> ${pMonthName} ${pYear} ዓ.ም
 🗓️ <b>የክፍያ ቀን፦</b> ${datePaid}`;
-        }
-      } else {
-        const list = Array.isArray(bulkItems) ? bulkItems : [];
-        const totalPaidBulk = list.reduce((s: number, it: any) => s + Number(it.amount || it.paidAmount || 0), 0);
-        const todayStr = new Date().toLocaleDateString('am-ET');
-        const rowLines = list.map((it: any, idx: number) => {
-          const m = membersList.find((mem) => mem.id === it.memberId) || {
-            id: it.memberId,
-            fullName: it.memberName || 'አባል',
-            generation: it.generation || 4,
-            isMinor: it.isMinor,
-            isSpouse: it.isSpouse,
-          };
-          const amt = Number(it.amount || it.paidAmount || 0);
-          const dPaid = it.datePaid || todayStr;
-          if (it.type === 'ትውልድ') {
-            const genStats = computeMemberGenStats(m, contribsList);
-            return `${idx + 1}. <b>${m.fullName}</b> — የትውልድ መዋጮ፡ ${amt.toLocaleString()} ብር | ቀን፡ ${dPaid} | ቀሪ፡ ${genStats.remainingBalance.toLocaleString()} ብር`;
           }
-          const mNameStr =
-            it.ethiopianMonthName ||
-            monthNames[Number(it.ethiopianMonth || effectiveMonth)] ||
-            monthName;
-          const yr = Number(it.ethiopianYear || effectiveYear);
-          return `${idx + 1}. <b>${m.fullName}</b> — ወርሃዊ (${mNameStr} ${yr} ዓ.ም)፡ ${amt.toLocaleString()} ብር · ቀን፡ ${dPaid}`;
-        });
+        } else {
+          const list = Array.isArray(bulkItems) ? bulkItems : [];
+          const totalPaidBulk = list.reduce((s: number, it: any) => s + Number(it.amount || it.paidAmount || 0), 0);
+          const todayStr = new Date().toLocaleDateString('am-ET');
+          const rowLines = list.map((it: any, idx: number) => {
+            const m = membersList.find((mem) => mem.id === it.memberId) || {
+              id: it.memberId,
+              fullName: it.memberName || 'አባል',
+              generation: it.generation || 4,
+              isMinor: it.isMinor,
+              isSpouse: it.isSpouse,
+            };
+            const amt = Number(it.amount || it.paidAmount || 0);
+            const dPaid = it.datePaid || todayStr;
+            if (it.type === 'ትውልድ') {
+              const genStats = computeMemberGenStats(m, contribsList);
+              return `${idx + 1}. <b>${m.fullName}</b> — የትውልድ መዋጮ፡ ${amt.toLocaleString()} ብር | ቀን፡ ${dPaid} | ጠቅላላ የተከፈለ፡ ${genStats.paidSoFar.toLocaleString()} ብር | ቀሪ፡ ${genStats.remainingBalance.toLocaleString()} ብር`;
+            }
+            const mNameStr =
+              it.ethiopianMonthName ||
+              monthNames[Number(it.ethiopianMonth || effectiveMonth)] ||
+              monthName;
+            const yr = Number(it.ethiopianYear || effectiveYear);
+            return `${idx + 1}. <b>${m.fullName}</b> — ወርሃዊ (${mNameStr} ${yr} ዓ.ም)፡ ${amt.toLocaleString()} ብር · ቀን፡ ${dPaid}`;
+          });
 
-        preparedReportText = `🏛️ <b>የአበሩስ አንድነት ማህበር — የጅምላ ክፍያ ሪፖርት</b>
+          preparedReportText = `🏛️ <b>የአበሩስ አንድነት ማህበር — የጅምላ ክፍያ ሪፖርት</b>
 ━━━━━━━━━━━━━━━━━━━━
 ${reqPayerName ? `💳 <b>ከፋይ፦</b> ${reqPayerName}\n` : ''}${masterReceiptNumber ? `🧾 <b>ዋና ደረሰኝ፦</b> ${masterReceiptNumber}\n` : ''}👥 <b>አባላት፦</b> ${list.length}
 💰 <b>ጠቅላላ የተከፈለ፦</b> ${totalPaidBulk.toLocaleString()} ብር
@@ -2119,21 +2292,18 @@ ${reqPayerName ? `💳 <b>ከፋይ፦</b> ${reqPayerName}\n` : ''}${masterRecei
 
 📌 <b>የአባላት ክፍያ ዝርዝር፦</b>
 ${rowLines.join('\n') || '• ምንም ክፍያ የለም'}`;
+        }
       }
 
-      const targetChat = incomingChatId || ADMIN_TELEGRAM_CHAT_ID;
-      let dispatched = false;
-      if (isTelegramBotActive && targetChat) {
-        try {
-          await sendTelegramMessage(targetChat, preparedReportText);
-          dispatched = true;
-        } catch {}
-      }
+      // Strictly route approved single & bulk payment confirmation reports ONLY to VITE_TELEGRAM_GROUP_CHAT_ID
+      const groupDispatch = await sendApprovedPaymentReportToGroup(preparedReportText);
       return res.status(200).json({
         success: true,
         reportType: target,
+        routingTarget: 'telegram_group',
+        targetChatId: groupDispatch.targetChatId,
         reportText: preparedReportText,
-        telegramDispatched: dispatched,
+        telegramDispatched: groupDispatch.ok,
       });
     }
 
@@ -2602,11 +2772,19 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
 
 // Webhook Status and Diagnostic Info API (for UI testing & configuration)
 app.get('/api/telegram-webhook/status', async (req: Request, res: Response) => {
+  const adminPrivateChat = resolveAdminPrivateChatId();
+  const groupChat = resolveTelegramGroupChatId();
   res.status(200).json({
     status: 'active',
     hasBotToken: Boolean(TELEGRAM_BOT_TOKEN && isTelegramBotActive),
     isBotActive: isTelegramBotActive,
-    hasAdminChatId: Boolean(ADMIN_TELEGRAM_CHAT_ID),
+    hasAdminChatId: Boolean(adminPrivateChat),
+    hasGroupChatId: Boolean(groupChat),
+    routing: {
+      complaintsTarget: 'VITE_ADMIN_TELEGRAM_CHAT_ID (private)',
+      adminReplyTarget: 'member.telegramChatId (private)',
+      approvedPaymentReportsTarget: 'VITE_TELEGRAM_GROUP_CHAT_ID (group)',
+    },
     firestoreConnected: Boolean(db),
     webhookRoute: '/api/telegram-webhook',
     serverTime: new Date().toISOString(),
@@ -2646,20 +2824,31 @@ app.get('/api/complaints', async (req: Request, res: Response) => {
 });
 
 // POST /api/complaints - Submit complaint/inquiry from Member Portal or Web App
+// RULE 1: Complaints NEVER go to a group; ONLY privately to VITE_ADMIN_TELEGRAM_CHAT_ID
 app.post('/api/complaints', async (req: Request, res: Response) => {
   try {
-    const { memberId, memberName, category, message, phone } = req.body || {};
+    const { id: incomingId, memberId, memberName, category, message, phone, telegramChatId: incomingTgChatId } = req.body || {};
     if (!message || !message.trim()) {
       return res.status(400).json({ success: false, error: 'Complaint message is required' });
     }
 
     const cleanId = String(memberId || 'MEM').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const complaintId = `comp_${Date.now()}_${cleanId}`;
+    const complaintId = (incomingId && String(incomingId).trim()) || `comp_${Date.now()}_${cleanId}`;
     const nowIso = new Date().toISOString();
+
+    // Resolve the complaining member's personal telegramChatId so Rule 2 replies can reach them privately later
+    let resolvedMemberTgChatId = sanitizeChatId(incomingTgChatId);
+    if (isGroupChatId(resolvedMemberTgChatId)) resolvedMemberTgChatId = '';
+    if (!resolvedMemberTgChatId && memberId) {
+      resolvedMemberTgChatId = await resolveComplaintMemberTelegramChatId({ memberId: String(memberId).trim() });
+    }
 
     const complaintData = {
       id: complaintId,
       memberId: memberId || '',
+      telegramChatId: resolvedMemberTgChatId || '',
+      fromId: resolvedMemberTgChatId || '',
+      chatId: resolvedMemberTgChatId || '',
       firstName: memberName || 'አባል',
       category: category || 'የክፍያ ማስተካከያ',
       complaintText: `[${category || 'የክፍያ ማስተካከያ'}] ${message.trim()}`,
@@ -2670,37 +2859,91 @@ app.post('/api/complaints', async (req: Request, res: Response) => {
     };
 
     if (db) {
-      await safeFirestoreSetDoc(doc(db, 'complaints', complaintId), complaintData);
+      await safeFirestoreSetDoc(doc(db, 'complaints', complaintId), complaintData, { merge: true });
       console.log(`[Firestore] Stored member portal complaint: ${complaintId}`);
     }
 
-    // Notify Telegram Admin if active
-    if (ADMIN_TELEGRAM_CHAT_ID && isTelegramBotActive) {
-      try {
-        const adminComplaintAlert = `⚠️ <b>አዲስ የአባል ቅሬታ/ጥያቄ በፖርታል ቀርቧል!</b>\n` +
-          `━━━━━━━━━━━━━━━━━━━━\n` +
-          `🆔 <b>የቅሬታ መለያ፦</b> <code>${complaintId}</code>\n` +
-          `👤 <b>ከላኪ፡</b> ${memberName || 'አባል'} (<code>${memberId || 'N/A'}</code>)\n` +
-          `📂 <b>ዓይነት፡</b> ${category || 'የክፍያ ማስተካከያ'}\n` +
-          `📝 <b>መልእክት፡</b> ${message.trim()}\n` +
-          `📞 <b>ስልክ፡</b> ${phone || 'የለም'}\n` +
-          `⏰ <b>ሰዓት፡</b> ${new Date().toLocaleString('am-ET')}\n\n` +
-          `💬 <i>መልስ ለመስጠት ይህንን መልዕክት በቀጥታ Reply ያድርጉ (Reply to this message to send response)</i>`;
-        await sendTelegramMessage(ADMIN_TELEGRAM_CHAT_ID, adminComplaintAlert);
-      } catch (tgErr) {
-        console.warn('[Telegram Admin Notification Notice]:', tgErr);
-      }
-    }
+    // RULE 1: Notify Admin privately ONLY via VITE_ADMIN_TELEGRAM_CHAT_ID (never group)
+    const adminComplaintAlert = `⚠️ <b>አዲስ የአባል ቅሬታ/ጥያቄ በፖርታል ቀርቧል!</b>\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `🆔 <b>የቅሬታ መለያ፦</b> <code>${complaintId}</code>\n` +
+      `👤 <b>ከላኪ፡</b> ${memberName || 'አባል'} (<code>${memberId || 'N/A'}</code>${resolvedMemberTgChatId ? ` · TG: <code>${resolvedMemberTgChatId}</code>` : ''})\n` +
+      `📂 <b>ዓይነት፡</b> ${category || 'የክፍያ ማስተካከያ'}\n` +
+      `📝 <b>መልእክት፡</b> ${message.trim()}\n` +
+      `📞 <b>ስልክ፡</b> ${phone || 'የለም'}\n` +
+      `⏰ <b>ሰዓት፡</b> ${new Date().toLocaleString('am-ET')}\n\n` +
+      `💬 <i>መልስ ለመስጠት ይህንን መልዕክት በቀጥታ Reply ያድርጉ (መልስዎ ወደ አባሉ telegramChatId በግል ብቻ ይላካል)</i>`;
+    const alertRes = await sendComplaintAlertToAdmin(adminComplaintAlert);
 
     return res.status(200).json({
       success: true,
       complaintId,
-      message: 'ቅሬታዎ/አስተያየትዎ በተሳካ ሁኔታ ተመዝግቧል!',
+      routingTarget: 'admin_private',
+      telegramDispatched: alertRes.ok,
+      message: 'ቅሬታዎ/አስተያየትዎ በተሳካ ሁኔታ ተመዝግቦ ወደ አስተዳዳሪው በግል ተልኳል!',
       complaint: complaintData,
     });
   } catch (err: any) {
     console.error('[Error in POST /api/complaints]:', err);
     return res.status(500).json({ success: false, error: err?.message || 'Failed to submit complaint' });
+  }
+});
+
+// POST /api/complaints/reply - Admin replies to a complaint from Web UI
+// RULE 2: Reply NEVER goes to a group or bounces back to Admin; goes ONLY to complaining member's personal telegramChatId
+app.post('/api/complaints/reply', async (req: Request, res: Response) => {
+  try {
+    const { complaintId, replyText } = req.body || {};
+    const cleanReply = String(replyText || '').trim();
+    if (!complaintId || !cleanReply) {
+      return res.status(400).json({ success: false, error: 'complaintId and replyText are required' });
+    }
+
+    let targetComplaint: any = null;
+    if (db) {
+      const cDoc = await getDoc(doc(db, 'complaints', String(complaintId)));
+      if (cDoc.exists()) {
+        targetComplaint = { id: cDoc.id, ...cDoc.data() };
+      }
+    }
+    if (!targetComplaint) {
+      targetComplaint = ((currentStore as any)?.complaints || []).find((c: any) => c.id === complaintId) || { id: complaintId };
+    }
+
+    const nowIso = new Date().toISOString();
+    const memberName = targetComplaint.firstName || targetComplaint.memberName || 'አባል';
+    const memberTelegramChatId = await resolveComplaintMemberTelegramChatId(targetComplaint);
+
+    const updateData = {
+      adminResponse: cleanReply,
+      status: 'Resolved',
+      resolvedAt: nowIso,
+      resolvedBy: 'Admin',
+      updatedAt: nowIso,
+      ...(memberTelegramChatId ? { telegramChatId: memberTelegramChatId } : {}),
+    };
+
+    if (db) {
+      await safeFirestoreSetDoc(doc(db, 'complaints', String(complaintId)), updateData, { merge: true });
+    }
+
+    let delivery: any = { ok: false, targetChatId: null };
+    if (memberTelegramChatId) {
+      const memberMsg = `ውድ ${memberName}፤ ለቅሬታዎ የተሰጠ ምላሽ፦\n\n${cleanReply}`;
+      delivery = await sendComplaintReplyToMember(memberTelegramChatId, memberMsg, getStandardKeyboard());
+    }
+
+    return res.status(200).json({
+      success: true,
+      complaintId,
+      routingTarget: 'member_private_telegram_chat_id',
+      targetChatId: delivery.targetChatId || memberTelegramChatId || null,
+      memberNotified: Boolean(delivery.ok),
+      adminResponse: cleanReply,
+    });
+  } catch (err: any) {
+    console.error('[Error in POST /api/complaints/reply]:', err);
+    return res.status(500).json({ success: false, error: err?.message || 'Failed to send complaint reply' });
   }
 });
 

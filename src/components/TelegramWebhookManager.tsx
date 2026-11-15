@@ -30,6 +30,8 @@ export const TelegramWebhookManager: React.FC<TelegramWebhookManagerProps> = ({ 
   const [webhookStatus, setWebhookStatus] = useState<'checking' | 'active' | 'error'>('checking');
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [hasBotToken, setHasBotToken] = useState<boolean>(false);
+  const [hasAdminChatId, setHasAdminChatId] = useState<boolean>(false);
+  const [hasGroupChatId, setHasGroupChatId] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'tester' | 'messages' | 'receipts' | 'complaints'>('tester');
   const [copiedLink, setCopiedLink] = useState(false);
 
@@ -48,6 +50,9 @@ export const TelegramWebhookManager: React.FC<TelegramWebhookManagerProps> = ({ 
   const [receiptsList, setReceiptsList] = useState<any[]>([]);
   const [complaintsList, setComplaintsList] = useState<any[]>([]);
   const [loadingRecords, setLoadingRecords] = useState(false);
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [sendingReplyId, setSendingReplyId] = useState<string | null>(null);
+  const [replyFeedback, setReplyFeedback] = useState<Record<string, string>>({});
 
   const webhookUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/api/telegram-webhook`;
 
@@ -70,6 +75,8 @@ export const TelegramWebhookManager: React.FC<TelegramWebhookManagerProps> = ({ 
       if (statusRes.ok) {
         const data = await statusRes.json();
         setHasBotToken(Boolean(data.hasBotToken));
+        setHasAdminChatId(Boolean(data.hasAdminChatId));
+        setHasGroupChatId(Boolean(data.hasGroupChatId));
       }
     } catch (err: any) {
       setWebhookStatus('error');
@@ -156,6 +163,42 @@ export const TelegramWebhookManager: React.FC<TelegramWebhookManagerProps> = ({ 
       });
     } finally {
       setSimulating(false);
+    }
+  };
+
+  const handleSendComplaintReply = async (complaintId: string) => {
+    const replyText = (replyDrafts[complaintId] || '').trim();
+    if (!replyText) return;
+    setSendingReplyId(complaintId);
+    try {
+      const res = await fetch('/api/complaints/reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ complaintId, replyText }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setReplyDrafts((prev) => ({ ...prev, [complaintId]: '' }));
+        setReplyFeedback((prev) => ({
+          ...prev,
+          [complaintId]: data.memberNotified
+            ? `መልስዎ ወደ አባሉ telegramChatId (${data.targetChatId}) በግል ተልኳል!`
+            : 'መልስዎ በዳታቤዝ ተመዝግቧል (ለአባሉ telegramChatId የግል መልእክት ተዘጋጅቷል)።',
+        }));
+        await fetchRecords();
+      } else {
+        setReplyFeedback((prev) => ({
+          ...prev,
+          [complaintId]: data?.error || 'መልሱን መላክ አልተቻለም።',
+        }));
+      }
+    } catch (err: any) {
+      setReplyFeedback((prev) => ({
+        ...prev,
+        [complaintId]: err?.message || 'መልሱን መላክ አልተቻለም።',
+      }));
+    } finally {
+      setSendingReplyId(null);
     }
   };
 
@@ -263,10 +306,24 @@ export const TelegramWebhookManager: React.FC<TelegramWebhookManagerProps> = ({ 
           <p className="text-xs text-neutral-600 leading-relaxed">
             ቦት ቶከኑ በአገልጋዩ (Server-side) ብቻ በ <code>TELEGRAM_BOT_TOKEN</code> ኢንቫይሮንመንት ይቀመጣል፤ በUI ላይ በፍጹም አይጋለጥም።
           </p>
-          <div className="flex items-center gap-2 pt-1">
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <span
+              className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                hasAdminChatId ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+              }`}
+            >
+              ቅሬታ (Admin DM): {hasAdminChatId ? 'Configured' : 'Env Missing'}
+            </span>
+            <span
+              className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                hasGroupChatId ? 'bg-sky-100 text-sky-800' : 'bg-amber-100 text-amber-800'
+              }`}
+            >
+              ክፍያ ሪፖርት (Group): {hasGroupChatId ? 'Configured' : 'VITE_TELEGRAM_GROUP_CHAT_ID'}
+            </span>
             <button
               onClick={copyWebhookCommand}
-              className="text-xs text-sky-700 hover:text-sky-800 font-medium flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-50 border border-sky-200 cursor-pointer"
+              className="text-xs text-sky-700 hover:text-sky-800 font-medium flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-50 border border-sky-200 cursor-pointer ml-auto"
             >
               {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
               <span>{copiedLink ? 'ትእዛዙ ተቀድቷል (Copied)' : 'setWebhook ትእዛዝ ቅዳ (Copy cURL)'}</span>
@@ -672,26 +729,70 @@ export const TelegramWebhookManager: React.FC<TelegramWebhookManagerProps> = ({ 
               ምንም የተመዘገበ ቅሬታ የለም።
             </div>
           ) : (
-            <div className="divide-y divide-neutral-100 border border-neutral-200 rounded-2xl overflow-hidden max-h-96 overflow-y-auto">
-              {complaintsList.map((comp, i) => (
-                <div key={comp.id || i} className="p-3.5 hover:bg-neutral-50 text-xs flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-neutral-900">
-                      {comp.firstName || 'አባል'} <span className="font-mono text-neutral-400">(ID: {comp.fromId})</span>
-                    </span>
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-100 text-rose-800">
-                      {comp.status || 'open'}
-                    </span>
+            <div className="divide-y divide-neutral-100 border border-neutral-200 rounded-2xl overflow-hidden max-h-[32rem] overflow-y-auto">
+              {complaintsList.map((comp, i) => {
+                const compKey = comp.id || String(i);
+                const memberTg = comp.telegramChatId || comp.fromId || comp.chatId || '';
+                const isResolved = String(comp.status || '').toLowerCase() === 'resolved';
+                return (
+                  <div key={compKey} className="p-3.5 hover:bg-neutral-50/70 text-xs flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-neutral-900">
+                        {comp.firstName || 'አባል'}{' '}
+                        {comp.memberId ? (
+                          <span className="font-mono text-emerald-700">({comp.memberId})</span>
+                        ) : null}{' '}
+                        <span className="font-mono text-neutral-400">TG: {memberTg || 'N/A'}</span>
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                          isResolved ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                        }`}
+                      >
+                        {comp.status || 'open'}
+                      </span>
+                    </div>
+                    <p className="text-neutral-800 bg-rose-50/50 p-2.5 rounded-xl border border-rose-100 leading-relaxed text-xs">
+                      {comp.complaintText}
+                    </p>
+                    {comp.adminResponse && (
+                      <div className="text-emerald-950 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200 text-xs">
+                        <span className="font-bold text-emerald-800 block mb-0.5">የአስተዳዳሪ ምላሽ (ለአባሉ telegramChatId በግል)፡</span>
+                        {comp.adminResponse}
+                      </div>
+                    )}
+                    {comp.id && (
+                      <div className="flex items-center gap-2 pt-0.5">
+                        <input
+                          type="text"
+                          value={replyDrafts[comp.id] || ''}
+                          onChange={(e) =>
+                            setReplyDrafts((prev) => ({ ...prev, [comp.id]: e.target.value }))
+                          }
+                          placeholder="ለቅሬታው ለአባሉ በግል የሚላክ መልስ ይጻፉ..."
+                          className="flex-1 text-xs rounded-lg border border-neutral-300 px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                        />
+                        <button
+                          type="button"
+                          disabled={sendingReplyId === comp.id || !(replyDrafts[comp.id] || '').trim()}
+                          onClick={() => handleSendComplaintReply(comp.id)}
+                          className="px-3 py-1.5 rounded-lg bg-[#1B5E20] hover:bg-[#154a19] disabled:opacity-50 text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer shrink-0"
+                        >
+                          <Send className="w-3 h-3" />
+                          <span>{sendingReplyId === comp.id ? 'በመላክ ላይ...' : 'ለአባሉ በግል መልስ ላክ'}</span>
+                        </button>
+                      </div>
+                    )}
+                    {comp.id && replyFeedback[comp.id] && (
+                      <p className="text-[11px] font-semibold text-emerald-800">{replyFeedback[comp.id]}</p>
+                    )}
+                    <div className="text-[10px] text-neutral-400 flex items-center justify-between">
+                      <span>Personal telegramChatId: {memberTg || 'ያልተገናኘ'}</span>
+                      <span>{comp.createdAt ? new Date(comp.createdAt).toLocaleString('am-ET') : ''}</span>
+                    </div>
                   </div>
-                  <p className="text-neutral-800 bg-rose-50/50 p-2.5 rounded-xl border border-rose-100 leading-relaxed text-xs">
-                    {comp.complaintText}
-                  </p>
-                  <div className="text-[10px] text-neutral-400 flex items-center justify-between">
-                    <span>Chat ID: {comp.chatId}</span>
-                    <span>{comp.createdAt ? new Date(comp.createdAt).toLocaleString('am-ET') : ''}</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

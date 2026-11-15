@@ -899,29 +899,39 @@ export async function updateCurrentMemberPassword(newPassword: string): Promise<
  * Save a complaint/inquiry directly to Firestore complaints collection
  */
 export async function saveComplaintToFirestore(complaint: {
+  id?: string;
   memberId: string;
   memberName: string;
   category: string;
   message: string;
   phone?: string;
+  telegramChatId?: string | number;
 }): Promise<string> {
   const cleanId = String(complaint.memberId || 'MEM').replace(/[^a-zA-Z0-9_-]/g, '_');
-  const complaintId = `comp_${Date.now()}_${cleanId}`;
+  const complaintId = (complaint.id && complaint.id.trim()) || `comp_${Date.now()}_${cleanId}`;
   const nowIso = new Date().toISOString();
+  const tgChat = complaint.telegramChatId ? String(complaint.telegramChatId).trim() : '';
 
   await safeClientFirestoreWrite(
     () =>
-      setDoc(doc(db, COMPLAINTS_COLLECTION, complaintId), {
-        id: complaintId,
-        memberId: complaint.memberId,
-        firstName: complaint.memberName,
-        category: complaint.category,
-        complaintText: `[${complaint.category}] ${complaint.message}`,
-        phone: complaint.phone || '',
-        status: 'open',
-        createdAt: nowIso,
-        source: 'member_portal',
-      }),
+      setDoc(
+        doc(db, COMPLAINTS_COLLECTION, complaintId),
+        {
+          id: complaintId,
+          memberId: complaint.memberId,
+          firstName: complaint.memberName,
+          category: complaint.category,
+          complaintText: `[${complaint.category}] ${complaint.message}`,
+          phone: complaint.phone || '',
+          telegramChatId: tgChat,
+          chatId: tgChat,
+          fromId: tgChat,
+          status: 'open',
+          createdAt: nowIso,
+          source: 'member_portal',
+        },
+        { merge: true }
+      ),
     `saving complaint ${complaintId}`
   );
 

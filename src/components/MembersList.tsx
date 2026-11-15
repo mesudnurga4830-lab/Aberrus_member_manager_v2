@@ -35,6 +35,7 @@ import {
 import {
   shareAppLinkToMember,
   formatBulkPaymentTelegramReport,
+  dispatchApprovedPaymentReportToGroup,
   getAppUrl,
 } from '../utils/telegramShare';
 import { AdminEditMemberModal } from './AdminEditMemberModal';
@@ -1280,16 +1281,39 @@ export const MembersList: React.FC<MembersListProps> = ({
               settings,
             });
             setLastBulkTelegramPayload({
-              name: payerMember?.fullName || 'አስተዳዳሪ / ወኪል',
-              role: 'የጅምላ ክፍያ ሪፖርት',
+              name: 'የማህበሩ Telegram Group',
+              role: 'የጅምላ ክፍያ ሪፖርት (Group Report)',
               phone: payerMember?.phone || '',
               telegram: payerMember?.telegram || '',
               messageText: bulkReportText,
               directUrl: getAppUrl(),
             });
+
+            // Rule 3: Dispatch approved bulk payment report ONLY to VITE_TELEGRAM_GROUP_CHAT_ID
+            void dispatchApprovedPaymentReportToGroup({
+              target: 'bulk_payment',
+              payerName: payerMember?.fullName || 'አስተዳዳሪ / ወኪል',
+              bulkItems: result.createdContributions.map((c) => {
+                const mem = members.find((m) => m.id === c.memberId);
+                return {
+                  memberId: c.memberId,
+                  memberName: c.memberName,
+                  generation: c.generation,
+                  isMinor: mem?.isMinor,
+                  isSpouse: mem?.isSpouse,
+                  type: c.type,
+                  amount: Number(c.paidAmount ?? c.amount ?? 0),
+                  ethiopianMonth: c.ethiopianMonth,
+                  ethiopianMonthName: c.ethiopianMonthName,
+                  ethiopianYear: c.ethiopianYear,
+                  datePaid: c.datePaid,
+                };
+              }),
+              reportText: bulkReportText,
+            });
             setSelectedMemberIds(new Set());
             setDeleteNotice(
-              `ለ${result.createdContributions.length} የተመረጡ አባላት ከCredit Wallet በተሳካ ሁኔታ ተከፍሏል! ቀሪ ሂሳብ፡ ${result.newWalletBalance.toLocaleString()} ብር`
+              `ለ${result.createdContributions.length} የተመረጡ አባላት ከCredit Wallet በተሳካ ሁኔታ ተከፍሏል! ቀሪ ሂሳብ፡ ${result.newWalletBalance.toLocaleString()} ብር (የጅምላ ሪፖርት ወደ Telegram Group ተልኳል)`
             );
           }}
         />
