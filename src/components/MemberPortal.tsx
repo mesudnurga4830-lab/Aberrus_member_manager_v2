@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Member, Contribution, SettingsRates, Family, UserRole, ContributionStatus, MasterReceipt, PaymentMethod } from '../types';
 import {
   subscribeToMemberContributions,
@@ -191,10 +191,48 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
     message: string;
   } | null>(null);
 
+  const membersRef = useRef<Member[]>(members);
+  membersRef.current = members;
+  const telegramInitializedRef = useRef<boolean>(false);
+  const autoLinkedMemberIdsRef = useRef<Set<string>>(new Set());
+
+  // Initialize Telegram Mini App SDK strictly ONCE on mount and sync telegramChatId only if missing
   useEffect(() => {
+    if (telegramInitializedRef.current) return;
+    telegramInitializedRef.current = true;
+
     try {
-      window.Telegram?.WebApp?.ready?.();
-    } catch {}
+      const tgWebApp = typeof window !== 'undefined' ? window.Telegram?.WebApp : undefined;
+      tgWebApp?.ready?.();
+
+      const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+      const tgChatId = tgUser?.id != null ? String(tgUser.id).trim() : '';
+      const initialMember =
+        membersRef.current.find((m) => m.id === currentMemberId) ||
+        (userRole === 'admin' ? membersRef.current[0] : null);
+
+      if (
+        tgChatId &&
+        initialMember?.id &&
+        !String(initialMember.telegramChatId || '').trim() &&
+        !autoLinkedMemberIdsRef.current.has(initialMember.id)
+      ) {
+        autoLinkedMemberIdsRef.current.add(initialMember.id);
+        updateMemberTelegramChatId(initialMember.id, tgChatId, tgUser?.username)
+          .then(() => {
+            setLinkedChatIdOverride(tgChatId);
+            setTelegramConnectStatus({
+              type: 'success',
+              message: 'የቴሌግራም አካውንትዎ በተሳካ ሁኔታ ተገናኝቷል!',
+            });
+          })
+          .catch((err) => {
+            console.warn('[Telegram Mini App] One-time auto-link notice:', err);
+          });
+      }
+    } catch (err) {
+      console.warn('[Telegram Mini App] Initialization notice:', err);
+    }
   }, []);
 
   useEffect(() => {
@@ -289,8 +327,8 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
         // Query Firestore members collection by familyName
         const fetchedMembers = await getMembersByFamilyName(familyName, familyId);
 
-        // Fallback filter from local members if needed
-        const fallbackMembers = members.filter(
+        // Fallback filter from local members ref (avoids re-running effect on every members snapshot)
+        const fallbackMembers = membersRef.current.filter(
           (m) =>
             (familyName && m.familyName && m.familyName.trim().toLowerCase() === familyName.trim().toLowerCase()) ||
             (familyId && m.familyId && m.familyId === familyId)
@@ -322,7 +360,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [activeMember?.id, activeMember?.familyName, activeMember?.familyId, members]);
+  }, [activeMember?.id, activeMember?.familyName, activeMember?.familyId]);
 
   // STEP A, B, C: REAL-TIME ON-SNAPSHOT SUBSCRIPTION & CONSOLE DIAGNOSIS
   useEffect(() => {
@@ -1001,15 +1039,14 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
   const handleConnectTelegramMiniApp = async () => {
     setTelegramConnectStatus(null);
 
-    const tgWebApp = typeof window !== 'undefined' ? window.Telegram?.WebApp : undefined;
     try {
-      tgWebApp?.ready?.();
+      window?.Telegram?.WebApp?.ready?.();
     } catch {}
 
-    const tgUser = tgWebApp?.initDataUnsafe?.user;
+    const tgUser = typeof window !== 'undefined' ? window.Telegram?.WebApp?.initDataUnsafe?.user : undefined;
     const chatId = tgUser?.id != null ? String(tgUser.id).trim() : '';
 
-    if (typeof window === 'undefined' || !window.Telegram || !tgWebApp || !chatId) {
+    if (typeof window === 'undefined' || !window.Telegram?.WebApp || !chatId) {
       setTelegramConnectStatus({
         type: 'warning',
         message: 'እባክዎ ይህንን አፕ በቴሌግራም ውስጥ ይክፈቱ',
@@ -1017,9 +1054,21 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
       return;
     }
 
+    // Write to Firebase ONLY if telegramChatId is missing or different (avoid redundant writes)
+    const existingChatId = String(activeMember.telegramChatId || '').trim();
+    if (existingChatId === chatId) {
+      setLinkedChatIdOverride(chatId);
+      setTelegramConnectStatus({
+        type: 'success',
+        message: 'የቴሌግራም አካውንትዎ በተሳካ ሁኔታ ተገናኝቷል!',
+      });
+      return;
+    }
+
     setIsConnectingTelegram(true);
     try {
       await updateMemberTelegramChatId(activeMember.id, chatId, tgUser?.username);
+      autoLinkedMemberIdsRef.current.add(activeMember.id);
       setLinkedChatIdOverride(chatId);
       setTelegramConnectStatus({
         type: 'success',

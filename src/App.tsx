@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   getMembers,
   getFamilies,
@@ -47,6 +47,7 @@ import { BulkImportModal } from './components/BulkImportModal';
 import { AdminMemberPaymentManagerModal } from './components/AdminMemberPaymentManagerModal';
 import { BatchPaymentManagerModal } from './components/BatchPaymentManagerModal';
 import { NetworkStatusIndicator } from './components/NetworkStatusIndicator';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { getCurrentEthiopianDate, getEthiopianMonthName } from './utils/ethiopianCalendar';
 import {
   formatSinglePaymentTelegramReport,
@@ -411,6 +412,8 @@ export default function App() {
     };
   }, [isAuthChecking, authFirebaseUser]);
 
+  const deepLinkFamilyAppliedRef = useRef(false);
+
   // Parse deep-link query and hash params on mount (when opened via Telegram link on mobile)
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -421,11 +424,7 @@ export default function App() {
         : '';
       const hashParams = new URLSearchParams(hashQuery);
 
-      const tokenParam = searchParams.get('token') || hashParams.get('token');
-      const roleParam = searchParams.get('role') || hashParams.get('role');
       const familyIdParam = searchParams.get('familyId') || hashParams.get('familyId');
-      const memberIdParam = searchParams.get('memberId') || hashParams.get('memberId');
-      const tabParam = searchParams.get('tab') || hashParams.get('tab');
       const secretAdminUnlock = searchParams.get('adminAuth') || hashParams.get('adminAuth') || searchParams.get('authPin');
 
       // Secret one-time authorization for Mesud Nurga's device via link
@@ -438,16 +437,17 @@ export default function App() {
         return;
       }
 
-      if (familyIdParam) {
+      if (familyIdParam && !deepLinkFamilyAppliedRef.current) {
         const cleanFamId = decodeURIComponent(familyIdParam).trim().toUpperCase();
         const matchFam = families.find((f) => f.id.toUpperCase() === cleanFamId);
         if (matchFam) {
+          deepLinkFamilyAppliedRef.current = true;
           setSelectedHeadFamilyId(matchFam.id);
           localStorage.setItem('abarrus_active_head_family_id', matchFam.id);
         }
       }
     } catch {}
-  }, [families, members]);
+  }, [families]);
 
   const handleInstallShortcut = async () => {
     if (deferredPrompt) {
@@ -846,74 +846,76 @@ export default function App() {
             }}
           />
         ) : userRole === 'member' || currentTab === 'portal' ? (
-          <MemberPortal
-            members={members}
-            families={families}
-            contributions={contributions}
-            settings={settings}
-            currentMemberId={selectedPortalMemberId}
-            userRole={userRole}
-            lang={lang}
-            onNavigateToLogin={() => setIsLoginPage(true)}
-            onLogout={handleLogout}
-            onSelectMember={(id) => setSelectedPortalMemberId(id)}
-            onSubmitPaymentClaim={async (claimData) => {
-              const {
-                memberId,
-                month,
-                amount,
-                method,
-                ref,
-                type,
-                slipPhoto,
-                payerId,
-                payerName,
-                beneficiaryId,
-                beneficiaryName,
-                isProxyPayment,
-                status,
-              } = claimData;
+          <ErrorBoundary fallbackTitle="የአባል መገለጫ ገጽ ስህተት (Member Profile Error)">
+            <MemberPortal
+              members={members}
+              families={families}
+              contributions={contributions}
+              settings={settings}
+              currentMemberId={selectedPortalMemberId}
+              userRole={userRole}
+              lang={lang}
+              onNavigateToLogin={() => setIsLoginPage(true)}
+              onLogout={handleLogout}
+              onSelectMember={(id) => setSelectedPortalMemberId(id)}
+              onSubmitPaymentClaim={async (claimData) => {
+                const {
+                  memberId,
+                  month,
+                  amount,
+                  method,
+                  ref,
+                  type,
+                  slipPhoto,
+                  payerId,
+                  payerName,
+                  beneficiaryId,
+                  beneficiaryName,
+                  isProxyPayment,
+                  status,
+                } = claimData;
 
-              const targetMemberId = beneficiaryId || memberId;
-              const mem = members.find((m) => m.id === targetMemberId);
-              const isGen = type === 'ትውልድ';
-              const effectiveStatus: ContributionStatus = status || (isProxyPayment ? 'Pending' : 'ተከፍሏል');
+                const targetMemberId = beneficiaryId || memberId;
+                const mem = members.find((m) => m.id === targetMemberId);
+                const isGen = type === 'ትውልድ';
+                const effectiveStatus: ContributionStatus = status || (isProxyPayment ? 'Pending' : 'ተከፍሏል');
 
-              const newCon: Contribution = {
-                id: `CON-${Date.now()}`,
-                memberId: targetMemberId,
-                memberName: beneficiaryName || mem?.fullName || 'አባል',
-                familyId: mem?.familyId || 'FA001',
-                familyName: mem?.familyName || 'የአበሩስ ቤተሰብ',
-                generation: mem?.generation || 4,
-                type: isGen ? 'ትውልድ' : 'ወርሃዊ',
-                ethiopianMonth: isGen ? 0 : month,
-                ethiopianMonthName: isGen ? 'የትውልድ መዋጮ' : getEthiopianMonthName(month),
-                ethiopianYear: currentDate.year || 2018,
-                amount,
-                paidAmount: amount,
-                status: effectiveStatus,
-                paymentMethod: method as any,
-                transactionRef: ref,
-                datePaid: `${currentDate.formatted}`,
-                notes: isProxyPayment
-                  ? `ተኪ ክፍያ፡ በ${payerName || payerId} ለ${beneficiaryName || mem?.fullName} የተከፈለ (Pending Admin Approval)`
-                  : slipPhoto
-                  ? 'ደረሰኝ ፎቶ ተያይዟል (በአባል በኩል የቀረበ)'
-                  : 'በአባል በኩል የቀረበ የክፍያ ማረጋገጫ',
-                payerId,
-                payerName,
-                beneficiaryId: targetMemberId,
-                beneficiaryName: beneficiaryName || mem?.fullName,
-                isProxyPayment,
-                slipPhoto,
-              };
+                const newCon: Contribution = {
+                  id: `CON-${Date.now()}`,
+                  memberId: targetMemberId,
+                  memberName: beneficiaryName || mem?.fullName || 'አባል',
+                  familyId: mem?.familyId || 'FA001',
+                  familyName: mem?.familyName || 'የአበሩስ ቤተሰብ',
+                  generation: mem?.generation || 4,
+                  type: isGen ? 'ትውልድ' : 'ወርሃዊ',
+                  ethiopianMonth: isGen ? 0 : month,
+                  ethiopianMonthName: isGen ? 'የትውልድ መዋጮ' : getEthiopianMonthName(month),
+                  ethiopianYear: currentDate.year || 2018,
+                  amount,
+                  paidAmount: amount,
+                  status: effectiveStatus,
+                  paymentMethod: method as any,
+                  transactionRef: ref,
+                  datePaid: `${currentDate.formatted}`,
+                  notes: isProxyPayment
+                    ? `ተኪ ክፍያ፡ በ${payerName || payerId} ለ${beneficiaryName || mem?.fullName} የተከፈለ (Pending Admin Approval)`
+                    : slipPhoto
+                    ? 'ደረሰኝ ፎቶ ተያይዟል (በአባል በኩል የቀረበ)'
+                    : 'በአባል በኩል የቀረበ የክፍያ ማረጋገጫ',
+                  payerId,
+                  payerName,
+                  beneficiaryId: targetMemberId,
+                  beneficiaryName: beneficiaryName || mem?.fullName,
+                  isProxyPayment,
+                  slipPhoto,
+                };
 
-              addContribution(newCon);
-              setContributions(getContributions());
-              await saveContributionToFirestore(newCon);
-            }}
-          />
+                addContribution(newCon);
+                setContributions(getContributions());
+                await saveContributionToFirestore(newCon);
+              }}
+            />
+          </ErrorBoundary>
         ) : userRole === 'family_head' || currentTab === 'heads' ? (
           <FamilyHeadPortal
             families={families}
