@@ -18,8 +18,29 @@ import {
   updateCurrentMemberPassword,
   subscribeToMasterReceipts,
   saveMasterReceiptToFirestore,
+  updateMemberTelegramChatId,
 } from '../firebase';
 import { generateSvgQRCode } from '../utils/qrCode';
+
+declare global {
+  interface Window {
+    Telegram?: {
+      WebApp?: {
+        ready?: () => void;
+        expand?: () => void;
+        initData?: string;
+        initDataUnsafe?: {
+          user?: {
+            id?: number | string;
+            first_name?: string;
+            last_name?: string;
+            username?: string;
+          };
+        };
+      };
+    };
+  }
+}
 import { getCurrentEthiopianDate, getEthiopianMonthName } from '../utils/ethiopianCalendar';
 import {
   User,
@@ -161,6 +182,25 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
   const [complaintText, setComplaintText] = useState<string>('');
   const [isSubmittingComplaint, setIsSubmittingComplaint] = useState(false);
   const [complaintSubmitted, setComplaintSubmitted] = useState<boolean>(false);
+
+  // Telegram Mini App linking state
+  const [isConnectingTelegram, setIsConnectingTelegram] = useState<boolean>(false);
+  const [linkedChatIdOverride, setLinkedChatIdOverride] = useState<string>('');
+  const [telegramConnectStatus, setTelegramConnectStatus] = useState<{
+    type: 'success' | 'warning' | 'error';
+    message: string;
+  } | null>(null);
+
+  useEffect(() => {
+    try {
+      window.Telegram?.WebApp?.ready?.();
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    setLinkedChatIdOverride('');
+    setTelegramConnectStatus(null);
+  }, [currentMemberId]);
 
   // Inline fast-login for members if not yet resolved
   const [inlineLoginInput, setInlineLoginInput] = useState('');
@@ -955,11 +995,48 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
     `ABARRUS-MEMBER:${activeMember.id}|${activeMember.fullName}|GEN:${activeMember.generation}`,
     140
   );
-  const telegramDeepLinkUrl = `https://t.me/Aberrusadminpaymentinfo_bot?start=${encodeURIComponent(
-    activeMember.id
-  )}`;
-  const linkedTelegramChatId = activeMember.telegramChatId || activeMember.telegramId;
+  const linkedTelegramChatId = linkedChatIdOverride || activeMember.telegramChatId || activeMember.telegramId;
   const isTelegramConnected = Boolean(linkedTelegramChatId);
+
+  const handleConnectTelegramMiniApp = async () => {
+    setTelegramConnectStatus(null);
+
+    const tgWebApp = typeof window !== 'undefined' ? window.Telegram?.WebApp : undefined;
+    try {
+      tgWebApp?.ready?.();
+    } catch {}
+
+    const tgUser = tgWebApp?.initDataUnsafe?.user;
+    const chatId = tgUser?.id != null ? String(tgUser.id).trim() : '';
+
+    if (typeof window === 'undefined' || !window.Telegram || !tgWebApp || !chatId) {
+      setTelegramConnectStatus({
+        type: 'warning',
+        message: 'እባክዎ ይህንን አፕ በቴሌግራም ውስጥ ይክፈቱ',
+      });
+      return;
+    }
+
+    setIsConnectingTelegram(true);
+    try {
+      await updateMemberTelegramChatId(activeMember.id, chatId, tgUser?.username);
+      setLinkedChatIdOverride(chatId);
+      setTelegramConnectStatus({
+        type: 'success',
+        message: 'የቴሌግራም አካውንትዎ በተሳካ ሁኔታ ተገናኝቷል!',
+      });
+    } catch (err: any) {
+      console.error('[Telegram Mini App] Failed to update telegramChatId:', err);
+      setTelegramConnectStatus({
+        type: 'error',
+        message: isEn
+          ? `Failed to link Telegram account: ${err?.message || 'Permission or network error'}`
+          : 'የቴሌግራም አካውንትዎን ማገናኘት አልተቻለም። እባክዎ ዳግም ይሞክሩ።',
+      });
+    } finally {
+      setIsConnectingTelegram(false);
+    }
+  };
 
   return (
     <div className="space-y-4 pb-16 page-fade-in max-w-7xl mx-auto">
@@ -1067,41 +1144,85 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
           </div>
         </div>
 
-        {/* Telegram Deep Link Account Connection Bar */}
-        <div className="pt-3 border-t border-[#E0E0E0] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-          <div className="flex items-center gap-2 flex-wrap">
-            {isTelegramConnected ? (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-[#1B5E20] border border-emerald-300 text-xs font-bold">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span>
-                  {isEn
-                    ? `Telegram Connected (Chat ID: ${linkedTelegramChatId})`
-                    : `ቴሌግራም ተገናኝቷል (Chat ID: ${linkedTelegramChatId})`}
+        {/* Telegram Mini App Account Connection Bar */}
+        <div className="pt-3 border-t border-[#E0E0E0] space-y-2.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              {isTelegramConnected ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-[#1B5E20] border border-emerald-300 text-xs font-bold">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>
+                    {isEn
+                      ? `Telegram Connected (Chat ID: ${linkedTelegramChatId})`
+                      : `ቴሌግራም ተገናኝቷል (Chat ID: ${linkedTelegramChatId})`}
+                  </span>
                 </span>
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-50 text-sky-900 border border-sky-200 text-xs font-semibold">
-                <Send className="w-3.5 h-3.5 text-[#0088cc] shrink-0" />
-                <span>
-                  {isEn
-                    ? 'Link your Telegram account to receive personal payment & complaint updates.'
-                    : 'የግል የክፍያ ማሳወቂያ እና የቅሬታ ምላሽ ለማግኘት የቴሌግራም አካውንትዎን ያገናኙ።'}
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-50 text-sky-900 border border-sky-200 text-xs font-semibold">
+                  <Send className="w-3.5 h-3.5 text-[#0088cc] shrink-0" />
+                  <span>
+                    {isEn
+                      ? 'Open inside Telegram and tap the button to link your Telegram Chat ID.'
+                      : 'የግል የክፍያ ማሳወቂያ እና የቅሬታ ምላሽ ለማግኘት የቴሌግራም አካውንትዎን ያገናኙ።'}
+                  </span>
                 </span>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleConnectTelegramMiniApp}
+              disabled={isConnectingTelegram}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#0088cc] hover:bg-[#0077b5] disabled:opacity-60 text-white text-xs font-bold shadow-sm transition-all cursor-pointer self-start sm:self-auto shrink-0"
+            >
+              {isConnectingTelegram ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Send className="w-3.5 h-3.5" />
+              )}
+              <span>
+                {isConnectingTelegram
+                  ? isEn
+                    ? 'Connecting...'
+                    : 'በማገናኘት ላይ...'
+                  : 'የቴሌግራም አካውንት አገናኝ'}
               </span>
-            )}
+            </button>
           </div>
 
-          <a
-            href={telegramDeepLinkUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#0088cc] hover:bg-[#0077b5] text-white text-xs font-bold shadow-sm transition-all cursor-pointer self-start sm:self-auto shrink-0"
-            title={telegramDeepLinkUrl}
-          >
-            <Send className="w-3.5 h-3.5" />
-            <span>የቴሌግራም አካውንት አገናኝ (Connect Telegram)</span>
-            <ExternalLink className="w-3.5 h-3.5 opacity-85" />
-          </a>
+          {telegramConnectStatus && (
+            <div
+              role="alert"
+              className={`flex items-center justify-between gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-bold border ${
+                telegramConnectStatus.type === 'success'
+                  ? 'bg-emerald-50 border-emerald-300 text-[#1B5E20]'
+                  : telegramConnectStatus.type === 'warning'
+                  ? 'bg-amber-50 border-amber-300 text-amber-900'
+                  : 'bg-red-50 border-red-300 text-red-900'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {telegramConnectStatus.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                ) : (
+                  <AlertCircle
+                    className={`w-4 h-4 shrink-0 ${
+                      telegramConnectStatus.type === 'warning' ? 'text-amber-600' : 'text-red-600'
+                    }`}
+                  />
+                )}
+                <span>{telegramConnectStatus.message}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTelegramConnectStatus(null)}
+                className="p-1 rounded-md hover:bg-black/5 cursor-pointer"
+                aria-label="Close"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

@@ -1164,6 +1164,63 @@ export async function saveMemberToFirestore(member: Member): Promise<void> {
   } catch {}
 }
 
+/**
+ * Update a member's Telegram Chat ID directly from Telegram Mini App (window.Telegram.WebApp)
+ * using Firebase Client SDK updateDoc.
+ */
+export async function updateMemberTelegramChatId(
+  memberId: string,
+  telegramChatId: string,
+  telegramUsername?: string
+): Promise<void> {
+  const cleanChatId = String(telegramChatId || '').trim();
+  if (!memberId || !cleanChatId) {
+    throw new Error('Missing memberId or telegramChatId');
+  }
+
+  const path = `${MEMBERS_COLLECTION}/${memberId}`;
+  const memberRef = doc(db, MEMBERS_COLLECTION, memberId);
+  const nowIso = new Date().toISOString();
+  const cleanUsername = telegramUsername ? `@${telegramUsername.replace(/^@/, '')}` : '';
+
+  const payload: Record<string, any> = {
+    telegramChatId: cleanChatId,
+    telegramId: cleanChatId,
+    updatedAt: nowIso,
+    ...(cleanUsername ? { telegram: cleanUsername } : {}),
+  };
+
+  try {
+    await updateDoc(memberRef, payload);
+  } catch (err: any) {
+    const errCode = String(err?.code || '');
+    if (errCode === 'not-found' || String(err?.message || '').includes('No document to update')) {
+      try {
+        await setDoc(memberRef, payload, { merge: true });
+      } catch (setErr) {
+        handleFirestoreError(setErr, OperationType.WRITE, path);
+      }
+    } else {
+      handleFirestoreError(err, OperationType.UPDATE, path);
+    }
+  }
+
+  // Keep local storage cache in sync
+  try {
+    const localList = getMembers();
+    const idx = localList.findIndex((m) => m.id === memberId);
+    if (idx !== -1) {
+      localList[idx] = {
+        ...localList[idx],
+        telegramChatId: cleanChatId,
+        telegramId: cleanChatId,
+        ...(cleanUsername ? { telegram: cleanUsername } : {}),
+      };
+      saveMembers(localList);
+    }
+  } catch {}
+}
+
 export interface BulkImportProgress {
   currentBatch: number;
   totalBatches: number;
