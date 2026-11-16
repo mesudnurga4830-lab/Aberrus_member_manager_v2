@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Member, Contribution, SettingsRates, Family, UserRole, ContributionStatus, MasterReceipt, PaymentMethod } from '../types';
+import { Member, Contribution, SettingsRates, Family, UserRole, ContributionStatus, MasterReceipt, PaymentMethod, ComplaintRecord } from '../types';
 import {
   subscribeToMemberContributions,
   matchMonthContribution,
@@ -19,6 +19,7 @@ import {
   subscribeToMasterReceipts,
   saveMasterReceiptToFirestore,
   updateMemberTelegramChatId,
+  subscribeToComplaints,
 } from '../firebase';
 import { generateSvgQRCode } from '../utils/qrCode';
 
@@ -182,6 +183,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
   const [complaintText, setComplaintText] = useState<string>('');
   const [isSubmittingComplaint, setIsSubmittingComplaint] = useState(false);
   const [complaintSubmitted, setComplaintSubmitted] = useState<boolean>(false);
+  const [myComplaints, setMyComplaints] = useState<ComplaintRecord[]>([]);
 
   // Telegram Mini App linking state
   const [isConnectingTelegram, setIsConnectingTelegram] = useState<boolean>(false);
@@ -416,6 +418,20 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
       (err) => {
         console.warn('[MemberPortal] Master receipts listener error:', err);
       }
+    );
+    return () => unsub();
+  }, [activeMember?.id]);
+
+  // Subscribe to member's own complaints & admin responses
+  useEffect(() => {
+    if (!activeMember?.id) {
+      setMyComplaints([]);
+      return;
+    }
+    const unsub = subscribeToComplaints(
+      (docs) => setMyComplaints(docs),
+      (err) => console.warn('[MemberPortal] Complaints listener notice:', err),
+      activeMember.id
     );
     return () => unsub();
   }, [activeMember?.id]);
@@ -2923,6 +2939,47 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
               </span>
             </button>
           </form>
+
+          {myComplaints.length > 0 && (
+            <div className="mt-4 pt-3.5 border-t border-[#E0E0E0] space-y-2.5">
+              <h5 className="text-xs font-bold text-[#212121]">
+                {isEn ? 'Your Submitted Complaints & Replies' : 'የላኳቸው ቅሬታዎች እና የአስተዳዳሪ ምላሾች'}
+              </h5>
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                {myComplaints.map((c) => {
+                  const isResolved = String(c.status || '').toLowerCase() === 'resolved';
+                  return (
+                    <div
+                      key={c.id}
+                      className="p-2.5 rounded-xl bg-[#F5F5F5] border border-[#E0E0E0] text-xs space-y-1.5"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] text-[#757575]">
+                          {c.createdAt ? new Date(c.createdAt).toLocaleString('am-ET') : ''}
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            isResolved
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {isResolved ? 'ተመልሷል (Resolved)' : 'በመጠባበቅ ላይ (Open)'}
+                        </span>
+                      </div>
+                      <p className="text-[#212121] whitespace-pre-wrap">{c.complaintText}</p>
+                      {c.adminResponse && (
+                        <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-[#1B5E20]">
+                          <span className="font-bold block text-[11px]">የአስተዳዳሪ ምላሽ፦</span>
+                          <p className="whitespace-pre-wrap">{c.adminResponse}</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

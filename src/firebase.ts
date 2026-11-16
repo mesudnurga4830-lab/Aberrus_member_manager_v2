@@ -46,6 +46,7 @@ import {
   MasterReceipt,
   MasterReceiptStatus,
   ContributionType,
+  ComplaintRecord,
 } from './types';
 import { initialSettings, initialMembers } from './data/initialData';
 import { getMembers, saveMembers, addMembersBatch, addContributionsBatch, updateMember } from './utils/storage';
@@ -2226,6 +2227,65 @@ export function subscribeToMasterReceipts(
       if (onError) onError(err);
     }
   );
+}
+
+/**
+ * Real-time onSnapshot listener for Member Complaints (sorted newest first)
+ */
+export function subscribeToComplaints(
+  onData: (complaints: ComplaintRecord[]) => void,
+  onError?: (err: any) => void,
+  memberIdFilter?: string
+): () => void {
+  const collRef = collection(db, COMPLAINTS_COLLECTION);
+  const qRef = memberIdFilter
+    ? query(collRef, where('memberId', '==', memberIdFilter))
+    : collRef;
+
+  return onSnapshot(
+    qRef,
+    (snapshot) => {
+      const docs = snapshot.docs
+        .map((d) => ({ id: d.id, ...d.data() } as ComplaintRecord))
+        .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+      onData(docs);
+    },
+    (err) => {
+      console.error('[Firestore onSnapshot Error in subscribeToComplaints]:', err);
+      if (onError) onError(err);
+    }
+  );
+}
+
+/**
+ * Save Admin reply to a complaint in Firestore (used as direct/offline fallback alongside /api/complaints/reply)
+ */
+export async function replyToComplaintInFirestore(
+  complaintId: string,
+  adminResponse: string,
+  telegramChatId?: string
+): Promise<void> {
+  const nowIso = new Date().toISOString();
+  const path = `${COMPLAINTS_COLLECTION}/${complaintId}`;
+  const payload: Record<string, any> = {
+    adminResponse: adminResponse.trim(),
+    status: 'Resolved',
+    resolvedAt: nowIso,
+    resolvedBy: 'Admin',
+    updatedAt: nowIso,
+  };
+  if (telegramChatId && String(telegramChatId).trim()) {
+    payload.telegramChatId = String(telegramChatId).trim();
+  }
+
+  try {
+    await safeClientFirestoreWrite(
+      () => setDoc(doc(db, COMPLAINTS_COLLECTION, complaintId), payload, { merge: true }),
+      `replying to complaint ${complaintId}`
+    );
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, path);
+  }
 }
 
 /**

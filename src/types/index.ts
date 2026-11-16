@@ -199,3 +199,22 @@ export interface NotificationLog {
   details?: Record<string, any>;
 }
 
+export interface ComplaintRecord {
+  id: string;
+  memberId?: string;
+  memberName?: string;
+  firstName?: string;
+  category?: string;
+  complaintText: string;
+  phone?: string;
+  telegramChatId?: string | number;
+  chatId?: string | number;
+  fromId?: string | number;
+  adminResponse?: string;
+  status: 'open' | 'under_review' | 'resolved' | 'Resolved' | string;
+  source?: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
+  createdAt: string;
+  updatedAt?: string;
+}

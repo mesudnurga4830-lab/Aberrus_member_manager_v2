@@ -6,6 +6,7 @@
 import React from 'react';
 import { Member, Family, Contribution, SettingsRates } from '../types';
 import { getCurrentEthiopianDate, getEthiopianMonthName, ETHIOPIAN_MONTHS } from '../utils/ethiopianCalendar';
+import { DashboardComplaintsPanel } from './DashboardComplaintsPanel';
 import {
   Wallet,
   Users,
@@ -851,6 +852,12 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Member Complaints Viewer & Reply Section */}
+      <DashboardComplaintsPanel
+        members={members}
+        onNavigateToMember={onNavigateToMember}
+      />
     </div>
   );
 };
