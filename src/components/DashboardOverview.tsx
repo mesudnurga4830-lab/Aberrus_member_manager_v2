@@ -855,7 +855,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
       {/* Member Complaints Viewer & Reply Section */}
       <DashboardComplaintsPanel
-        members={members}
         onNavigateToMember={onNavigateToMember}
       />
     </div>

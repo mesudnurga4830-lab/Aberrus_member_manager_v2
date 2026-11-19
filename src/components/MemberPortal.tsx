@@ -18,30 +18,9 @@ import {
   updateCurrentMemberPassword,
   subscribeToMasterReceipts,
   saveMasterReceiptToFirestore,
-  updateMemberTelegramChatId,
   subscribeToComplaints,
 } from '../firebase';
 import { generateSvgQRCode } from '../utils/qrCode';
-
-declare global {
-  interface Window {
-    Telegram?: {
-      WebApp?: {
-        ready?: () => void;
-        expand?: () => void;
-        initData?: string;
-        initDataUnsafe?: {
-          user?: {
-            id?: number | string;
-            first_name?: string;
-            last_name?: string;
-            username?: string;
-          };
-        };
-      };
-    };
-  }
-}
 import { getCurrentEthiopianDate, getEthiopianMonthName } from '../utils/ethiopianCalendar';
 import {
   User,
@@ -183,64 +162,11 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
   const [complaintText, setComplaintText] = useState<string>('');
   const [isSubmittingComplaint, setIsSubmittingComplaint] = useState(false);
   const [complaintSubmitted, setComplaintSubmitted] = useState<boolean>(false);
+  const [complaintError, setComplaintError] = useState<string | null>(null);
   const [myComplaints, setMyComplaints] = useState<ComplaintRecord[]>([]);
-
-  // Telegram Mini App linking state
-  const [isConnectingTelegram, setIsConnectingTelegram] = useState<boolean>(false);
-  const [linkedChatIdOverride, setLinkedChatIdOverride] = useState<string>('');
-  const [telegramConnectStatus, setTelegramConnectStatus] = useState<{
-    type: 'success' | 'warning' | 'error';
-    message: string;
-  } | null>(null);
 
   const membersRef = useRef<Member[]>(members);
   membersRef.current = members;
-  const telegramInitializedRef = useRef<boolean>(false);
-  const autoLinkedMemberIdsRef = useRef<Set<string>>(new Set());
-
-  // Initialize Telegram Mini App SDK strictly ONCE on mount and sync telegramChatId only if missing
-  useEffect(() => {
-    if (telegramInitializedRef.current) return;
-    telegramInitializedRef.current = true;
-
-    try {
-      const tgWebApp = typeof window !== 'undefined' ? window.Telegram?.WebApp : undefined;
-      tgWebApp?.ready?.();
-
-      const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
-      const tgChatId = tgUser?.id != null ? String(tgUser.id).trim() : '';
-      const initialMember =
-        membersRef.current.find((m) => m.id === currentMemberId) ||
-        (userRole === 'admin' ? membersRef.current[0] : null);
-
-      if (
-        tgChatId &&
-        initialMember?.id &&
-        !String(initialMember.telegramChatId || '').trim() &&
-        !autoLinkedMemberIdsRef.current.has(initialMember.id)
-      ) {
-        autoLinkedMemberIdsRef.current.add(initialMember.id);
-        updateMemberTelegramChatId(initialMember.id, tgChatId, tgUser?.username)
-          .then(() => {
-            setLinkedChatIdOverride(tgChatId);
-            setTelegramConnectStatus({
-              type: 'success',
-              message: 'የቴሌግራም አካውንትዎ በተሳካ ሁኔታ ተገናኝቷል!',
-            });
-          })
-          .catch((err) => {
-            console.warn('[Telegram Mini App] One-time auto-link notice:', err);
-          });
-      }
-    } catch (err) {
-      console.warn('[Telegram Mini App] Initialization notice:', err);
-    }
-  }, []);
-
-  useEffect(() => {
-    setLinkedChatIdOverride('');
-    setTelegramConnectStatus(null);
-  }, [currentMemberId]);
 
   // Inline fast-login for members if not yet resolved
   const [inlineLoginInput, setInlineLoginInput] = useState('');
@@ -866,18 +792,17 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
     setTimeout(() => setSubmittedAlert(false), 6000);
   };
 
-  // Submit Complaint
+  // Submit Complaint (100% In-App via Firestore)
   const handleComplaintSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!complaintText.trim() || !activeMember) return;
 
     setIsSubmittingComplaint(true);
+    setComplaintError(null);
     const phoneToUse = complaintPhone.trim() || activeMember.phone || '';
-    const memberTgChatId = String(activeMember.telegramChatId || activeMember.telegramId || '').trim();
     const cleanMemberKey = String(activeMember.id || 'MEM').replace(/[^a-zA-Z0-9_-]/g, '_');
     const unifiedComplaintId = `comp_${Date.now()}_${cleanMemberKey}`;
 
-    // 1. Direct Firestore persistence (uses unified ID so server call merges cleanly)
     try {
       await saveComplaintToFirestore({
         id: unifiedComplaintId,
@@ -886,44 +811,30 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
         category: complaintCategory,
         message: complaintText.trim(),
         phone: phoneToUse,
-        telegramChatId: memberTgChatId,
       });
-    } catch (err) {
-      console.warn('[MemberPortal] Could not save complaint to Firestore directly:', err);
+
+      try {
+        confetti({
+          particleCount: 40,
+          spread: 50,
+          origin: { y: 0.7 },
+          colors: ['#FF9800', '#1B5E20', '#FFD700'],
+        });
+      } catch {}
+
+      setComplaintSubmitted(true);
+      setComplaintText('');
+      setTimeout(() => setComplaintSubmitted(false), 6000);
+    } catch (err: any) {
+      console.warn('[MemberPortal] Could not save complaint to Firestore:', err);
+      setComplaintError(
+        isEn
+          ? 'Could not submit your complaint. Please check your connection and try again.'
+          : 'ቅሬታዎን መመዝገብ አልተቻለም። እባክዎ ኢንተርኔትዎን አረጋግጠው ዳግም ይሞክሩ።'
+      );
+    } finally {
+      setIsSubmittingComplaint(false);
     }
-
-    // 2. Server API call (persists + routes complaint privately ONLY to VITE_ADMIN_TELEGRAM_CHAT_ID)
-    try {
-      await fetch('/api/complaints', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: unifiedComplaintId,
-          memberId: activeMember.id,
-          memberName: activeMember.fullName,
-          phone: phoneToUse,
-          telegramChatId: memberTgChatId,
-          category: complaintCategory,
-          message: complaintText.trim(),
-        }),
-      });
-    } catch (apiErr) {
-      console.warn('[MemberPortal] Server complaints endpoint fallback:', apiErr);
-    }
-
-    try {
-      confetti({
-        particleCount: 40,
-        spread: 50,
-        origin: { y: 0.7 },
-        colors: ['#FF9800', '#1B5E20', '#FFD700'],
-      });
-    } catch {}
-
-    setIsSubmittingComplaint(false);
-    setComplaintSubmitted(true);
-    setComplaintText('');
-    setTimeout(() => setComplaintSubmitted(false), 6000);
   };
 
   // Handle Member Password Change (Individual Member only)
@@ -1049,59 +960,9 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
     `ABARRUS-MEMBER:${activeMember.id}|${activeMember.fullName}|GEN:${activeMember.generation}`,
     140
   );
-  const linkedTelegramChatId = linkedChatIdOverride || activeMember.telegramChatId || activeMember.telegramId;
-  const isTelegramConnected = Boolean(linkedTelegramChatId);
-
-  const handleConnectTelegramMiniApp = async () => {
-    setTelegramConnectStatus(null);
-
-    try {
-      window?.Telegram?.WebApp?.ready?.();
-    } catch {}
-
-    const tgUser = typeof window !== 'undefined' ? window.Telegram?.WebApp?.initDataUnsafe?.user : undefined;
-    const chatId = tgUser?.id != null ? String(tgUser.id).trim() : '';
-
-    if (typeof window === 'undefined' || !window.Telegram?.WebApp || !chatId) {
-      setTelegramConnectStatus({
-        type: 'warning',
-        message: 'እባክዎ ይህንን አፕ በቴሌግራም ውስጥ ይክፈቱ',
-      });
-      return;
-    }
-
-    // Write to Firebase ONLY if telegramChatId is missing or different (avoid redundant writes)
-    const existingChatId = String(activeMember.telegramChatId || '').trim();
-    if (existingChatId === chatId) {
-      setLinkedChatIdOverride(chatId);
-      setTelegramConnectStatus({
-        type: 'success',
-        message: 'የቴሌግራም አካውንትዎ በተሳካ ሁኔታ ተገናኝቷል!',
-      });
-      return;
-    }
-
-    setIsConnectingTelegram(true);
-    try {
-      await updateMemberTelegramChatId(activeMember.id, chatId, tgUser?.username);
-      autoLinkedMemberIdsRef.current.add(activeMember.id);
-      setLinkedChatIdOverride(chatId);
-      setTelegramConnectStatus({
-        type: 'success',
-        message: 'የቴሌግራም አካውንትዎ በተሳካ ሁኔታ ተገናኝቷል!',
-      });
-    } catch (err: any) {
-      console.error('[Telegram Mini App] Failed to update telegramChatId:', err);
-      setTelegramConnectStatus({
-        type: 'error',
-        message: isEn
-          ? `Failed to link Telegram account: ${err?.message || 'Permission or network error'}`
-          : 'የቴሌግራም አካውንትዎን ማገናኘት አልተቻለም። እባክዎ ዳግም ይሞክሩ።',
-      });
-    } finally {
-      setIsConnectingTelegram(false);
-    }
-  };
+  const repliedComplaintsCount = myComplaints.filter(
+    (c) => Boolean(c.adminResponse && c.adminResponse.trim())
+  ).length;
 
   return (
     <div className="space-y-4 pb-16 page-fade-in max-w-7xl mx-auto">
@@ -1208,87 +1069,6 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
             )}
           </div>
         </div>
-
-        {/* Telegram Mini App Account Connection Bar */}
-        <div className="pt-3 border-t border-[#E0E0E0] space-y-2.5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-            <div className="flex items-center gap-2 flex-wrap">
-              {isTelegramConnected ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-[#1B5E20] border border-emerald-300 text-xs font-bold">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>
-                    {isEn
-                      ? `Telegram Connected (Chat ID: ${linkedTelegramChatId})`
-                      : `ቴሌግራም ተገናኝቷል (Chat ID: ${linkedTelegramChatId})`}
-                  </span>
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-50 text-sky-900 border border-sky-200 text-xs font-semibold">
-                  <Send className="w-3.5 h-3.5 text-[#0088cc] shrink-0" />
-                  <span>
-                    {isEn
-                      ? 'Open inside Telegram and tap the button to link your Telegram Chat ID.'
-                      : 'የግል የክፍያ ማሳወቂያ እና የቅሬታ ምላሽ ለማግኘት የቴሌግራም አካውንትዎን ያገናኙ።'}
-                  </span>
-                </span>
-              )}
-            </div>
-
-            <button
-              type="button"
-              onClick={handleConnectTelegramMiniApp}
-              disabled={isConnectingTelegram}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#0088cc] hover:bg-[#0077b5] disabled:opacity-60 text-white text-xs font-bold shadow-sm transition-all cursor-pointer self-start sm:self-auto shrink-0"
-            >
-              {isConnectingTelegram ? (
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Send className="w-3.5 h-3.5" />
-              )}
-              <span>
-                {isConnectingTelegram
-                  ? isEn
-                    ? 'Connecting...'
-                    : 'በማገናኘት ላይ...'
-                  : 'የቴሌግራም አካውንት አገናኝ'}
-              </span>
-            </button>
-          </div>
-
-          {telegramConnectStatus && (
-            <div
-              role="alert"
-              className={`flex items-center justify-between gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-bold border ${
-                telegramConnectStatus.type === 'success'
-                  ? 'bg-emerald-50 border-emerald-300 text-[#1B5E20]'
-                  : telegramConnectStatus.type === 'warning'
-                  ? 'bg-amber-50 border-amber-300 text-amber-900'
-                  : 'bg-red-50 border-red-300 text-red-900'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                {telegramConnectStatus.type === 'success' ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                ) : (
-                  <AlertCircle
-                    className={`w-4 h-4 shrink-0 ${
-                      telegramConnectStatus.type === 'warning' ? 'text-amber-600' : 'text-red-600'
-                    }`}
-                  />
-                )}
-                <span>{telegramConnectStatus.message}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setTelegramConnectStatus(null)}
-                className="p-1 rounded-md hover:bg-black/5 cursor-pointer"
-                aria-label="Close"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-        </div>
       </div>
 
       {/* SUB-VIEWS TAB NAVIGATION */}
@@ -1388,6 +1168,21 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
         >
           <MessageSquare className="w-4 h-4 text-amber-500" />
           <span>{isEn ? 'Complaints & Support' : 'ቅሬታና ድጋፍ'}</span>
+          {repliedComplaintsCount > 0 ? (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+              {repliedComplaintsCount} {isEn ? 'Reply' : 'መልስ'}
+            </span>
+          ) : myComplaints.length > 0 ? (
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                activeTabSubView === 'complaint'
+                  ? 'bg-[#FFD700] text-[#1B5E20]'
+                  : 'bg-amber-100 text-amber-800'
+              }`}
+            >
+              {myComplaints.length}
+            </span>
+          ) : null}
         </button>
 
         {userRole !== 'admin' && (
@@ -1491,11 +1286,19 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
             </div>
             <div className="text-left">
               <div className="text-[10px] text-amber-100 font-semibold">{isEn ? 'Support' : 'ድጋፍና ማስተካከያ'}</div>
-              <div className="font-bold text-xs truncate">{isEn ? 'Complaint' : 'ቅሬታ አቅርብ'}</div>
+              <div className="font-bold text-xs truncate">
+                {repliedComplaintsCount > 0
+                  ? isEn
+                    ? `Complaint (${repliedComplaintsCount} Reply)`
+                    : `ቅሬታ (${repliedComplaintsCount} መልስ)`
+                  : isEn
+                  ? 'Complaint'
+                  : 'ቅሬታ አቅርብ'}
+              </div>
             </div>
           </div>
           <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded text-white group-hover:bg-white/30 transition-colors">
-            ↓
+            {myComplaints.length > 0 ? myComplaints.length : '↓'}
           </span>
         </button>
       </div>
@@ -2871,9 +2674,20 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
           </div>
 
           {complaintSubmitted && (
-            <div className="p-3 mb-3 bg-[#4CAF50]/15 border border-[#4CAF50] text-[#1B5E20] rounded-lg text-xs flex items-center gap-2 animate-bounce">
+            <div className="p-3 mb-3 bg-[#4CAF50]/15 border border-[#4CAF50] text-[#1B5E20] rounded-lg text-xs flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-[#4CAF50] shrink-0" />
-              <span>{isEn ? 'Complaint recorded! Leadership will review and follow up.' : 'ቅሬታዎ በተሳካ ሁኔታ ተመዝግቧል! አመራሮች ተመልክተው እርምጃ ይወስዳሉ።'}</span>
+              <span>
+                {isEn
+                  ? 'Complaint submitted! You will see Admin replies right here inside the app.'
+                  : 'ቅሬታዎ በተሳካ ሁኔታ ተመዝግቧል! አስተዳዳሪው ሲመልሱ መልሱን እዚሁ አፕ ውስጥ በቀጥታ ያዩታል።'}
+              </span>
+            </div>
+          )}
+
+          {complaintError && (
+            <div className="p-3 mb-3 bg-red-50 border border-red-200 text-red-800 rounded-lg text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+              <span>{complaintError}</span>
             </div>
           )}
 
@@ -2969,8 +2783,15 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                       </div>
                       <p className="text-[#212121] whitespace-pre-wrap">{c.complaintText}</p>
                       {c.adminResponse && (
-                        <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-[#1B5E20]">
-                          <span className="font-bold block text-[11px]">የአስተዳዳሪ ምላሽ፦</span>
+                        <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-[#1B5E20] space-y-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-bold text-[11px]">የአስተዳዳሪ ምላሽ፦</span>
+                            {c.resolvedAt && (
+                              <span className="text-[10px] text-emerald-700 font-mono">
+                                {new Date(c.resolvedAt).toLocaleString('am-ET')}
+                              </span>
+                            )}
+                          </div>
                           <p className="whitespace-pre-wrap">{c.adminResponse}</p>
                         </div>
                       )}

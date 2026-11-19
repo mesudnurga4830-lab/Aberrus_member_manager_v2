@@ -906,12 +906,10 @@ export async function saveComplaintToFirestore(complaint: {
   category: string;
   message: string;
   phone?: string;
-  telegramChatId?: string | number;
 }): Promise<string> {
   const cleanId = String(complaint.memberId || 'MEM').replace(/[^a-zA-Z0-9_-]/g, '_');
   const complaintId = (complaint.id && complaint.id.trim()) || `comp_${Date.now()}_${cleanId}`;
   const nowIso = new Date().toISOString();
-  const tgChat = complaint.telegramChatId ? String(complaint.telegramChatId).trim() : '';
 
   await safeClientFirestoreWrite(
     () =>
@@ -921,12 +919,10 @@ export async function saveComplaintToFirestore(complaint: {
           id: complaintId,
           memberId: complaint.memberId,
           firstName: complaint.memberName,
+          memberName: complaint.memberName,
           category: complaint.category,
           complaintText: `[${complaint.category}] ${complaint.message}`,
           phone: complaint.phone || '',
-          telegramChatId: tgChat,
-          chatId: tgChat,
-          fromId: tgChat,
           status: 'open',
           createdAt: nowIso,
           source: 'member_portal',
@@ -1160,63 +1156,6 @@ export async function saveMemberToFirestore(member: Member): Promise<void> {
     const idx = localList.findIndex((m) => m.id === memberId);
     if (idx !== -1) {
       localList[idx] = { ...localList[idx], ...dataToSave };
-      saveMembers(localList);
-    }
-  } catch {}
-}
-
-/**
- * Update a member's Telegram Chat ID directly from Telegram Mini App (window.Telegram.WebApp)
- * using Firebase Client SDK updateDoc.
- */
-export async function updateMemberTelegramChatId(
-  memberId: string,
-  telegramChatId: string,
-  telegramUsername?: string
-): Promise<void> {
-  const cleanChatId = String(telegramChatId || '').trim();
-  if (!memberId || !cleanChatId) {
-    throw new Error('Missing memberId or telegramChatId');
-  }
-
-  const path = `${MEMBERS_COLLECTION}/${memberId}`;
-  const memberRef = doc(db, MEMBERS_COLLECTION, memberId);
-  const nowIso = new Date().toISOString();
-  const cleanUsername = telegramUsername ? `@${telegramUsername.replace(/^@/, '')}` : '';
-
-  const payload: Record<string, any> = {
-    telegramChatId: cleanChatId,
-    telegramId: cleanChatId,
-    updatedAt: nowIso,
-    ...(cleanUsername ? { telegram: cleanUsername } : {}),
-  };
-
-  try {
-    await updateDoc(memberRef, payload);
-  } catch (err: any) {
-    const errCode = String(err?.code || '');
-    if (errCode === 'not-found' || String(err?.message || '').includes('No document to update')) {
-      try {
-        await setDoc(memberRef, payload, { merge: true });
-      } catch (setErr) {
-        handleFirestoreError(setErr, OperationType.WRITE, path);
-      }
-    } else {
-      handleFirestoreError(err, OperationType.UPDATE, path);
-    }
-  }
-
-  // Keep local storage cache in sync
-  try {
-    const localList = getMembers();
-    const idx = localList.findIndex((m) => m.id === memberId);
-    if (idx !== -1) {
-      localList[idx] = {
-        ...localList[idx],
-        telegramChatId: cleanChatId,
-        telegramId: cleanChatId,
-        ...(cleanUsername ? { telegram: cleanUsername } : {}),
-      };
       saveMembers(localList);
     }
   } catch {}
@@ -2258,12 +2197,11 @@ export function subscribeToComplaints(
 }
 
 /**
- * Save Admin reply to a complaint in Firestore (used as direct/offline fallback alongside /api/complaints/reply)
+ * Save Admin reply to a complaint directly in Firestore for in-app viewing by the member
  */
 export async function replyToComplaintInFirestore(
   complaintId: string,
-  adminResponse: string,
-  telegramChatId?: string
+  adminResponse: string
 ): Promise<void> {
   const nowIso = new Date().toISOString();
   const path = `${COMPLAINTS_COLLECTION}/${complaintId}`;
@@ -2274,9 +2212,6 @@ export async function replyToComplaintInFirestore(
     resolvedBy: 'Admin',
     updatedAt: nowIso,
   };
-  if (telegramChatId && String(telegramChatId).trim()) {
-    payload.telegramChatId = String(telegramChatId).trim();
-  }
 
   try {
     await safeClientFirestoreWrite(
@@ -2286,6 +2221,56 @@ export async function replyToComplaintInFirestore(
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
+}
+
+/**
+ * Permanently delete a single accidental or unnecessary complaint from Firestore
+ */
+export async function deleteComplaintFromFirestore(complaintId: string): Promise<void> {
+  const cleanId = String(complaintId || '').trim();
+  if (!cleanId) throw new Error('Missing complaintId');
+  const path = `${COMPLAINTS_COLLECTION}/${cleanId}`;
+
+  try {
+    await safeClientFirestoreWrite(
+      () => deleteDoc(doc(db, COMPLAINTS_COLLECTION, cleanId)),
+      `deleting complaint ${cleanId}`
+    );
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, path);
+  }
+}
+
+/**
+ * Permanently delete multiple selected complaints in batches from Firestore
+ */
+export async function deleteComplaintsBatchFromFirestore(complaintIds: string[]): Promise<number> {
+  const uniqueIds = Array.from(
+    new Set(complaintIds.map((id) => String(id || '').trim()).filter(Boolean))
+  );
+  if (uniqueIds.length === 0) return 0;
+
+  const CHUNK_SIZE = 450;
+  let deletedCount = 0;
+
+  for (let i = 0; i < uniqueIds.length; i += CHUNK_SIZE) {
+    const chunk = uniqueIds.slice(i, i + CHUNK_SIZE);
+    const batch = writeBatch(db);
+    chunk.forEach((id) => {
+      batch.delete(doc(db, COMPLAINTS_COLLECTION, id));
+    });
+    try {
+      await safeClientFirestoreWrite(
+        () => batch.commit(),
+        `batch deleting ${chunk.length} complaints`
+      );
+      deletedCount += chunk.length;
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, COMPLAINTS_COLLECTION);
+    }
+  }
+
+  return deletedCount;
 }
 
 /**
