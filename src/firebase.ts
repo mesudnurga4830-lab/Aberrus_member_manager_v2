@@ -924,6 +924,7 @@ export async function saveComplaintToFirestore(complaint: {
           complaintText: `[${complaint.category}] ${complaint.message}`,
           phone: complaint.phone || '',
           status: 'open',
+          isReadByAdmin: false,
           createdAt: nowIso,
           source: 'member_portal',
         },
@@ -2208,6 +2209,8 @@ export async function replyToComplaintInFirestore(
   const payload: Record<string, any> = {
     adminResponse: adminResponse.trim(),
     status: 'Resolved',
+    isReadByAdmin: true,
+    readAt: nowIso,
     resolvedAt: nowIso,
     resolvedBy: 'Admin',
     updatedAt: nowIso,
@@ -2220,6 +2223,63 @@ export async function replyToComplaintInFirestore(
     );
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
+  }
+}
+
+/**
+ * Mark a single complaint notification as read by Admin in Firestore
+ */
+export async function markComplaintAsReadInFirestore(complaintId: string): Promise<void> {
+  const cleanId = String(complaintId || '').trim();
+  if (!cleanId) return;
+  const nowIso = new Date().toISOString();
+  const path = `${COMPLAINTS_COLLECTION}/${cleanId}`;
+
+  try {
+    await safeClientFirestoreWrite(
+      () =>
+        setDoc(
+          doc(db, COMPLAINTS_COLLECTION, cleanId),
+          { isReadByAdmin: true, readAt: nowIso, updatedAt: nowIso },
+          { merge: true }
+        ),
+      `marking complaint ${cleanId} as read`
+    );
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, path);
+  }
+}
+
+/**
+ * Mark all unread complaint notifications as read by Admin in batches
+ */
+export async function markAllComplaintsAsReadInFirestore(complaintIds: string[]): Promise<void> {
+  const uniqueIds = Array.from(
+    new Set(complaintIds.map((id) => String(id || '').trim()).filter(Boolean))
+  );
+  if (uniqueIds.length === 0) return;
+
+  const nowIso = new Date().toISOString();
+  const CHUNK_SIZE = 450;
+
+  for (let i = 0; i < uniqueIds.length; i += CHUNK_SIZE) {
+    const chunk = uniqueIds.slice(i, i + CHUNK_SIZE);
+    const batch = writeBatch(db);
+    chunk.forEach((id) => {
+      batch.set(
+        doc(db, COMPLAINTS_COLLECTION, id),
+        { isReadByAdmin: true, readAt: nowIso, updatedAt: nowIso },
+        { merge: true }
+      );
+    });
+    try {
+      await safeClientFirestoreWrite(
+        () => batch.commit(),
+        `marking ${chunk.length} complaints as read`
+      );
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, COMPLAINTS_COLLECTION);
+    }
   }
 }
 

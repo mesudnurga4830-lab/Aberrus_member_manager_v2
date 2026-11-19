@@ -213,6 +213,8 @@ export interface ComplaintRecord {
   adminResponse?: string;
   status: 'open' | 'under_review' | 'resolved' | 'Resolved' | string;
   source?: string;
+  isReadByAdmin?: boolean;
+  readAt?: string;
   resolvedAt?: string;
   resolvedBy?: string;
   createdAt: string;

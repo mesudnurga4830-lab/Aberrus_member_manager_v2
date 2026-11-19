@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard,
   Users,
@@ -22,8 +22,13 @@ import {
   KeyRound,
   Check,
   LogOut,
+  Bell,
+  CheckCheck,
+  MessageSquareWarning,
+  ArrowRight,
+  Clock,
 } from 'lucide-react';
-import { UserRole } from '../types';
+import { ComplaintRecord, UserRole } from '../types';
 import { getLastSavedTimestamp, formatSavedTime, touchSaveTimestamp } from '../utils/storage';
 import { isThisDeviceAdminAuthorized } from '../utils/adminAuth';
 import { googleSignIn, logoutGoogle, initGoogleAuth } from '../firebase';
@@ -40,6 +45,10 @@ interface NavbarProps {
   onToggleLang?: () => void;
   activeMemberName?: string;
   onLogout?: () => void;
+  adminComplaints?: ComplaintRecord[];
+  onOpenComplaintNotification?: (complaint: ComplaintRecord) => void;
+  onMarkAllComplaintsRead?: (ids: string[]) => void;
+  onViewAllComplaints?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -54,12 +63,45 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleLang,
   activeMemberName,
   onLogout,
+  adminComplaints = [],
+  onOpenComplaintNotification,
+  onMarkAllComplaintsRead,
+  onViewAllComplaints,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isJustRefreshed, setIsJustRefreshed] = useState(false);
   const [googleUser, setGoogleUser] = useState<any>(null);
   const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const notifRef = useRef<HTMLDivElement>(null);
+
+  const unreadComplaints = adminComplaints.filter(
+    (c) =>
+      String(c.status || '').trim().toLowerCase() !== 'resolved' &&
+      c.isReadByAdmin !== true
+  );
+  const openComplaints = adminComplaints.filter(
+    (c) => String(c.status || '').trim().toLowerCase() !== 'resolved'
+  );
+  const notificationItems = (openComplaints.length > 0 ? openComplaints : adminComplaints).slice(0, 8);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+        setNotificationsOpen(false);
+      }
+    };
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setNotificationsOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, []);
 
   useEffect(() => {
     const unsub = initGoogleAuth(
@@ -225,6 +267,162 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Globe className="w-3.5 h-3.5 text-[#FFD700]" />
               <span className="text-[11px] font-mono">{isEn ? 'አማርኛ' : 'EN'}</span>
             </button>
+
+            {/* Admin Complaint Notification Bell */}
+            {userRole === 'admin' && (
+              <div className="relative" ref={notifRef}>
+                <button
+                  type="button"
+                  onClick={() => setNotificationsOpen((prev) => !prev)}
+                  className={`relative p-2 rounded-lg transition-all cursor-pointer ${
+                    notificationsOpen
+                      ? 'bg-[#FFD700] text-[#1B5E20]'
+                      : 'bg-white/10 hover:bg-white/20 text-white'
+                  }`}
+                  title={
+                    isEn
+                      ? 'Member Complaint Notifications'
+                      : 'የአባላት ቅሬታ ማሳወቂያዎች'
+                  }
+                  aria-label="Admin Complaint Notifications"
+                >
+                  <Bell
+                    className={`w-4 h-4 ${
+                      notificationsOpen ? 'text-[#1B5E20]' : 'text-[#FFD700]'
+                    } ${unreadComplaints.length > 0 && !notificationsOpen ? 'animate-bounce' : ''}`}
+                  />
+                  {unreadComplaints.length > 0 ? (
+                    <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-600 text-white text-[10px] font-extrabold flex items-center justify-center shadow-sm ring-2 ring-[#1B5E20]">
+                      {unreadComplaints.length > 9 ? '9+' : unreadComplaints.length}
+                    </span>
+                  ) : openComplaints.length > 0 ? (
+                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-400 ring-1 ring-[#1B5E20]" />
+                  ) : null}
+                </button>
+
+                {notificationsOpen && (
+                  <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white text-neutral-900 rounded-2xl shadow-2xl border border-emerald-900/20 overflow-hidden z-50">
+                    <div className="px-4 py-3 bg-emerald-950 text-white flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <MessageSquareWarning className="w-4 h-4 text-[#FFD700] shrink-0" />
+                        <div>
+                          <p className="text-xs font-extrabold leading-tight">
+                            {isEn ? 'Complaint Alerts' : 'የአባላት ቅሬታ ማሳወቂያ'}
+                          </p>
+                          <p className="text-[10px] text-emerald-200">
+                            {unreadComplaints.length > 0
+                              ? `${unreadComplaints.length} ያልተነበበ አዲስ ቅሬታ`
+                              : openComplaints.length > 0
+                              ? `${openComplaints.length} መልስ የሚጠብቅ ቅሬታ`
+                              : 'ሁሉም ቅሬታዎች ተነበዋል'}
+                          </p>
+                        </div>
+                      </div>
+                      {unreadComplaints.length > 0 && onMarkAllComplaintsRead && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onMarkAllComplaintsRead(unreadComplaints.map((c) => c.id))
+                          }
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-[10px] font-bold text-[#FFD700] cursor-pointer transition-colors"
+                        >
+                          <CheckCheck className="w-3 h-3" />
+                          <span>ሁሉንም አንብብ</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="max-h-80 overflow-y-auto divide-y divide-neutral-100">
+                      {notificationItems.length === 0 ? (
+                        <div className="p-6 text-center text-xs text-neutral-400">
+                          {isEn ? 'No complaints yet.' : 'እስካሁን የደረሰ ቅሬታ የለም።'}
+                        </div>
+                      ) : (
+                        notificationItems.map((comp) => {
+                          const isResolved =
+                            String(comp.status || '').trim().toLowerCase() === 'resolved';
+                          const isUnread = !isResolved && comp.isReadByAdmin !== true;
+                          const sender = comp.firstName || comp.memberName || 'አባል';
+                          return (
+                            <button
+                              key={comp.id}
+                              type="button"
+                              onClick={() => {
+                                setNotificationsOpen(false);
+                                onOpenComplaintNotification?.(comp);
+                              }}
+                              className={`w-full text-left px-4 py-3 hover:bg-emerald-50/70 transition-colors cursor-pointer flex items-start gap-2.5 ${
+                                isUnread ? 'bg-amber-50/60' : 'bg-white'
+                              }`}
+                            >
+                              <div
+                                className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
+                                  isUnread
+                                    ? 'bg-rose-600'
+                                    : isResolved
+                                    ? 'bg-emerald-500'
+                                    : 'bg-amber-400'
+                                }`}
+                              />
+                              <div className="flex-1 min-w-0 space-y-1">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-xs font-bold text-neutral-900 truncate">
+                                    {sender}
+                                    {comp.memberId ? ` (${comp.memberId})` : ''}
+                                  </span>
+                                  {isUnread ? (
+                                    <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 text-[9px] font-extrabold shrink-0">
+                                      አዲስ
+                                    </span>
+                                  ) : (
+                                    <span
+                                      className={`px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 ${
+                                        isResolved
+                                          ? 'bg-emerald-100 text-emerald-800'
+                                          : 'bg-amber-100 text-amber-800'
+                                      }`}
+                                    >
+                                      {isResolved ? 'ተመልሷል' : 'Open'}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-neutral-600 line-clamp-2 leading-snug">
+                                  {comp.complaintText}
+                                </p>
+                                <div className="flex items-center gap-2 text-[10px] text-neutral-400">
+                                  <Clock className="w-2.5 h-2.5" />
+                                  <span>
+                                    {comp.createdAt
+                                      ? new Date(comp.createdAt).toLocaleString('am-ET')
+                                      : ''}
+                                  </span>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    <div className="p-2.5 bg-neutral-50 border-t border-neutral-100">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNotificationsOpen(false);
+                          onViewAllComplaints?.();
+                        }}
+                        className="w-full py-2 px-3 rounded-xl bg-[#1B5E20] hover:bg-[#144818] text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                      >
+                        <span>
+                          {isEn ? 'Open Complaints Panel' : 'ሁሉንም ቅሬታዎች በዳሽቦርድ እይ'}
+                        </span>
+                        <ArrowRight className="w-3.5 h-3.5 text-[#FFD700]" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Refresh Button */}
             {onRefreshData && (

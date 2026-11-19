@@ -22,7 +22,7 @@ import {
   syncWithBackendServer,
   refreshAllDataFromServer,
 } from './utils/storage';
-import { Member, Family, Contribution, SettingsRates, ContributionStatus, UserRole } from './types';
+import { Member, Family, Contribution, SettingsRates, ContributionStatus, UserRole, ComplaintRecord } from './types';
 import { Navbar } from './components/Navbar';
 import { DashboardOverview } from './components/DashboardOverview';
 import { MembersList } from './components/MembersList';
@@ -73,6 +73,9 @@ import {
   subscribeToAllContributions,
   subscribeToMembersWithMetadata,
   subscribeToFamiliesWithMetadata,
+  subscribeToComplaints,
+  markComplaintAsReadInFirestore,
+  markAllComplaintsAsReadInFirestore,
 } from './firebase';
 import type { User as FirebaseUser } from 'firebase/auth';
 import {
@@ -86,6 +89,8 @@ import {
   User,
   Sparkles,
   Lock,
+  MessageSquareWarning,
+  ArrowRight,
 } from 'lucide-react';
 
 import { isThisDeviceAdminAuthorized, MASTER_ADMIN, verifyAndAuthorizeDevice } from './utils/adminAuth';
@@ -105,6 +110,12 @@ export default function App() {
   const [userRole, setUserRole] = useState<UserRole>('member');
   const [currentTab, setCurrentTab] = useState<string>('portal');
   const [selectedPortalMemberId, setSelectedPortalMemberId] = useState<string>('');
+
+  // Admin real-time complaint notification states
+  const [adminComplaints, setAdminComplaints] = useState<ComplaintRecord[]>([]);
+  const [liveComplaintToast, setLiveComplaintToast] = useState<ComplaintRecord | null>(null);
+  const knownComplaintIdsRef = useRef<Set<string>>(new Set());
+  const complaintsInitialLoadedRef = useRef<boolean>(false);
   
   // Persisted family head selection so it never resets unexpectedly to FA001
   const [selectedHeadFamilyId, setSelectedHeadFamilyId] = useState<string>(() => {
@@ -411,6 +422,84 @@ export default function App() {
       unsubscribeContribs();
     };
   }, [isAuthChecking, authFirebaseUser]);
+
+  // Real-time Admin Notification listener for newly submitted Member Complaints
+  useEffect(() => {
+    if (isAuthChecking || !authFirebaseUser || userRole !== 'admin') {
+      setAdminComplaints([]);
+      setLiveComplaintToast(null);
+      knownComplaintIdsRef.current.clear();
+      complaintsInitialLoadedRef.current = false;
+      return;
+    }
+
+    const playAlertChime = () => {
+      try {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(784, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1046.5, ctx.currentTime + 0.14);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.36);
+      } catch {}
+    };
+
+    const unsubComplaints = subscribeToComplaints(
+      (docs) => {
+        setAdminComplaints(docs);
+
+        if (!complaintsInitialLoadedRef.current) {
+          knownComplaintIdsRef.current = new Set(docs.map((d) => d.id));
+          complaintsInitialLoadedRef.current = true;
+          return;
+        }
+
+        const newlyArrived = docs.find(
+          (d) =>
+            !knownComplaintIdsRef.current.has(d.id) &&
+            String(d.status || '').trim().toLowerCase() !== 'resolved' &&
+            d.isReadByAdmin !== true
+        );
+
+        docs.forEach((d) => knownComplaintIdsRef.current.add(d.id));
+
+        if (newlyArrived) {
+          setLiveComplaintToast(newlyArrived);
+          playAlertChime();
+        }
+      },
+      (err) => {
+        console.warn('[App Admin Complaint Notifications Error]:', err);
+      }
+    );
+
+    return () => {
+      unsubComplaints();
+    };
+  }, [isAuthChecking, authFirebaseUser, userRole]);
+
+  const handleJumpToAdminComplaints = (complaint?: ComplaintRecord) => {
+    if (complaint && complaint.id && complaint.isReadByAdmin !== true) {
+      void markComplaintAsReadInFirestore(complaint.id);
+    }
+    setLiveComplaintToast(null);
+    setCurrentTab('dashboard');
+    setIsLoginPage(false);
+    setTimeout(() => {
+      document.getElementById('admin-complaints-section')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }, 100);
+  };
 
   const deepLinkFamilyAppliedRef = useRef(false);
 
@@ -788,7 +877,67 @@ export default function App() {
         onToggleLang={() => setLang((l) => (l === 'am' ? 'en' : 'am'))}
         activeMemberName={members.find((m) => m.id === selectedPortalMemberId)?.fullName}
         onLogout={handleLogout}
+        adminComplaints={adminComplaints}
+        onOpenComplaintNotification={(c) => handleJumpToAdminComplaints(c)}
+        onMarkAllComplaintsRead={(ids) => {
+          void markAllComplaintsAsReadInFirestore(ids);
+        }}
+        onViewAllComplaints={() => handleJumpToAdminComplaints()}
       />
+
+      {/* Real-time Admin Floating Alert Banner when a Member submits a Complaint */}
+      {userRole === 'admin' && !isLoginPage && liveComplaintToast && (
+        <div
+          role="alert"
+          className="fixed top-20 right-3 sm:right-6 z-50 w-[calc(100%-1.5rem)] max-w-md bg-white rounded-2xl shadow-2xl border-2 border-amber-400 p-4 flex items-start gap-3 no-print animate-in fade-in slide-in-from-top-3"
+        >
+          <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+            <MessageSquareWarning className="w-5 h-5 text-amber-700" />
+          </div>
+          <div className="flex-1 min-w-0 space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-extrabold text-emerald-950">
+                አዲስ የአባል ቅሬታ ደርሷል!
+              </span>
+              <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[10px] font-bold">
+                አሁን
+              </span>
+            </div>
+            <p className="text-xs font-bold text-neutral-800 truncate">
+              ከ {liveComplaintToast.firstName || liveComplaintToast.memberName || 'አባል'}
+              {liveComplaintToast.memberId ? ` (${liveComplaintToast.memberId})` : ''}
+            </p>
+            <p className="text-xs text-neutral-600 line-clamp-2">
+              {liveComplaintToast.complaintText}
+            </p>
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => handleJumpToAdminComplaints(liveComplaintToast)}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#1B5E20] hover:bg-[#144818] text-white text-[11px] font-bold cursor-pointer transition-colors"
+              >
+                <span>እይና መልስ ስጥ</span>
+                <ArrowRight className="w-3 h-3 text-[#FFD700]" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setLiveComplaintToast(null)}
+                className="px-2.5 py-1.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-[11px] font-semibold cursor-pointer"
+              >
+                ዝጋ
+              </button>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setLiveComplaintToast(null)}
+            className="p-1 rounded-lg text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 cursor-pointer shrink-0"
+            aria-label="Close alert"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Desktop / Mobile Shortcut Notification Banner */}
       {showDesktopPrompt && (
@@ -1161,6 +1310,13 @@ export default function App() {
         }}
         userRole={userRole}
         lang={lang}
+        unreadComplaintsCount={
+          adminComplaints.filter(
+            (c) =>
+              String(c.status || '').trim().toLowerCase() !== 'resolved' &&
+              c.isReadByAdmin !== true
+          ).length
+        }
       />
 
       {/* MODALS */}

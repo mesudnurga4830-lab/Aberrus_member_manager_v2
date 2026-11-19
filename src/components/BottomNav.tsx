@@ -12,6 +12,7 @@ interface BottomNavProps {
   onSelectTab: (tab: string) => void;
   userRole: UserRole;
   lang?: 'am' | 'en';
+  unreadComplaintsCount?: number;
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({
@@ -19,6 +20,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   onSelectTab,
   userRole,
   lang = 'am',
+  unreadComplaintsCount = 0,
 }) => {
   const isEn = lang === 'en';
 
@@ -76,6 +78,11 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           >
             <div className="relative">
               <Icon className="w-5 h-5" />
+              {idx === 0 && userRole === 'admin' && unreadComplaintsCount > 0 && (
+                <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-rose-600 text-white text-[9px] font-extrabold flex items-center justify-center shadow-xs">
+                  {unreadComplaintsCount > 9 ? '9+' : unreadComplaintsCount}
+                </span>
+              )}
             </div>
             <span className="text-[11px] leading-tight font-medium tracking-tight">
               {item.label}

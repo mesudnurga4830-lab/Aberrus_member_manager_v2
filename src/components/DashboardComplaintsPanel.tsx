@@ -8,11 +8,13 @@ import { ComplaintRecord } from '../types';
 import {
   deleteComplaintFromFirestore,
   deleteComplaintsBatchFromFirestore,
+  markComplaintAsReadInFirestore,
   replyToComplaintInFirestore,
   subscribeToComplaints,
 } from '../firebase';
 import {
   AlertTriangle,
+  Check,
   CheckCircle2,
   Clock,
   MessageSquare,
@@ -199,7 +201,10 @@ export const DashboardComplaintsPanel: React.FC<DashboardComplaintsPanelProps> =
   };
 
   return (
-    <div className="bg-white rounded-3xl p-5 sm:p-6 border border-emerald-900/15 shadow-sm space-y-5">
+    <div
+      id="admin-complaints-section"
+      className="bg-white rounded-3xl p-5 sm:p-6 border border-emerald-900/15 shadow-sm space-y-5 scroll-mt-24"
+    >
       {/* Header & Counters */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-neutral-100">
         <div className="flex items-start gap-3">
@@ -426,6 +431,11 @@ export const DashboardComplaintsPanel: React.FC<DashboardComplaintsPanelProps> =
                             {comp.category}
                           </span>
                         )}
+                        {!resolved && comp.isReadByAdmin !== true && (
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-rose-600 text-white animate-pulse">
+                            አዲስ
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2.5 text-[11px] text-neutral-500 mt-0.5 flex-wrap">
                         {comp.phone && (
@@ -441,7 +451,19 @@ export const DashboardComplaintsPanel: React.FC<DashboardComplaintsPanelProps> =
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+                  <div className="flex items-center gap-2 self-start sm:self-center shrink-0 flex-wrap">
+                    {!resolved && comp.isReadByAdmin !== true && (
+                      <button
+                        type="button"
+                        onClick={() => void markComplaintAsReadInFirestore(comp.id)}
+                        title="እንደተነበበ ምልክት አድርግ"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 cursor-pointer transition-colors"
+                      >
+                        <Check className="w-3 h-3" />
+                        <span>ተነብቧል</span>
+                      </button>
+                    )}
+
                     <span
                       className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold ${
                         resolved
