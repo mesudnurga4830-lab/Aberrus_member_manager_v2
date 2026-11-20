@@ -999,6 +999,64 @@ export async function getFamiliesFromFirestore(): Promise<Family[]> {
   }
 }
 
+function normalizeLeaderEntry(raw: any, fallbackRoleTitle: string) {
+  const obj = raw && typeof raw === 'object' ? raw : {};
+  const resolvedName = String(obj.fullName || obj.name || '').trim();
+  const resolvedPhone = String(obj.phoneNumber ?? obj.phone ?? '').trim();
+  const resolvedTelegram = String(obj.telegramUsername ?? obj.telegram ?? '').trim();
+  return {
+    ...obj,
+    name: resolvedName,
+    fullName: resolvedName,
+    memberId: obj.memberId ? String(obj.memberId) : '',
+    phone: resolvedPhone,
+    phoneNumber: resolvedPhone,
+    telegram: resolvedTelegram,
+    telegramUsername: resolvedTelegram,
+    roleTitle: String(obj.roleTitle || fallbackRoleTitle),
+  };
+}
+
+export function normalizeSettingsData(raw: any): SettingsRates {
+  const src = raw && typeof raw === 'object' ? raw : {};
+  const rawLead = src.leadership && typeof src.leadership === 'object' ? src.leadership : {};
+  return {
+    ...initialSettings,
+    ...src,
+    generationPayment: {
+      ...initialSettings.generationPayment,
+      ...(src.generationPayment || {}),
+    },
+    monthlyRate: {
+      ...initialSettings.monthlyRate,
+      ...(src.monthlyRate || {}),
+    },
+    spouseMonthlyRate: Number(src.spouseMonthlyRate ?? initialSettings.spouseMonthlyRate ?? 100),
+    associationInfo: {
+      ...initialSettings.associationInfo,
+      ...(src.associationInfo || {}),
+    },
+    leadership: {
+      executive: normalizeLeaderEntry(
+        rawLead.executive || initialSettings.leadership.executive,
+        'የማህበሩ ስራ አስፈፃሚ'
+      ),
+      secretary: normalizeLeaderEntry(
+        rawLead.secretary || initialSettings.leadership.secretary,
+        'የማህበሩ ጸሀፊ'
+      ),
+      financeOfficer: normalizeLeaderEntry(
+        rawLead.financeOfficer || initialSettings.leadership.financeOfficer,
+        'የማህበሩ ፋይናንስ ሀላፊ'
+      ),
+    },
+    automationSettings: {
+      ...initialSettings.automationSettings,
+      ...(src.automationSettings || {}),
+    },
+  };
+}
+
 /**
  * Fetch association settings live from Firestore
  */
@@ -1007,12 +1065,38 @@ export async function getSettingsFromFirestore(): Promise<SettingsRates> {
     const docRef = doc(db, SETTINGS_COLLECTION, 'rates');
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
-      return docSnap.data() as SettingsRates;
+      return normalizeSettingsData(docSnap.data());
     }
   } catch (err) {
     console.error('Error reading settings from Firestore:', err);
   }
-  return initialSettings;
+  return normalizeSettingsData(initialSettings);
+}
+
+/**
+ * Real-time listener for association settings & leadership appointments in Firestore
+ */
+export function subscribeToSettings(
+  onData: (settings: SettingsRates) => void,
+  onError?: (err: Error) => void
+): () => void {
+  const docRef = doc(db, SETTINGS_COLLECTION, 'rates');
+  return onSnapshot(
+    docRef,
+    { includeMetadataChanges: true },
+    (docSnap) => {
+      if (docSnap.metadata.fromCache && !docSnap.exists()) {
+        return;
+      }
+      if (docSnap.exists()) {
+        onData(normalizeSettingsData(docSnap.data()));
+      }
+    },
+    (err) => {
+      logSnapshotError(err, OperationType.GET, `${SETTINGS_COLLECTION}/rates`);
+      if (onError) onError(err);
+    }
+  );
 }
 
 /**
@@ -2105,10 +2189,11 @@ export function matchMonthContribution(
 }
 
 /**
- * Save Settings to Firestore
+ * Save Settings (including leadership appointments) to Firestore
  */
 export async function saveSettingsToFirestore(settings: SettingsRates): Promise<void> {
-  const sanitized = sanitizeForFirestore(settings);
+  const normalized = normalizeSettingsData(settings);
+  const sanitized = sanitizeForFirestore(normalized);
   await safeClientFirestoreWrite(
     () => setDoc(doc(db, SETTINGS_COLLECTION, 'rates'), sanitized, { merge: true }),
     'saving association settings rates'

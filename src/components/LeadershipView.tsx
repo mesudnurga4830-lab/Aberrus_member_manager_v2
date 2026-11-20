@@ -45,7 +45,7 @@ interface LeadershipViewProps {
   members: Member[];
   families: Family[];
   contributions: Contribution[];
-  onUpdateSettings: (settings: SettingsRates) => void;
+  onUpdateSettings: (settings: SettingsRates) => Promise<void> | void;
   onOpenRecordPayment: (memberId?: string) => void;
   onOpenQR: (member: Member) => void;
   onNavigateToMember: (memberId: string) => void;
@@ -79,8 +79,12 @@ export const LeadershipView: React.FC<LeadershipViewProps> = ({
 
   const [editingRole, setEditingRole] = useState<'executive' | 'secretary' | 'financeOfficer' | null>(null);
   const [selectedMemberIdForRole, setSelectedMemberIdForRole] = useState<string>('');
+  const [customName, setCustomName] = useState<string>('');
   const [customPhone, setCustomPhone] = useState<string>('');
   const [customTelegram, setCustomTelegram] = useState<string>('');
+  const [isSavingRole, setIsSavingRole] = useState<boolean>(false);
+  const [roleSaveError, setRoleSaveError] = useState<string | null>(null);
+  const [roleSaveSuccess, setRoleSaveSuccess] = useState<string | null>(null);
 
   // Financial aggregates
   const activeMembers = members.filter((m) => !m.isMinor);
@@ -135,33 +139,63 @@ export const LeadershipView: React.FC<LeadershipViewProps> = ({
 
   const handleOpenAssignModal = (role: 'executive' | 'secretary' | 'financeOfficer') => {
     setEditingRole(role);
-    const curr = leadership[role];
-    setSelectedMemberIdForRole(curr.memberId || '');
-    setCustomPhone(curr.phone || curr.phoneNumber || '');
-    setCustomTelegram(curr.telegram || curr.telegramUsername || '');
+    setRoleSaveError(null);
+    const curr = leadership?.[role];
+    setSelectedMemberIdForRole(curr?.memberId || '');
+    setCustomName(curr?.fullName || curr?.name || '');
+    setCustomPhone(curr?.phoneNumber || curr?.phone || '');
+    setCustomTelegram(curr?.telegramUsername || curr?.telegram || '');
   };
 
-  const handleSaveAssignRole = () => {
+  const handleSaveAssignRole = async () => {
     if (!editingRole) return;
     const selectedMem = members.find((m) => m.id === selectedMemberIdForRole);
+    const curr = leadership?.[editingRole];
+    const resolvedName = customName.trim() || selectedMem?.fullName || curr?.fullName || curr?.name || '';
+    if (!resolvedName) {
+      setRoleSaveError('እባክዎ አባል ይምረጡ ወይም ሙሉ ስም ያስገቡ።');
+      return;
+    }
+
+    const resolvedPhone = customPhone.trim() || selectedMem?.phone || '';
+    const resolvedTelegram = customTelegram.trim() || selectedMem?.telegram || '';
+
     const updatedLeadership: AssociationLeadership = {
       ...leadership,
       [editingRole]: {
-        name: selectedMem ? selectedMem.fullName : leadership[editingRole].name,
-        fullName: selectedMem ? selectedMem.fullName : leadership[editingRole].fullName,
-        memberId: selectedMemberIdForRole || undefined,
-        phone: customPhone.trim() || (selectedMem?.phone ?? ''),
-        phoneNumber: customPhone.trim() || (selectedMem?.phone ?? ''),
-        telegram: customTelegram.trim() || (selectedMem?.telegram ?? ''),
-        telegramUsername: customTelegram.trim() || (selectedMem?.telegram ?? ''),
+        ...(curr || {}),
+        name: resolvedName,
+        fullName: resolvedName,
+        memberId: selectedMemberIdForRole || '',
+        phone: resolvedPhone,
+        phoneNumber: resolvedPhone,
+        telegram: resolvedTelegram,
+        telegramUsername: resolvedTelegram,
       },
     };
 
-    onUpdateSettings({
-      ...settings,
-      leadership: updatedLeadership,
-    });
-    setEditingRole(null);
+    setIsSavingRole(true);
+    setRoleSaveError(null);
+    try {
+      await onUpdateSettings({
+        ...settings,
+        leadership: updatedLeadership,
+      });
+      const roleTitle =
+        editingRole === 'executive'
+          ? 'ስራ አስፈፃሚ'
+          : editingRole === 'secretary'
+          ? 'ጸሀፊ'
+          : 'ፋይናንስ ሀላፊ';
+      setEditingRole(null);
+      setRoleSaveSuccess(`የ${roleTitle} ሹመት (${resolvedName}) በተሳካ ሁኔታ ተመዝግቧል!`);
+      setTimeout(() => setRoleSaveSuccess(null), 5000);
+    } catch (err: any) {
+      console.error('[LeadershipView] Error saving leadership appointment:', err);
+      setRoleSaveError(err?.message || 'ሹመቱን ማስቀመጥ አልተቻለም። እባክዎ እንደገና ይሞክሩ።');
+    } finally {
+      setIsSavingRole(false);
+    }
   };
 
   // Dispatch reports via Telegram with phone options
@@ -250,6 +284,22 @@ export const LeadershipView: React.FC<LeadershipViewProps> = ({
 
   return (
     <div className="space-y-6">
+      {roleSaveSuccess && (
+        <div className="p-3.5 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-950 text-xs font-bold flex items-center justify-between gap-2 shadow-xs">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+            <span>{roleSaveSuccess}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setRoleSaveSuccess(null)}
+            className="text-emerald-800 hover:text-emerald-950 px-1.5"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Top Banner */}
       <div className="bg-gradient-to-r from-emerald-900 via-teal-900 to-emerald-950 rounded-2xl p-6 text-white shadow-md relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -389,11 +439,11 @@ export const LeadershipView: React.FC<LeadershipViewProps> = ({
                 <div className="p-4 space-y-3">
                   <div className="flex items-start gap-3">
                     <div className="w-12 h-12 rounded-xl bg-neutral-100 border border-neutral-200 flex items-center justify-center font-bold text-lg text-emerald-950 shrink-0">
-                      {person.name ? person.name.charAt(0) : 'አ'}
+                      {(person.fullName || person.name) ? (person.fullName || person.name || '').charAt(0) : 'አ'}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="font-bold text-neutral-900 text-sm truncate">
-                        {person.name || person.fullName || 'አልተሾመም'}
+                        {person.fullName || person.name || 'አልተሾመም'}
                       </div>
                       {assignedMember ? (
                         <div className="text-[11px] text-emerald-700 font-medium">
@@ -523,6 +573,12 @@ export const LeadershipView: React.FC<LeadershipViewProps> = ({
             </div>
 
             <div className="p-5 space-y-4">
+              {roleSaveError && (
+                <div className="p-2.5 rounded-lg bg-red-50 border border-red-200 text-red-800 text-xs font-semibold">
+                  {roleSaveError}
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-bold text-neutral-800 mb-1">
                   አባል ይምረጡ (ከዝርዝሩ)፡
@@ -534,8 +590,13 @@ export const LeadershipView: React.FC<LeadershipViewProps> = ({
                     setSelectedMemberIdForRole(memId);
                     const mem = members.find((m) => m.id === memId);
                     if (mem) {
+                      setCustomName(mem.fullName || '');
                       setCustomPhone(mem.phone || '');
                       setCustomTelegram(mem.telegram || '');
+                    } else if (!memId) {
+                      setCustomName('');
+                      setCustomPhone('');
+                      setCustomTelegram('');
                     }
                   }}
                   className="w-full px-3 py-2 text-xs bg-neutral-50 rounded-lg border border-neutral-300 focus:outline-none focus:ring-2 focus:ring-emerald-700"
@@ -547,6 +608,19 @@ export const LeadershipView: React.FC<LeadershipViewProps> = ({
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-neutral-800 mb-1">
+                  ሙሉ ስም (Full Name)፡
+                </label>
+                <input
+                  type="text"
+                  value={customName}
+                  onChange={(e) => setCustomName(e.target.value)}
+                  placeholder="የተሾመው አባል ሙሉ ስም"
+                  className="w-full px-3 py-2 text-xs bg-neutral-50 rounded-lg border border-neutral-300 focus:outline-none focus:ring-2 focus:ring-emerald-700"
+                />
               </div>
 
               <div>
@@ -581,16 +655,19 @@ export const LeadershipView: React.FC<LeadershipViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setEditingRole(null)}
-                  className="px-3.5 py-2 rounded-xl bg-neutral-200 hover:bg-neutral-300 text-neutral-800 font-bold text-xs cursor-pointer"
+                  disabled={isSavingRole}
+                  className="px-3.5 py-2 rounded-xl bg-neutral-200 hover:bg-neutral-300 text-neutral-800 font-bold text-xs cursor-pointer disabled:opacity-50"
                 >
                   ሰርዝ
                 </button>
                 <button
                   type="button"
                   onClick={handleSaveAssignRole}
-                  className="px-4 py-2 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs cursor-pointer"
+                  disabled={isSavingRole}
+                  className="px-4 py-2 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs cursor-pointer disabled:opacity-60 inline-flex items-center gap-1.5"
                 >
-                  ሹመቱን አጽድቅና መዝግብ
+                  {isSavingRole && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{isSavingRole ? 'በማስቀመጥ ላይ...' : 'ሹመቱን አጽድቅና መዝግብ'}</span>
                 </button>
               </div>
             </div>

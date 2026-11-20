@@ -70,6 +70,8 @@ import {
   getFamiliesFromFirestore,
   getContributionsFromFirestore,
   getSettingsFromFirestore,
+  saveSettingsToFirestore,
+  subscribeToSettings,
   saveContributionToFirestore,
   deleteContributionFromFirestore,
   saveMemberToFirestore,
@@ -298,6 +300,12 @@ export default function App() {
     setSettings(getSettings());
   };
 
+  const handleSaveSettings = async (nextSettings: SettingsRates): Promise<void> => {
+    saveSettings(nextSettings);
+    setSettings(nextSettings);
+    await saveSettingsToFirestore(nextSettings);
+  };
+
   const currentDate = getCurrentEthiopianDate();
 
   // Listen for local storage sync events and PWA install prompt (no Firestore calls before auth)
@@ -429,10 +437,28 @@ export default function App() {
       }
     );
 
-    // 4. Fetch settings from Firestore (do not overwrite live Firestore state with stale /api/data cache)
+    // 4. Fetch & subscribe to live settings (including leadership appointments) from Firestore
     getSettingsFromFirestore().then((live) => {
-      if (isActive && live) setSettings(live);
+      if (isActive && live) {
+        setSettings(live);
+        try {
+          localStorage.setItem('abarrus_settings_v6', JSON.stringify(live));
+        } catch {}
+      }
     });
+
+    const unsubscribeSettings = subscribeToSettings(
+      (liveSettings) => {
+        if (!isActive) return;
+        setSettings(liveSettings);
+        try {
+          localStorage.setItem('abarrus_settings_v6', JSON.stringify(liveSettings));
+        } catch {}
+      },
+      (err) => {
+        console.warn('[App Settings Subscription Error]:', err);
+      }
+    );
 
     return () => {
       isActive = false;
@@ -440,6 +466,7 @@ export default function App() {
       unsubscribeMembers();
       unsubscribeFamilies();
       unsubscribeContribs();
+      unsubscribeSettings();
     };
   }, [isAuthChecking, authFirebaseUser]);
 
@@ -1263,10 +1290,7 @@ export default function App() {
                 members={members}
                 families={families}
                 contributions={contributions}
-                onUpdateSettings={(s) => {
-                  saveSettings(s);
-                  setSettings(getSettings());
-                }}
+                onUpdateSettings={handleSaveSettings}
                 onOpenRecordPayment={(id) => {
                   if (id) {
                     handleOpenRecordPaymentForMember(id);
@@ -1304,7 +1328,7 @@ export default function App() {
                 members={members}
                 contributions={contributions}
                 settings={settings}
-                onUpdateSettings={(s) => saveSettings(s)}
+                onUpdateSettings={handleSaveSettings}
               />
             )}
           </>
@@ -1410,7 +1434,7 @@ export default function App() {
         <SettingsModal
           settings={settings}
           members={members}
-          onSave={(s) => saveSettings(s)}
+          onSave={handleSaveSettings}
           onReset={() => resetAllData()}
           onClose={() => setIsSettingsOpen(false)}
           onOpenChangePin={() => setIsChangePinOpen(true)}

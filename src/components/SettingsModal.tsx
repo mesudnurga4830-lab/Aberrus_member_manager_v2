@@ -26,11 +26,28 @@ import { MASTER_ADMIN, getAdminPin, setAdminPin } from '../utils/adminAuth';
 interface SettingsModalProps {
   settings: SettingsRates;
   members?: Member[];
-  onSave: (settings: SettingsRates) => void;
+  onSave: (settings: SettingsRates) => Promise<void> | void;
   onReset: () => void;
   onClose: () => void;
   onOpenChangePin?: () => void;
 }
+
+const normalizeModalLeader = (raw: any, defaultRoleTitle: string) => {
+  const fullName = String(raw?.fullName || raw?.name || '');
+  const phoneNumber = String(raw?.phoneNumber ?? raw?.phone ?? '');
+  const telegramUsername = String(raw?.telegramUsername ?? raw?.telegram ?? '');
+  return {
+    ...(raw || {}),
+    memberId: raw?.memberId || '',
+    name: fullName,
+    fullName,
+    phone: phoneNumber,
+    phoneNumber,
+    telegram: telegramUsername,
+    telegramUsername,
+    roleTitle: raw?.roleTitle || defaultRoleTitle,
+  };
+};
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   settings,
@@ -43,18 +60,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [formData, setFormData] = useState<SettingsRates>(() => {
     const clone: SettingsRates = JSON.parse(JSON.stringify(settings));
     if (!clone.spouseMonthlyRate) clone.spouseMonthlyRate = 100;
-    if (!clone.leadership) {
-      clone.leadership = {
-        executive: { fullName: '', roleTitle: 'የማህበሩ ስራ አስፈፃሚ' },
-        secretary: { fullName: '', roleTitle: 'የማህበሩ ጸሀፊ' },
-        financeOfficer: { fullName: '', roleTitle: 'የማህበሩ ፋይናንስ ሀላፊ' },
-      };
-    }
+    clone.leadership = {
+      executive: normalizeModalLeader(clone.leadership?.executive, 'የማህበሩ ስራ አስፈፃሚ'),
+      secretary: normalizeModalLeader(clone.leadership?.secretary, 'የማህበሩ ጸሀፊ'),
+      financeOfficer: normalizeModalLeader(clone.leadership?.financeOfficer, 'የማህበሩ ፋይናንስ ሀላፊ'),
+    };
     return clone;
   });
 
   const [adminPin, setLocalAdminPin] = useState(getAdminPin());
   const [savedNotice, setSavedNotice] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
 
   React.useEffect(() => {
@@ -67,15 +83,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     return () => window.removeEventListener('abarrus_admin_pin_changed', handlePinChanged);
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setAdminPin(adminPin);
-    onSave(formData);
-    setSavedNotice(true);
-    setTimeout(() => {
-      setSavedNotice(false);
-      onClose();
-    }, 1000);
+    setIsSaving(true);
+    try {
+      setAdminPin(adminPin);
+      const normalizedForm: SettingsRates = {
+        ...formData,
+        leadership: {
+          executive: normalizeModalLeader(formData.leadership.executive, 'የማህበሩ ስራ አስፈፃሚ'),
+          secretary: normalizeModalLeader(formData.leadership.secretary, 'የማህበሩ ጸሀፊ'),
+          financeOfficer: normalizeModalLeader(formData.leadership.financeOfficer, 'የማህበሩ ፋይናንስ ሀላፊ'),
+        },
+      };
+      await onSave(normalizedForm);
+      setSavedNotice(true);
+      setTimeout(() => {
+        setSavedNotice(false);
+        onClose();
+      }, 900);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -296,21 +325,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   onChange={(e) => {
                     const selectedId = e.target.value;
                     const mem = members.find((m) => m.id === selectedId);
-                    if (mem) {
-                      setFormData({
-                        ...formData,
-                        leadership: {
-                          ...formData.leadership,
-                          executive: {
-                            ...formData.leadership.executive,
-                            memberId: mem.id,
-                            fullName: mem.fullName,
-                            phoneNumber: mem.phone || '',
-                            telegramUsername: mem.telegram || mem.phone || '',
-                          },
-                        },
-                      });
-                    }
+                    setFormData({
+                      ...formData,
+                      leadership: {
+                        ...formData.leadership,
+                        executive: mem
+                          ? {
+                              ...formData.leadership.executive,
+                              memberId: mem.id,
+                              name: mem.fullName,
+                              fullName: mem.fullName,
+                              phone: mem.phone || '',
+                              phoneNumber: mem.phone || '',
+                              telegram: mem.telegram || mem.phone || '',
+                              telegramUsername: mem.telegram || mem.phone || '',
+                            }
+                          : {
+                              ...formData.leadership.executive,
+                              memberId: '',
+                            },
+                      },
+                    });
                   }}
                   className="w-full p-2 bg-neutral-50 border border-neutral-300 rounded-lg text-xs font-medium text-neutral-800 focus:bg-white"
                 >
@@ -328,13 +363,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <label className="text-[10px] text-neutral-500 block mb-0.5">ሙሉ ስም</label>
                   <input
                     type="text"
-                    value={formData.leadership.executive.fullName}
+                    value={formData.leadership.executive.fullName || ''}
                     onChange={(e) =>
                       setFormData({
                         ...formData,
                         leadership: {
                           ...formData.leadership,
-                          executive: { ...formData.leadership.executive, fullName: e.target.value },
+                          executive: {
+                            ...formData.leadership.executive,
+                            name: e.target.value,
+                            fullName: e.target.value,
+                          },
                         },
                       })
                     }
@@ -354,7 +393,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         ...formData,
                         leadership: {
                           ...formData.leadership,
-                          executive: { ...formData.leadership.executive, phoneNumber: e.target.value },
+                          executive: {
+                            ...formData.leadership.executive,
+                            phone: e.target.value,
+                            phoneNumber: e.target.value,
+                          },
                         },
                       })
                     }
@@ -372,7 +415,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         ...formData,
                         leadership: {
                           ...formData.leadership,
-                          executive: { ...formData.leadership.executive, telegramUsername: e.target.value },
+                          executive: {
+                            ...formData.leadership.executive,
+                            telegram: e.target.value,
+                            telegramUsername: e.target.value,
+                          },
                         },
                       })
                     }
@@ -407,21 +454,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   onChange={(e) => {
                     const selectedId = e.target.value;
                     const mem = members.find((m) => m.id === selectedId);
-                    if (mem) {
-                      setFormData({
-                        ...formData,
-                        leadership: {
-                          ...formData.leadership,
-                          secretary: {
-                            ...formData.leadership.secretary,
-                            memberId: mem.id,
-                            fullName: mem.fullName,
-                            phoneNumber: mem.phone || '',
-                            telegramUsername: mem.telegram || mem.phone || '',
-                          },
-                        },
-                      });
-                    }
+                    setFormData({
+                      ...formData,
+                      leadership: {
+                        ...formData.leadership,
+                        secretary: mem
+                          ? {
+                              ...formData.leadership.secretary,
+                              memberId: mem.id,
+                              name: mem.fullName,
+                              fullName: mem.fullName,
+                              phone: mem.phone || '',
+                              phoneNumber: mem.phone || '',
+                              telegram: mem.telegram || mem.phone || '',
+                              telegramUsername: mem.telegram || mem.phone || '',
+                            }
+                          : {
+                              ...formData.leadership.secretary,
+                              memberId: '',
+                            },
+                      },
+                    });
                   }}
                   className="w-full p-2 bg-neutral-50 border border-neutral-300 rounded-lg text-xs font-medium text-neutral-800 focus:bg-white"
                 >
@@ -439,13 +492,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <label className="text-[10px] text-neutral-500 block mb-0.5">ሙሉ ስም</label>
                   <input
                     type="text"
-                    value={formData.leadership.secretary.fullName}
+                    value={formData.leadership.secretary.fullName || ''}
                     onChange={(e) =>
                       setFormData({
                         ...formData,
                         leadership: {
                           ...formData.leadership,
-                          secretary: { ...formData.leadership.secretary, fullName: e.target.value },
+                          secretary: {
+                            ...formData.leadership.secretary,
+                            name: e.target.value,
+                            fullName: e.target.value,
+                          },
                         },
                       })
                     }
@@ -465,7 +522,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         ...formData,
                         leadership: {
                           ...formData.leadership,
-                          secretary: { ...formData.leadership.secretary, phoneNumber: e.target.value },
+                          secretary: {
+                            ...formData.leadership.secretary,
+                            phone: e.target.value,
+                            phoneNumber: e.target.value,
+                          },
                         },
                       })
                     }
@@ -483,7 +544,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         ...formData,
                         leadership: {
                           ...formData.leadership,
-                          secretary: { ...formData.leadership.secretary, telegramUsername: e.target.value },
+                          secretary: {
+                            ...formData.leadership.secretary,
+                            telegram: e.target.value,
+                            telegramUsername: e.target.value,
+                          },
                         },
                       })
                     }
@@ -518,21 +583,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   onChange={(e) => {
                     const selectedId = e.target.value;
                     const mem = members.find((m) => m.id === selectedId);
-                    if (mem) {
-                      setFormData({
-                        ...formData,
-                        leadership: {
-                          ...formData.leadership,
-                          financeOfficer: {
-                            ...formData.leadership.financeOfficer,
-                            memberId: mem.id,
-                            fullName: mem.fullName,
-                            phoneNumber: mem.phone || '',
-                            telegramUsername: mem.telegram || mem.phone || '',
-                          },
-                        },
-                      });
-                    }
+                    setFormData({
+                      ...formData,
+                      leadership: {
+                        ...formData.leadership,
+                        financeOfficer: mem
+                          ? {
+                              ...formData.leadership.financeOfficer,
+                              memberId: mem.id,
+                              name: mem.fullName,
+                              fullName: mem.fullName,
+                              phone: mem.phone || '',
+                              phoneNumber: mem.phone || '',
+                              telegram: mem.telegram || mem.phone || '',
+                              telegramUsername: mem.telegram || mem.phone || '',
+                            }
+                          : {
+                              ...formData.leadership.financeOfficer,
+                              memberId: '',
+                            },
+                      },
+                    });
                   }}
                   className="w-full p-2 bg-neutral-50 border border-neutral-300 rounded-lg text-xs font-medium text-neutral-800 focus:bg-white"
                 >
@@ -550,13 +621,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <label className="text-[10px] text-neutral-500 block mb-0.5">ሙሉ ስም</label>
                   <input
                     type="text"
-                    value={formData.leadership.financeOfficer.fullName}
+                    value={formData.leadership.financeOfficer.fullName || ''}
                     onChange={(e) =>
                       setFormData({
                         ...formData,
                         leadership: {
                           ...formData.leadership,
-                          financeOfficer: { ...formData.leadership.financeOfficer, fullName: e.target.value },
+                          financeOfficer: {
+                            ...formData.leadership.financeOfficer,
+                            name: e.target.value,
+                            fullName: e.target.value,
+                          },
                         },
                       })
                     }
@@ -576,7 +651,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         ...formData,
                         leadership: {
                           ...formData.leadership,
-                          financeOfficer: { ...formData.leadership.financeOfficer, phoneNumber: e.target.value },
+                          financeOfficer: {
+                            ...formData.leadership.financeOfficer,
+                            phone: e.target.value,
+                            phoneNumber: e.target.value,
+                          },
                         },
                       })
                     }
@@ -594,7 +673,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         ...formData,
                         leadership: {
                           ...formData.leadership,
-                          financeOfficer: { ...formData.leadership.financeOfficer, telegramUsername: e.target.value },
+                          financeOfficer: {
+                            ...formData.leadership.financeOfficer,
+                            telegram: e.target.value,
+                            telegramUsername: e.target.value,
+                          },
                         },
                       })
                     }
@@ -714,10 +797,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </button>
               <button
                 type="submit"
-                className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-emerald-800 hover:bg-emerald-700 rounded-xl shadow-sm transition-colors cursor-pointer"
+                disabled={isSaving}
+                className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-emerald-800 hover:bg-emerald-700 rounded-xl shadow-sm transition-colors cursor-pointer disabled:opacity-60"
               >
                 <Save className="w-4 h-4" />
-                <span>አስቀምጥ (Save)</span>
+                <span>{isSaving ? 'በማስቀመጥ ላይ...' : 'አስቀምጥ (Save)'}</span>
               </button>
             </div>
           </div>
