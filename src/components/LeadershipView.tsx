@@ -27,10 +27,18 @@ import {
   shareReportToExecutiveOrSecretary,
   shareReportToFinanceOfficer,
   getAppUrl,
+  buildAllPaidMonthsSummaryLines,
 } from '../utils/telegramShare';
 import { generateFinancialReportPdf } from '../utils/pdfGenerator';
-import { getCurrentEthiopianDate, formatEthiopianCurrency } from '../utils/ethiopianCalendar';
-import { getMemberGenContributionStats } from '../utils/storage';
+import { getCurrentEthiopianDate, formatEthiopianCurrency, ETHIOPIAN_MONTHS, getEthiopianMonthName } from '../utils/ethiopianCalendar';
+import {
+  computeGenerationPortfolioSummary,
+  isPaidStatus,
+  isPaidOrPartialStatus,
+  getContributionMonth,
+  getContributionYear,
+  getContributionPaidAmount,
+} from '../utils/storage';
 
 interface LeadershipViewProps {
   settings: SettingsRates;
@@ -65,6 +73,10 @@ export const LeadershipView: React.FC<LeadershipViewProps> = ({
   const currentDate = getCurrentEthiopianDate();
   const leadership = settings.leadership;
 
+  const [selectedMonth, setSelectedMonth] = useState<number>(currentDate.month || 11);
+  const [selectedYear, setSelectedYear] = useState<number>(currentDate.year || 2018);
+  const selectedMonthName = getEthiopianMonthName(selectedMonth);
+
   const [editingRole, setEditingRole] = useState<'executive' | 'secretary' | 'financeOfficer' | null>(null);
   const [selectedMemberIdForRole, setSelectedMemberIdForRole] = useState<string>('');
   const [customPhone, setCustomPhone] = useState<string>('');
@@ -76,11 +88,14 @@ export const LeadershipView: React.FC<LeadershipViewProps> = ({
   const totalSpouses = members.filter((m) => m.isSpouse).length;
 
   const monthContributions = contributions.filter(
-    (c) => c.ethiopianMonth === 11 && c.ethiopianYear === 2018 && c.type === 'ወርሃዊ'
+    (c) =>
+      getContributionMonth(c) === selectedMonth &&
+      getContributionYear(c) === selectedYear &&
+      (!c.type || c.type === 'ወርሃዊ')
   );
   const monthlyCollected = monthContributions
-    .filter((c) => c.status === 'ተከፍሏል' || c.status === 'ከፊል')
-    .reduce((sum, c) => sum + (c.paidAmount || 0), 0);
+    .filter((c) => isPaidOrPartialStatus(c.status))
+    .reduce((sum, c) => sum + getContributionPaidAmount(c), 0);
 
   const expectedMonthly = members.reduce((sum, m) => {
     if (m.isMinor) return sum;
@@ -90,27 +105,31 @@ export const LeadershipView: React.FC<LeadershipViewProps> = ({
 
   const monthlyArrears = Math.max(expectedMonthly - monthlyCollected, 0);
 
-  const genContributions = contributions.filter((c) => c.type === 'ትውልድ');
-  const genCollected = genContributions
-    .filter((c) => c.status === 'ተከፍሏል' || c.status === 'ከፊል')
-    .reduce((sum, c) => sum + (c.paidAmount || 0), 0);
+  const genPortfolio = computeGenerationPortfolioSummary(members, settings, contributions);
+  const allPaidMonthsLines = buildAllPaidMonthsSummaryLines(contributions);
+  const allTimeMonthlyCollected = contributions
+    .filter((c) => (!c.type || c.type === 'ወርሃዊ') && isPaidOrPartialStatus(c.status))
+    .reduce((sum, c) => sum + getContributionPaidAmount(c), 0);
 
   // Generate standardized leadership report summary string
-  // Strictly omits Monthly remaining balance; shows Generation Total Paid & Remaining Balance.
+  // Strictly omits Monthly remaining balance; includes all paid months + Generation Expected / Collected / Remaining.
   const generateReportSummaryText = () => {
-    const paidCount = monthContributions.filter((c) => c.status === 'ተከፍሏል').length;
-    const unpaidCount = activeMembers.length - paidCount;
-
-    const totalGenRemaining = members
-      .filter((m) => !m.isMinor && !m.isSpouse)
-      .reduce((sum, m) => sum + getMemberGenContributionStats(m, settings, contributions).remainingBalance, 0);
+    const paidCount = monthContributions.filter((c) => isPaidStatus(c.status)).length;
+    const unpaidCount = Math.max(activeMembers.length - paidCount, 0);
+    const monthsBlock =
+      allPaidMonthsLines.length > 0
+        ? `\n📆 ሁሉም የተከፈሉ ወራት (ጠቅላላ፡ ${formatEthiopianCurrency(allTimeMonthlyCollected)})፦\n${allPaidMonthsLines.join('\n')}`
+        : '';
 
     return `📅 ቀን፡ ${currentDate.formatted}
 👥 ጠቅላላ አባላት፡ ${members.length} (ከ18 ዓመት በታች፡ ${totalMinors}፣ የትዳር አጋር፡ ${totalSpouses})
-✅ የሐምሌ 2018 ወርሃዊ ክፍያ የፈጸሙ፡ ${paidCount} አባላት (ያልከፈሉ፡ ${unpaidCount})
-💰 የተሰበሰበ ወርሃዊ መዋጮ፡ ${formatEthiopianCurrency(monthlyCollected)}
-🏛️ የትውልድ መዋጮ ጠቅላላ የተከፈለ (Total Paid)፡ ${formatEthiopianCurrency(genCollected)}
-📉 የትውልድ መዋጮ ቀሪ (Remaining Balance)፡ ${formatEthiopianCurrency(totalGenRemaining)}
+✅ የ${selectedMonthName} ${selectedYear} ወርሃዊ ክፍያ የፈጸሙ፡ ${paidCount} አባላት (ያልከፈሉ፡ ${unpaidCount})
+💰 የ${selectedMonthName} ${selectedYear} የተሰበሰበ ወርሃዊ መዋጮ፡ ${formatEthiopianCurrency(monthlyCollected)}${monthsBlock}
+
+🏛️ የትውልድ መዋጮ ማጠቃለያ፦
+• ጠቅላላ መሰብሰብ የነበረበት (Total Expected)፡ ${formatEthiopianCurrency(genPortfolio.totalExpected)}
+• እስካሁን የተሰበሰበ (Total Collected)፡ ${formatEthiopianCurrency(genPortfolio.totalCollected)} (${genPortfolio.collectionPercentage}%)
+• ቀሪ ያልተሰበሰበ (Remaining Balance)፡ ${formatEthiopianCurrency(genPortfolio.totalRemaining)}
 🏦 የCBE ይፋዊ ሂሳብ፡ 1000778285146 (Aida, Ibrahim and zebiba)`;
   };
 
@@ -191,8 +210,8 @@ export const LeadershipView: React.FC<LeadershipViewProps> = ({
       members,
       families,
       settings,
-      selectedMonth: 11,
-      selectedYear: 2018,
+      selectedMonth,
+      selectedYear,
     });
   };
 
@@ -248,9 +267,29 @@ export const LeadershipView: React.FC<LeadershipViewProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(Number(e.target.value))}
+              className="text-xs font-bold bg-white/95 text-emerald-950 rounded-xl px-2.5 py-2 border border-white/30 cursor-pointer"
+            >
+              {ETHIOPIAN_MONTHS.map((m) => (
+                <option key={m.number} value={m.number}>
+                  {m.number}ኛ ወር - {m.amharic}
+                </option>
+              ))}
+            </select>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number(e.target.value))}
+              className="text-xs font-bold bg-white/95 text-emerald-950 rounded-xl px-2.5 py-2 border border-white/30 font-mono cursor-pointer"
+            >
+              <option value={2018}>2018 ዓ.ም</option>
+              <option value={2019}>2019 ዓ.ም</option>
+              <option value={2020}>2020 ዓ.ም</option>
+            </select>
             <button
               onClick={handleDownloadPDF}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white hover:bg-neutral-100 text-emerald-950 font-bold text-xs transition-colors shadow-xs cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-neutral-100 text-emerald-950 font-bold text-xs transition-colors shadow-xs cursor-pointer"
             >
               <Download className="w-4 h-4 text-emerald-800" />
               <span>የአመራር ሪፖርት PDF አውርድ</span>
@@ -270,7 +309,7 @@ export const LeadershipView: React.FC<LeadershipViewProps> = ({
             {members.length}
           </div>
           <p className="text-[10px] text-neutral-500 mt-1">
-            39 ከ18 በታች ነፃ • 2 የትዳር አጋር
+            {totalMinors} ከ18 በታች ነፃ • {totalSpouses} የትዳር አጋር
           </p>
         </div>
 
@@ -283,33 +322,33 @@ export const LeadershipView: React.FC<LeadershipViewProps> = ({
             {formatEthiopianCurrency(monthlyCollected)}
           </div>
           <p className="text-[10px] text-neutral-500 mt-1">
-            የሐምሌ 2018 ዓ.ም መዋጮ
+            የ{selectedMonthName} {selectedYear} ዓ.ም መዋጮ
           </p>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-neutral-200 shadow-2xs">
           <div className="flex items-center justify-between text-neutral-500 mb-1">
-            <span className="text-xs font-bold">የተሰበሰበ የትውልድ</span>
+            <span className="text-xs font-bold">የትውልድ የተሰበሰበ</span>
             <Building className="w-4 h-4 text-amber-600" />
           </div>
           <div className="text-xl sm:text-2xl font-black text-amber-900 font-mono">
-            {formatEthiopianCurrency(genCollected)}
+            {formatEthiopianCurrency(genPortfolio.totalCollected)}
           </div>
           <p className="text-[10px] text-neutral-500 mt-1">
-            የትውልድ መዋጮ ድምር
+            ከጠቅላላ {formatEthiopianCurrency(genPortfolio.totalExpected)} ({genPortfolio.collectionPercentage}%)
           </p>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-neutral-200 shadow-2xs">
           <div className="flex items-center justify-between text-neutral-500 mb-1">
-            <span className="text-xs font-bold">ቀሪ ያልተሰበሰበ</span>
+            <span className="text-xs font-bold">የትውልድ ቀሪ ያልተሰበሰበ</span>
             <AlertTriangle className="w-4 h-4 text-rose-600" />
           </div>
           <div className="text-xl sm:text-2xl font-black text-rose-700 font-mono">
-            {formatEthiopianCurrency(monthlyArrears)}
+            {formatEthiopianCurrency(genPortfolio.totalRemaining)}
           </div>
           <p className="text-[10px] text-rose-600 font-semibold mt-1">
-            የወርሃዊ መዋጮ ቀሪ እዳ
+            ወርሃዊ ቀሪ ({selectedMonthName})፡ {formatEthiopianCurrency(monthlyArrears)}
           </p>
         </div>
       </div>

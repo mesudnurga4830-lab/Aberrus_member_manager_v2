@@ -6,6 +6,14 @@
 import { jsPDF } from 'jspdf';
 import { Contribution, Member, Family, SettingsRates } from '../types';
 import { getEthiopianMonthName, getCurrentEthiopianDate } from './ethiopianCalendar';
+import {
+  isPaidStatus,
+  isPartialStatus,
+  isPaidOrPartialStatus,
+  getContributionMonth,
+  getContributionYear,
+  getContributionPaidAmount,
+} from './storage';
 
 interface GenerateReportPdfOptions {
   contributions: Contribution[];
@@ -47,15 +55,15 @@ export function generateFinancialReportPdf({
   // 1. FILTER MONTHLY CONTRIBUTIONS (ወርሃዊ መዋጮ) FOR SELECTED MONTH
   const monthContributions = contributions.filter(
     (c) =>
-      c.type === 'ወርሃዊ' &&
-      Number(c.ethiopianMonth) === selectedMonth &&
-      Number(c.ethiopianYear) === selectedYear &&
+      (!c.type || c.type === 'ወርሃዊ') &&
+      getContributionMonth(c) === selectedMonth &&
+      getContributionYear(c) === selectedYear &&
       (!familyFilterId || c.familyId === familyFilterId)
   );
 
   const totalMonthlyCollected = monthContributions
-    .filter((c) => c.status === 'ተከፍሏል' || c.status === 'ከፊል')
-    .reduce((sum, c) => sum + (c.paidAmount || 0), 0);
+    .filter((c) => isPaidOrPartialStatus(c.status))
+    .reduce((sum, c) => sum + getContributionPaidAmount(c), 0);
 
   const totalMonthlyExpected = filteredMembers.reduce((sum, m) => {
     if (m.isMinor) return sum;
@@ -68,10 +76,8 @@ export function generateFinancialReportPdf({
   const paidMonthlyCount = filteredMembers.filter((m) => {
     if (m.isMinor) return false;
     const con = monthContributions.find((c) => c.memberId === m.id);
-    return con?.status === 'ተከፍሏል';
+    return isPaidStatus(con?.status);
   }).length;
-
-  const unpaidMonthlyCount = filteredMembers.filter((m) => !m.isMinor).length - paidMonthlyCount;
 
   // 2. FILTER GENERATION CONTRIBUTIONS (የትውልድ መዋጮ)
   const allGenContributions = contributions.filter(
@@ -81,15 +87,15 @@ export function generateFinancialReportPdf({
   const genPaidThisMonth = allGenContributions
     .filter(
       (c) =>
-        Number(c.ethiopianMonth) === selectedMonth &&
-        Number(c.ethiopianYear) === selectedYear &&
-        (c.status === 'ተከፍሏል' || c.status === 'ከፊል')
+        getContributionMonth(c) === selectedMonth &&
+        getContributionYear(c) === selectedYear &&
+        isPaidOrPartialStatus(c.status)
     )
-    .reduce((sum, c) => sum + (c.paidAmount || 0), 0);
+    .reduce((sum, c) => sum + getContributionPaidAmount(c), 0);
 
   const totalGenCollected = allGenContributions
-    .filter((c) => c.status === 'ተከፍሏል' || c.status === 'ከፊል')
-    .reduce((sum, c) => sum + (c.paidAmount || 0), 0);
+    .filter((c) => isPaidOrPartialStatus(c.status))
+    .reduce((sum, c) => sum + getContributionPaidAmount(c), 0);
 
   const totalGenExpected = filteredMembers.reduce((sum, m) => {
     if (m.isMinor || m.isSpouse) return sum;
@@ -217,9 +223,9 @@ export function generateFinancialReportPdf({
       ? settings.spouseMonthlyRate || 100
       : settings.monthlyRate[m.generation] || 50;
 
-    const paidAmt = con?.paidAmount || 0;
-    const isPaid = con?.status === 'ተከፍሏል' || (standardRate > 0 && paidAmt >= standardRate);
-    const isPartial = con?.status === 'ከፊል' || (paidAmt > 0 && paidAmt < standardRate);
+    const paidAmt = getContributionPaidAmount(con);
+    const isPaid = isPaidStatus(con?.status) || (standardRate > 0 && paidAmt >= standardRate);
+    const isPartial = isPartialStatus(con?.status) || (paidAmt > 0 && paidAmt < standardRate);
 
     doc.setFillColor(rowCount % 2 === 0 ? 255 : 248, rowCount % 2 === 0 ? 255 : 249, rowCount % 2 === 0 ? 255 : 250);
     doc.rect(14, y, 182, 5.5, 'F');
@@ -339,17 +345,17 @@ export function generateFinancialReportPdf({
 
     const mGenDocs = allGenContributions.filter((c) => c.memberId === m.id);
     const totalGenPaid = mGenDocs
-      .filter((c) => c.status === 'ተከፍሏል' || c.status === 'ከፊል')
-      .reduce((sum, c) => sum + (c.paidAmount || 0), 0);
+      .filter((c) => isPaidOrPartialStatus(c.status))
+      .reduce((sum, c) => sum + getContributionPaidAmount(c), 0);
 
     const thisMonthGenPaid = mGenDocs
       .filter(
         (c) =>
-          Number(c.ethiopianMonth) === selectedMonth &&
-          Number(c.ethiopianYear) === selectedYear &&
-          (c.status === 'ተከፍሏል' || c.status === 'ከፊል')
+          getContributionMonth(c) === selectedMonth &&
+          getContributionYear(c) === selectedYear &&
+          isPaidOrPartialStatus(c.status)
       )
-      .reduce((sum, c) => sum + (c.paidAmount || 0), 0);
+      .reduce((sum, c) => sum + getContributionPaidAmount(c), 0);
 
     const isComplete = targetDues > 0 && totalGenPaid >= targetDues;
     const isPartial = totalGenPaid > 0 && totalGenPaid < targetDues;

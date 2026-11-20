@@ -1935,6 +1935,73 @@ app.get('/api/notifications/logs', async (req: Request, res: Response) => {
   }
 });
 
+const SERVER_MONTH_NAMES: Record<number, string> = {
+  1: 'መስከረም',
+  2: 'ጥቅምት',
+  3: 'ህዳር',
+  4: 'ታህሳስ',
+  5: 'ጥር',
+  6: 'የካቲት',
+  7: 'መጋቢት',
+  8: 'ሚያዝያ',
+  9: 'ግንቦት',
+  10: 'ሰኔ',
+  11: 'ሀምሌ',
+  12: 'ነሐሴ',
+  13: 'ጳጉሜን',
+};
+
+const getContribMonth = (c: any): number => {
+  const n = Number(c?.ethiopianMonth ?? c?.month ?? c?.monthNumber ?? c?.ethiopian_month ?? 0);
+  return isNaN(n) ? 0 : n;
+};
+
+const getContribYear = (c: any): number => {
+  const n = Number(c?.ethiopianYear ?? c?.year ?? c?.ethiopian_year ?? 2018);
+  return isNaN(n) ? 2018 : n;
+};
+
+const getContribPaidAmount = (c: any): number => {
+  const n = Number(c?.paidAmount ?? c?.amount ?? 0);
+  return isNaN(n) ? 0 : n;
+};
+
+const isContribPaid = (status: unknown): boolean => {
+  const st = String(status || '').trim().toLowerCase();
+  return st === 'ተከፍሏል' || st === 'paid' || st === 'completed' || st === 'approved';
+};
+
+const isContribPartial = (status: unknown): boolean => {
+  const st = String(status || '').trim().toLowerCase();
+  return st === 'ከፊል' || st === 'partial';
+};
+
+const isContribPaidOrPartial = (status: unknown): boolean => {
+  return isContribPaid(status) || isContribPartial(status);
+};
+
+const buildServerAllPaidMonthsLines = (contribs: any[]): string[] => {
+  const buckets = new Map<string, { year: number; month: number; total: number; count: number }>();
+  for (const c of contribs) {
+    if (c?.type && c.type !== 'ወርሃዊ') continue;
+    if (!isContribPaidOrPartial(c?.status)) continue;
+    const yr = getContribYear(c);
+    const mo = getContribMonth(c);
+    if (mo < 1 || mo > 13) continue;
+    const key = `${yr}-${String(mo).padStart(2, '0')}`;
+    const existing = buckets.get(key) || { year: yr, month: mo, total: 0, count: 0 };
+    existing.total += getContribPaidAmount(c);
+    existing.count += 1;
+    buckets.set(key, existing);
+  }
+  return Array.from(buckets.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, b]) => {
+      const mName = SERVER_MONTH_NAMES[b.month] || `ወር ${b.month}`;
+      return `• ${mName} ${b.year} ዓ.ም (${b.count} ክፍያዎች)፡ <b>${b.total.toLocaleString()} ብር</b>`;
+    });
+};
+
 // GET /api/reports - Validated, role-aware and member-aware financial & membership report endpoint
 app.get('/api/reports', async (req: Request, res: Response) => {
   try {
@@ -2016,25 +2083,25 @@ app.get('/api/reports', async (req: Request, res: Response) => {
 
       // Apply date filters if provided
       if (parsedYear !== undefined) {
-        memberContributions = memberContributions.filter((c: any) => c.ethiopianYear === parsedYear);
+        memberContributions = memberContributions.filter((c: any) => getContribYear(c) === parsedYear);
       }
       if (parsedMonth !== undefined) {
-        memberContributions = memberContributions.filter((c: any) => c.ethiopianMonth === parsedMonth);
+        memberContributions = memberContributions.filter((c: any) => getContribMonth(c) === parsedMonth);
       }
 
-      const monthlyContribs = memberContributions.filter((c: any) => c.type === 'ወርሃዊ');
+      const monthlyContribs = memberContributions.filter((c: any) => !c.type || c.type === 'ወርሃዊ');
       const genContribs = memberContributions.filter((c: any) => c.type === 'ትውልድ');
 
       const monthlyPaid = monthlyContribs
-        .filter((c: any) => c.status === 'ተከፍሏል' || c.status === 'ከፊል')
-        .reduce((sum: number, c: any) => sum + (Number(c.paidAmount) || 0), 0);
+        .filter((c: any) => isContribPaidOrPartial(c.status))
+        .reduce((sum: number, c: any) => sum + getContribPaidAmount(c), 0);
 
       const genPaid = genContribs
-        .filter((c: any) => c.status === 'ተከፍሏል' || c.status === 'ከፊል')
-        .reduce((sum: number, c: any) => sum + (Number(c.paidAmount) || 0), 0);
+        .filter((c: any) => isContribPaidOrPartial(c.status))
+        .reduce((sum: number, c: any) => sum + getContribPaidAmount(c), 0);
 
-      const paidCount = memberContributions.filter((c: any) => c.status === 'ተከፍሏል').length;
-      const unpaidCount = memberContributions.filter((c: any) => c.status === 'ያልተከፈለ').length;
+      const paidCount = memberContributions.filter((c: any) => isContribPaid(c.status)).length;
+      const unpaidCount = memberContributions.filter((c: any) => !isContribPaidOrPartial(c.status)).length;
 
       return res.status(200).json({
         status: 'success',
@@ -2106,22 +2173,22 @@ app.get('/api/reports', async (req: Request, res: Response) => {
       let famContribs = contributions.filter((c: any) => c.familyId === targetFamily.id);
 
       if (parsedYear !== undefined) {
-        famContribs = famContribs.filter((c: any) => c.ethiopianYear === parsedYear);
+        famContribs = famContribs.filter((c: any) => getContribYear(c) === parsedYear);
       }
       if (parsedMonth !== undefined) {
-        famContribs = famContribs.filter((c: any) => c.ethiopianMonth === parsedMonth);
+        famContribs = famContribs.filter((c: any) => getContribMonth(c) === parsedMonth);
       }
 
-      const monthlyContribs = famContribs.filter((c: any) => c.type === 'ወርሃዊ');
+      const monthlyContribs = famContribs.filter((c: any) => !c.type || c.type === 'ወርሃዊ');
       const genContribs = famContribs.filter((c: any) => c.type === 'ትውልድ');
 
       const monthlyCollected = monthlyContribs
-        .filter((c: any) => c.status === 'ተከፍሏል' || c.status === 'ከፊል')
-        .reduce((sum: number, c: any) => sum + (Number(c.paidAmount) || 0), 0);
+        .filter((c: any) => isContribPaidOrPartial(c.status))
+        .reduce((sum: number, c: any) => sum + getContribPaidAmount(c), 0);
 
       const genCollected = genContribs
-        .filter((c: any) => c.status === 'ተከፍሏል' || c.status === 'ከፊል')
-        .reduce((sum: number, c: any) => sum + (Number(c.paidAmount) || 0), 0);
+        .filter((c: any) => isContribPaidOrPartial(c.status))
+        .reduce((sum: number, c: any) => sum + getContribPaidAmount(c), 0);
 
       return res.status(200).json({
         status: 'success',
@@ -2171,12 +2238,32 @@ app.get('/api/reports', async (req: Request, res: Response) => {
       contributions = currentStore.contributions || [];
     }
 
+    const allContributionsRaw = [...contributions];
+    const defaultGenRatesReport: Record<number, number> = { 3: 5000, 4: 1000, 5: 500, 6: 250 };
+    const effectiveGenRatesReport: Record<number, number> = {
+      ...defaultGenRatesReport,
+      ...(settings?.generationPayment || {}),
+    };
+    let genPortfolioExpected = 0;
+    let genPortfolioCollected = 0;
+    let genPortfolioRemaining = 0;
+    for (const m of members) {
+      if (m.isMinor || m.isSpouse) continue;
+      const expectedAmt = Number(effectiveGenRatesReport[Number(m.generation) || 4] ?? 500);
+      const paidAmt = allContributionsRaw
+        .filter((c: any) => c.memberId === m.id && c.type === 'ትውልድ' && isContribPaidOrPartial(c.status))
+        .reduce((s: number, c: any) => s + getContribPaidAmount(c), 0);
+      genPortfolioExpected += expectedAmt;
+      genPortfolioCollected += paidAmt;
+      genPortfolioRemaining += Math.max(0, expectedAmt - paidAmt);
+    }
+
     // Apply date filters if provided
     if (parsedYear !== undefined) {
-      contributions = contributions.filter((c: any) => c.ethiopianYear === parsedYear);
+      contributions = contributions.filter((c: any) => getContribYear(c) === parsedYear);
     }
     if (parsedMonth !== undefined) {
-      contributions = contributions.filter((c: any) => c.ethiopianMonth === parsedMonth);
+      contributions = contributions.filter((c: any) => getContribMonth(c) === parsedMonth);
     }
 
     const totalMembers = members.length;
@@ -2189,20 +2276,20 @@ app.get('/api/reports', async (req: Request, res: Response) => {
     const gen5Count = members.filter((m: any) => m.generation === 5).length;
     const gen6Count = members.filter((m: any) => m.generation === 6).length;
 
-    const monthlyContributions = contributions.filter((c: any) => c.type === 'ወርሃዊ');
+    const monthlyContributions = contributions.filter((c: any) => !c.type || c.type === 'ወርሃዊ');
     const genContributions = contributions.filter((c: any) => c.type === 'ትውልድ');
 
     const monthlyCollected = monthlyContributions
-      .filter((c: any) => c.status === 'ተከፍሏል' || c.status === 'ከፊል')
-      .reduce((sum: number, c: any) => sum + (Number(c.paidAmount) || 0), 0);
+      .filter((c: any) => isContribPaidOrPartial(c.status))
+      .reduce((sum: number, c: any) => sum + getContribPaidAmount(c), 0);
 
     const genCollected = genContributions
-      .filter((c: any) => c.status === 'ተከፍሏል' || c.status === 'ከፊል')
-      .reduce((sum: number, c: any) => sum + (Number(c.paidAmount) || 0), 0);
+      .filter((c: any) => isContribPaidOrPartial(c.status))
+      .reduce((sum: number, c: any) => sum + getContribPaidAmount(c), 0);
 
-    const paidCount = contributions.filter((c: any) => c.status === 'ተከፍሏል').length;
-    const unpaidCount = contributions.filter((c: any) => c.status === 'ያልተከፈለ').length;
-    const partialCount = contributions.filter((c: any) => c.status === 'ከፊል').length;
+    const paidCount = contributions.filter((c: any) => isContribPaid(c.status)).length;
+    const unpaidCount = contributions.filter((c: any) => !isContribPaidOrPartial(c.status)).length;
+    const partialCount = contributions.filter((c: any) => isContribPartial(c.status)).length;
 
     const reportPayload = {
       status: 'success',
@@ -2222,7 +2309,9 @@ app.get('/api/reports', async (req: Request, res: Response) => {
         partialCount,
         totalCollectedAmount: monthlyCollected + genCollected,
         monthlyCollectedAmount: monthlyCollected,
-        generationCollectedAmount: genCollected,
+        generationCollectedAmount: genPortfolioCollected,
+        generationExpectedAmount: genPortfolioExpected,
+        generationRemainingAmount: genPortfolioRemaining,
         currency: 'ETB',
       },
       // Separated Monthly and Generation Reports
@@ -2235,7 +2324,10 @@ app.get('/api/reports', async (req: Request, res: Response) => {
       },
       generationReport: {
         title: 'የትውልድ መዋጮ ሪፖርት (Generation Contributions)',
-        totalCollected: genCollected,
+        totalExpected: genPortfolioExpected,
+        totalCollected: genPortfolioCollected,
+        remainingBalance: genPortfolioRemaining,
+        periodCollected: genCollected,
         contributionsCount: genContributions.length,
       },
       generationBreakdown: {
@@ -2290,7 +2382,17 @@ app.get('/api/reports', async (req: Request, res: Response) => {
 // POST /api/reports/send - Send Telegram reports per member, family heads, or leadership
 app.post('/api/reports/send', async (req: Request, res: Response) => {
   try {
-    const { target, memberId, familyId, targetFamilyId, role, month, year, chatId: incomingChatId } = req.body || {};
+    const {
+      target,
+      memberId,
+      familyId,
+      targetFamilyId,
+      role,
+      month,
+      year,
+      chatId: incomingChatId,
+      reportText: incomingReportText,
+    } = req.body || {};
 
     let parsedMonth: number | undefined;
     let parsedYear: number | undefined;
@@ -2344,15 +2446,13 @@ app.post('/api/reports/send', async (req: Request, res: Response) => {
       }
       const expectedAmount = Number(genRates[Number(m.generation) || 4] ?? 500);
       const paidSoFar = contribs
-        .filter((c: any) => {
-          const st = String(c.status || '').toLowerCase();
-          return (
+        .filter(
+          (c: any) =>
             c.memberId === m.id &&
             c.type === 'ትውልድ' &&
-            (st === 'ተከፍሏል' || st === 'ከፊል' || st === 'paid' || st === 'partial' || st === 'completed')
-          );
-        })
-        .reduce((sum: number, c: any) => sum + Number(c.paidAmount ?? c.amount ?? 0), 0);
+            isContribPaidOrPartial(c.status)
+        )
+        .reduce((sum: number, c: any) => sum + getContribPaidAmount(c), 0);
       return {
         expectedAmount,
         paidSoFar,
@@ -2523,30 +2623,27 @@ ${rowLines.join('\n') || '• ምንም ክፍያ የለም'}`;
       // 1. Monthly Contributions for this month (NO remaining balance info!)
       const monthContribs = famContribs.filter(
         (c: any) =>
-          c.type === 'ወርሃዊ' &&
-          Number(c.ethiopianMonth) === effectiveMonth &&
-          Number(c.ethiopianYear) === effectiveYear
+          (!c.type || c.type === 'ወርሃዊ') &&
+          getContribMonth(c) === effectiveMonth &&
+          getContribYear(c) === effectiveYear
       );
 
       const paidMonthlyMembers = famMembers.filter((m: any) => {
         const c = monthContribs.find((con: any) => con.memberId === m.id);
-        const st = String(c?.status || '').toLowerCase();
-        return st === 'ተከፍሏል' || st === 'paid' || st === 'completed';
+        return Boolean(c && isContribPaidOrPartial(c.status));
       });
 
       const unpaidMonthlyMembers = famMembers.filter((m: any) => {
         if (m.isMinor) return false;
         const c = monthContribs.find((con: any) => con.memberId === m.id);
-        const st = String(c?.status || '').toLowerCase();
-        return !(st === 'ተከፍሏል' || st === 'paid' || st === 'completed');
+        return !(c && isContribPaidOrPartial(c.status));
       });
 
       const monthlyCollected = monthContribs
-        .filter((c: any) => {
-          const st = String(c.status || '').toLowerCase();
-          return st === 'ተከፍሏል' || st === 'paid' || st === 'ከፊል' || st === 'partial';
-        })
-        .reduce((sum: number, c: any) => sum + (Number(c.paidAmount) || 0), 0);
+        .filter((c: any) => isContribPaidOrPartial(c.status))
+        .reduce((sum: number, c: any) => sum + getContribPaidAmount(c), 0);
+
+      const famAllPaidMonthsLines = buildServerAllPaidMonthsLines(famContribs);
 
       // 2. Generation Contributions (Expected - Total Paid Gen)
       const genEligibleMembers = famMembers.filter((m: any) => !m.isMinor && !m.isSpouse);
@@ -2625,8 +2722,13 @@ ${rowLines.join('\n') || '• ምንም ክፍያ የለም'}`;
         }))
       );
 
-      // Strictly NO remaining balance in Monthly section; Generation section displays Total Paid & Remaining Balance
-      const familyReportText = `🏛️ <b>የአበሩስ አንድነት ማህበር</b>
+      // Strictly NO remaining balance in Monthly section; Generation section displays Total Expected, Collected & Remaining Balance
+      const allMonthsBlock =
+        famAllPaidMonthsLines.length > 0
+          ? `\n\n📆 <b>ሁሉም የተከፈሉ ወራት ማጠቃለያ (1ኛ፣ 2ኛ እና ተከታይ ወራት)፦</b>\n${famAllPaidMonthsLines.join('\n')}`
+          : '';
+
+      const builtFamilyReportText = `🏛️ <b>የአበሩስ አንድነት ማህበር</b>
 የመዋጮ ሪፖርት
 
 ━━━━━━━━━━━━━━━
@@ -2642,13 +2744,13 @@ ${rowLines.join('\n') || '• ምንም ክፍያ የለም'}`;
 ✅ <b>የከፈሉ (${paidMonthlyMembers.length})፦</b>
 ${paidMonthlyLines || '• እስካሁን የከፈለ የለም'}
 
-${monthlyUnpaidSection}
+${monthlyUnpaidSection}${allMonthsBlock}
 
 ━━━━━━━━━━━━━━━
 🏛️ <b>የትውልድ መዋጮ</b>
-• ጠቅላላ የሚጠበቅ (Total Expected)፦ ${genExpectedTotal.toLocaleString()} ብር
-• ጠቅላላ የተከፈለ (Total Paid)፦ ${genCollected.toLocaleString()} ብር
-• ቀሪ መዋጮ (Remaining Balance)፦ ${genRemainingTotal.toLocaleString()} ብር
+• ጠቅላላ መሰብሰብ የነበረበት (Total Expected)፦ ${genExpectedTotal.toLocaleString()} ብር
+• እስካሁን የተሰበሰበ (Total Collected)፦ ${genCollected.toLocaleString()} ብር
+• ቀሪ ያልተሰበሰበ (Remaining Balance)፦ ${genRemainingTotal.toLocaleString()} ብር
 
 ✅ <b>የከፈሉ / በከፊል የከፈሉ (${paidOrPartialGen.length})</b>
 ${paidGenLines || '• እስካሁን የለም'}
@@ -2662,6 +2764,11 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
 • ስም፦ Aida, Ibrahim and Zebiba
 ━━━━━━━━━━━━━━━
 🤖 የአበሩስ አንድነት ማህበር`;
+
+      const familyReportText =
+        typeof incomingReportText === 'string' && incomingReportText.trim().length > 0
+          ? incomingReportText.trim()
+          : builtFamilyReportText;
 
       const familyPortalUrl = `${APP_URL}/family-portal?familyId=${family.id}`;
       let telegramDispatchSuccess = false;
@@ -2766,24 +2873,30 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
       const genStats = computeMemberGenStats(member, memberContributions);
 
       if (parsedYear !== undefined) {
-        memberContributions = memberContributions.filter((c) => c.ethiopianYear === parsedYear);
+        memberContributions = memberContributions.filter((c) => getContribYear(c) === parsedYear);
       }
       if (parsedMonth !== undefined) {
-        memberContributions = memberContributions.filter((c) => c.ethiopianMonth === parsedMonth);
+        memberContributions = memberContributions.filter((c) => getContribMonth(c) === parsedMonth);
       }
 
-      const monthlyCons = memberContributions.filter((c) => {
-        const st = String(c.status || '').toLowerCase();
-        return c.type === 'ወርሃዊ' && (st === 'ተከፍሏል' || st === 'ከፊል' || st === 'paid' || st === 'partial');
-      });
-      const monthlyPaid = monthlyCons.reduce((sum, c) => sum + (Number(c.paidAmount) || 0), 0);
+      const monthlyCons = memberContributions
+        .filter((c) => (!c.type || c.type === 'ወርሃዊ') && isContribPaidOrPartial(c.status))
+        .sort((a, b) => {
+          const ya = getContribYear(a);
+          const yb = getContribYear(b);
+          if (ya !== yb) return ya - yb;
+          return getContribMonth(a) - getContribMonth(b);
+        });
+      const monthlyPaid = monthlyCons.reduce((sum, c) => sum + getContribPaidAmount(c), 0);
       const monthlyListText =
         monthlyCons.length > 0
           ? monthlyCons
-              .map(
-                (c) =>
-                  `${c.ethiopianMonthName || monthNames[Number(c.ethiopianMonth)] || ''} ${c.ethiopianYear} (${Number(c.paidAmount || 0).toLocaleString()} ብር${c.datePaid ? ` · ${c.datePaid}` : ''})`
-              )
+              .map((c) => {
+                const cMonth = getContribMonth(c);
+                const cYear = getContribYear(c);
+                const mName = c.ethiopianMonthName || monthNames[cMonth] || `ወር ${cMonth}`;
+                return `${mName} ${cYear} (${getContribPaidAmount(c).toLocaleString()} ብር${c.datePaid ? ` · ${c.datePaid}` : ''})`;
+              })
               .join('፣ ')
           : 'እስካሁን አልተመዘገበም';
 
@@ -2872,30 +2985,44 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
       allContribs = currentStore.contributions || [];
     }
 
-    // Compute Generation totals across all members prior to period filter
-    const totalGenRemainingAll = allMembers
-      .filter((m) => !m.isMinor && !m.isSpouse)
-      .reduce((sum, m) => sum + computeMemberGenStats(m, allContribs).remainingBalance, 0);
+    // Compute Generation totals and all-months monthly breakdown across all members/records prior to period filter
+    const allContribsRaw = [...allContribs];
+    let genExpectedAll = 0;
+    let genCollectedAll = 0;
+    let totalGenRemainingAll = 0;
+    for (const m of allMembers) {
+      if (m.isMinor || m.isSpouse) continue;
+      const st = computeMemberGenStats(m, allContribsRaw);
+      genExpectedAll += st.expectedAmount;
+      genCollectedAll += st.paidSoFar;
+      totalGenRemainingAll += st.remainingBalance;
+    }
+
+    const allPaidMonthsSummaryLines = buildServerAllPaidMonthsLines(allContribsRaw);
+    const allPaidMonthsSection =
+      allPaidMonthsSummaryLines.length > 0
+        ? `\n\n📆 <b>ሁሉም የተከፈሉ ወራት ማጠቃለያ (1ኛ፣ 2ኛ እና ተከታይ ወራት)፦</b>\n${allPaidMonthsSummaryLines.join('\n')}`
+        : '';
 
     if (parsedYear !== undefined) {
-      allContribs = allContribs.filter((c) => c.ethiopianYear === parsedYear);
+      allContribs = allContribs.filter((c) => getContribYear(c) === parsedYear);
     }
     if (parsedMonth !== undefined) {
-      allContribs = allContribs.filter((c) => c.ethiopianMonth === parsedMonth);
+      allContribs = allContribs.filter((c) => getContribMonth(c) === parsedMonth);
     }
 
     const monthlyTotal = allContribs
-      .filter((c) => c.type === 'ወርሃዊ' && (c.status === 'ተከፍሏል' || c.status === 'ከፊል'))
-      .reduce((sum, c) => sum + (Number(c.paidAmount) || 0), 0);
+      .filter((c) => (!c.type || c.type === 'ወርሃዊ') && isContribPaidOrPartial(c.status))
+      .reduce((sum, c) => sum + getContribPaidAmount(c), 0);
 
-    const genTotal = allContribs
-      .filter((c) => c.type === 'ትውልድ' && (c.status === 'ተከፍሏል' || c.status === 'ከፊል'))
-      .reduce((sum, c) => sum + (Number(c.paidAmount) || 0), 0);
+    const genPeriodTotal = allContribs
+      .filter((c) => c.type === 'ትውልድ' && isContribPaidOrPartial(c.status))
+      .reduce((sum, c) => sum + getContribPaidAmount(c), 0);
 
-    const paidCount = allContribs.filter((c) => c.status === 'ተከፍሏል').length;
-    const unpaidCount = allContribs.filter((c) => c.status === 'ያልተከፈለ').length;
+    const paidCount = allContribs.filter((c) => isContribPaid(c.status)).length;
+    const unpaidCount = allContribs.filter((c) => !isContribPaidOrPartial(c.status)).length;
 
-    const leadershipText = `📈 <b>የአበሩስ አንድነት ማህበር - የአመራር አጠቃላይ ሪፖርት</b>
+    const builtLeadershipText = `📈 <b>የአበሩስ አንድነት ማህበር - የአመራር አጠቃላይ ሪፖርት</b>
 ━━━━━━━━━━━━━━━━━━━━
 🎯 <b>የተላከለት የአመራር አካል፡</b> <b>${targetRole}</b>
 📅 <b>የሪፖርት ወቅት፡</b> ${monthName} ${effectiveYear} ዓ.ም
@@ -2903,17 +3030,25 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
 👥 <b>የአባላት አጠቃላይ ሁኔታ፦</b>
 • የተመዘገቡ አባላት ብዛት፡ <b>${allMembers.length}</b>
 
-💰 <b>የገቢ አጠቃላይ ማጠቃለያ፦</b>
-• የወርሃዊ መዋጮ ገቢ (${monthName} ${effectiveYear})፡ <b>${monthlyTotal.toLocaleString()} ብር</b>
-• የትውልድ መዋጮ ጠቅላላ የተከፈለ (Total Paid)፡ <b>${genTotal.toLocaleString()} ብር</b>
-• የትውልድ መዋጮ ቀሪ (Remaining Balance)፡ <b>${totalGenRemainingAll.toLocaleString()} ብር</b>
-• <b>አጠቃላይ የተሰበሰበ ገቢ፡</b> <b>${(monthlyTotal + genTotal).toLocaleString()} ብር</b>
+💰 <b>ወርሃዊ መዋጮ (${monthName} ${effectiveYear})፦</b>
+• የተሰበሰበ ገቢ፡ <b>${monthlyTotal.toLocaleString()} ብር</b>${allPaidMonthsSection}
 
-📋 <b>የክፍያ ምዝገባ ሁኔታ፦</b>
+🏛️ <b>የትውልድ መዋጮ ማጠቃለያ፦</b>
+• ጠቅላላ መሰብሰብ የነበረበት (Total Expected)፡ <b>${genExpectedAll.toLocaleString()} ብር</b>
+• እስካሁን የተሰበሰበ (Total Collected)፡ <b>${genCollectedAll.toLocaleString()} ብር</b>
+• ቀሪ ያልተሰበሰበ (Remaining Balance)፡ <b>${totalGenRemainingAll.toLocaleString()} ብር</b>
+• <b>አጠቃላይ የተሰበሰበ ገቢ (ወቅቱ + ትውልድ)፡</b> <b>${(monthlyTotal + genPeriodTotal).toLocaleString()} ብር</b>
+
+📋 <b>የክፍያ ምዝገባ ሁኔታ (${monthName} ${effectiveYear})፦</b>
 • የተከፈሉ ምዝገባዎች፡ <b>${paidCount}</b>
 • ያልተከፈሉ ምዝገባዎች፡ <b>${unpaidCount}</b>
 
 🌐 <b>አስተዳዳሪ ዳሽቦርድ፡</b> <a href="${APP_URL}">${APP_URL}</a>`;
+
+    const leadershipText =
+      typeof incomingReportText === 'string' && incomingReportText.trim().length > 0
+        ? incomingReportText.trim()
+        : builtLeadershipText;
 
     let leadershipDispatched = false;
     if (targetChatId && isTelegramBotActive) {

@@ -330,6 +330,50 @@ export function deleteMember(id: string): void {
   }
 }
 
+export function isPaidStatus(status: unknown): boolean {
+  const s = String(status || '').trim().toLowerCase();
+  return s === 'ተከፍሏል' || s === 'paid' || s === 'completed' || s === 'approved';
+}
+
+export function isPartialStatus(status: unknown): boolean {
+  const s = String(status || '').trim().toLowerCase();
+  return s === 'ከፊል' || s === 'partial';
+}
+
+export function isPaidOrPartialStatus(status: unknown): boolean {
+  return isPaidStatus(status) || isPartialStatus(status);
+}
+
+export function getContributionMonth(c: Partial<Contribution> | any): number {
+  const raw = c?.ethiopianMonth ?? c?.month ?? c?.monthNumber ?? c?.ethiopian_month;
+  const num = Number(raw);
+  return isNaN(num) ? 0 : num;
+}
+
+export function getContributionYear(c: Partial<Contribution> | any): number {
+  const raw = c?.ethiopianYear ?? c?.year ?? c?.ethiopian_year;
+  const num = Number(raw);
+  return isNaN(num) ? 2018 : num;
+}
+
+export function getContributionPaidAmount(c: Partial<Contribution> | any): number {
+  const raw = c?.paidAmount ?? c?.amount ?? 0;
+  const num = Number(raw);
+  return isNaN(num) ? 0 : num;
+}
+
+export function normalizeContributionRecord(c: Contribution): Contribution {
+  const m = getContributionMonth(c);
+  const y = getContributionYear(c);
+  return {
+    ...c,
+    month: m,
+    year: y,
+    ethiopianMonth: m,
+    ethiopianYear: y,
+  };
+}
+
 export function getContributions(): Contribution[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.CONTRIBUTIONS);
@@ -338,12 +382,14 @@ export function getContributions(): Contribution[] {
       return initialContributions;
     }
     const parsed: Contribution[] = JSON.parse(raw);
-    // Enforce: ከ ሀምሌ 01፣ 2018 በፊት ምንም አይነት ክፍያ የለም
-    const valid = parsed.filter((c) => {
-      if (!c.ethiopianYear || c.ethiopianYear < 2018) return false;
-      if (c.ethiopianYear === 2018 && c.ethiopianMonth < 11) return false;
-      return true;
-    });
+
+    // Normalize period fields without dropping Month 1 (መስከረም), Month 2 (ጥቅምት), or Generation (month 0) records
+    const valid = parsed
+      .map((c) => normalizeContributionRecord(c))
+      .filter((c) => {
+        const y = getContributionYear(c);
+        return y >= 2018;
+      });
 
     // 1. Enforce: avoid double entry for the same member, same year, and same month
     let hasDeduplicated = false;
@@ -351,15 +397,18 @@ export function getContributions(): Contribution[] {
     const nonMonthly: Contribution[] = [];
 
     for (const c of valid) {
-      if (c.type === 'ወርሃዊ') {
-        const key = `${c.memberId}-${c.ethiopianYear}-${c.ethiopianMonth}`;
+      if (!c.type || c.type === 'ወርሃዊ') {
+        const key = `${c.memberId}-${getContributionYear(c)}-${getContributionMonth(c)}`;
         const existing = monthlyMap.get(key);
         if (!existing) {
           monthlyMap.set(key, c);
         } else {
           hasDeduplicated = true;
           // Keep the paid record or the one with higher paid amount
-          if ((c.paidAmount || 0) > (existing.paidAmount || 0) || (c.status === 'ተከፍሏል' && existing.status !== 'ተከፍሏል')) {
+          if (
+            getContributionPaidAmount(c) > getContributionPaidAmount(existing) ||
+            (isPaidStatus(c.status) && !isPaidStatus(existing.status))
+          ) {
             monthlyMap.set(key, c);
           }
         }
@@ -423,14 +472,15 @@ export function saveContributions(contributions: Contribution[]): void {
   }
 
   const cleanContributions = contributions.map((c) => {
-    if (!c.id || seenIds.has(c.id)) {
+    const normalized = normalizeContributionRecord(c);
+    if (!normalized.id || seenIds.has(normalized.id)) {
       maxNumericId++;
       const newId = `CON-${String(maxNumericId).padStart(3, '0')}`;
       seenIds.add(newId);
-      return { ...c, id: newId };
+      return { ...normalized, id: newId };
     }
-    seenIds.add(c.id);
-    return c;
+    seenIds.add(normalized.id);
+    return normalized;
   });
 
   localStorage.setItem(STORAGE_KEYS.CONTRIBUTIONS, JSON.stringify(cleanContributions));
@@ -612,13 +662,14 @@ export function getMemberGenContributionStats(
     };
   }
 
-  const memberGenCons = contributions.filter(
-    (c) => c.memberId === member.id && c.type === 'ትውልድ'
-  );
+  const memberGenCons = contributions.filter((c) => {
+    const t = String(c.type || '').trim().toLowerCase();
+    return c.memberId === member.id && (t === 'ትውልድ' || t === 'generation' || t.includes('ትውልድ'));
+  });
 
   const paidSoFar = memberGenCons
-    .filter((c) => c.status === 'ተከፍሏል' || c.status === 'ከፊል')
-    .reduce((sum, c) => sum + (c.paidAmount || 0), 0);
+    .filter((c) => isPaidOrPartialStatus(c.status))
+    .reduce((sum, c) => sum + getContributionPaidAmount(c), 0);
 
   const remainingBalance = Math.max(expectedAmount - paidSoFar, 0);
 
@@ -636,6 +687,107 @@ export function getMemberGenContributionStats(
     status,
     isExempt: false,
     contributions: memberGenCons,
+  };
+}
+
+export interface GenerationBucketSummary {
+  generation: GenerationNumber;
+  rate: number;
+  eligibleCount: number;
+  paidFullCount: number;
+  partialCount: number;
+  unpaidCount: number;
+  expectedAmount: number;
+  collectedAmount: number;
+  remainingAmount: number;
+  percentage: number;
+}
+
+export interface GenerationPortfolioSummary {
+  totalExpected: number;
+  totalCollected: number;
+  totalRemaining: number;
+  collectionPercentage: number;
+  eligibleCount: number;
+  exemptCount: number;
+  paidFullCount: number;
+  partialCount: number;
+  unpaidCount: number;
+  byGeneration: GenerationBucketSummary[];
+}
+
+export function computeGenerationPortfolioSummary(
+  members: Member[],
+  settings: SettingsRates,
+  contributions: Contribution[]
+): GenerationPortfolioSummary {
+  const bucketMap: Record<GenerationNumber, GenerationBucketSummary> = {
+    3: { generation: 3, rate: settings.generationPayment[3] ?? 5000, eligibleCount: 0, paidFullCount: 0, partialCount: 0, unpaidCount: 0, expectedAmount: 0, collectedAmount: 0, remainingAmount: 0, percentage: 0 },
+    4: { generation: 4, rate: settings.generationPayment[4] ?? 1000, eligibleCount: 0, paidFullCount: 0, partialCount: 0, unpaidCount: 0, expectedAmount: 0, collectedAmount: 0, remainingAmount: 0, percentage: 0 },
+    5: { generation: 5, rate: settings.generationPayment[5] ?? 500, eligibleCount: 0, paidFullCount: 0, partialCount: 0, unpaidCount: 0, expectedAmount: 0, collectedAmount: 0, remainingAmount: 0, percentage: 0 },
+    6: { generation: 6, rate: settings.generationPayment[6] ?? 250, eligibleCount: 0, paidFullCount: 0, partialCount: 0, unpaidCount: 0, expectedAmount: 0, collectedAmount: 0, remainingAmount: 0, percentage: 0 },
+  };
+
+  let totalExpected = 0;
+  let totalCollected = 0;
+  let totalRemaining = 0;
+  let eligibleCount = 0;
+  let exemptCount = 0;
+  let paidFullCount = 0;
+  let partialCount = 0;
+  let unpaidCount = 0;
+
+  for (const m of members) {
+    const stats = getMemberGenContributionStats(m, settings, contributions);
+    if (stats.isExempt) {
+      exemptCount++;
+      continue;
+    }
+
+    eligibleCount++;
+    totalExpected += stats.expectedAmount;
+    totalCollected += stats.paidSoFar;
+    totalRemaining += stats.remainingBalance;
+
+    const gen = ([3, 4, 5, 6].includes(Number(m.generation)) ? Number(m.generation) : 4) as GenerationNumber;
+    const bucket = bucketMap[gen];
+    bucket.eligibleCount++;
+    bucket.expectedAmount += stats.expectedAmount;
+    bucket.collectedAmount += stats.paidSoFar;
+    bucket.remainingAmount += stats.remainingBalance;
+
+    if (stats.status === 'ተከፍሏል (ሙሉ)') {
+      paidFullCount++;
+      bucket.paidFullCount++;
+    } else if (stats.status === 'ከፊል ክፍያ') {
+      partialCount++;
+      bucket.partialCount++;
+    } else {
+      unpaidCount++;
+      bucket.unpaidCount++;
+    }
+  }
+
+  const byGeneration = ([3, 4, 5, 6] as GenerationNumber[]).map((g) => {
+    const b = bucketMap[g];
+    b.percentage = b.expectedAmount > 0 ? Math.min(Math.round((b.collectedAmount / b.expectedAmount) * 100), 100) : 0;
+    return b;
+  });
+
+  const collectionPercentage =
+    totalExpected > 0 ? Math.min(Math.round((totalCollected / totalExpected) * 100), 100) : 0;
+
+  return {
+    totalExpected,
+    totalCollected,
+    totalRemaining,
+    collectionPercentage,
+    eligibleCount,
+    exemptCount,
+    paidFullCount,
+    partialCount,
+    unpaidCount,
+    byGeneration,
   };
 }
 
@@ -754,14 +906,17 @@ export function deduplicateAndCleanAllContributions(): { beforeCount: number; af
   const nonMonthly: Contribution[] = [];
 
   for (const c of contributions) {
-    if (c.type === 'ወርሃዊ') {
-      const key = `${c.memberId}-${c.ethiopianYear}-${c.ethiopianMonth}`;
+    if (!c.type || c.type === 'ወርሃዊ') {
+      const key = `${c.memberId}-${getContributionYear(c)}-${getContributionMonth(c)}`;
       const existing = monthlyMap.get(key);
       if (!existing) {
         monthlyMap.set(key, c);
       } else {
         // Keep the paid record or higher paid amount
-        if ((c.paidAmount || 0) > (existing.paidAmount || 0) || (c.status === 'ተከፍሏል' && existing.status !== 'ተከፍሏል')) {
+        if (
+          getContributionPaidAmount(c) > getContributionPaidAmount(existing) ||
+          (isPaidStatus(c.status) && !isPaidStatus(existing.status))
+        ) {
           monthlyMap.set(key, c);
         }
       }

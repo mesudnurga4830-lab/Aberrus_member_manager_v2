@@ -7,6 +7,14 @@ import React, { useState } from 'react';
 import { X, Printer, Download, CheckCircle, AlertTriangle, Calendar, Layers, Check, Clock } from 'lucide-react';
 import { Contribution, Member, Family, SettingsRates } from '../types';
 import { getCurrentEthiopianDate, getEthiopianMonthName, ETHIOPIAN_MONTHS } from '../utils/ethiopianCalendar';
+import {
+  isPaidStatus,
+  isPartialStatus,
+  isPaidOrPartialStatus,
+  getContributionMonth,
+  getContributionYear,
+  getContributionPaidAmount,
+} from '../utils/storage';
 import { generateFinancialReportPdf } from '../utils/pdfGenerator';
 
 interface PrintReportModalProps {
@@ -45,18 +53,15 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   // 1. SEPARATE MONTHLY CONTRIBUTIONS (ወርሃዊ መዋጮ) FOR SELECTED MONTH (STRICT MONTH/YEAR)
   const monthlyContributions = contributions.filter(
     (c) =>
-      c.type === 'ወርሃዊ' &&
-      Number(c.month ?? c.ethiopianMonth) === currentMonth &&
-      Number(c.year ?? c.ethiopianYear) === currentYear &&
+      (!c.type || c.type === 'ወርሃዊ') &&
+      getContributionMonth(c) === currentMonth &&
+      getContributionYear(c) === currentYear &&
       (familyFilter === 'all' || c.familyId === familyFilter)
   );
 
   const totalMonthlyCollected = monthlyContributions
-    .filter((c) => {
-      const st = String(c.status || '').toLowerCase();
-      return st === 'ተከፍሏል' || st === 'paid' || st === 'ከፊል' || st === 'partial';
-    })
-    .reduce((sum, c) => sum + (c.paidAmount || 0), 0);
+    .filter((c) => isPaidOrPartialStatus(c.status))
+    .reduce((sum, c) => sum + getContributionPaidAmount(c), 0);
 
   const totalMonthlyExpected = displayMembers.reduce((sum, m) => {
     if (m.isMinor) return sum;
@@ -67,15 +72,13 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   const paidMonthlyCount = displayMembers.filter((m) => {
     if (m.isMinor) return false;
     const c = monthlyContributions.find((con) => con.memberId === m.id);
-    const st = String(c?.status || '').toLowerCase();
-    return st === 'ተከፍሏል' || st === 'paid';
+    return isPaidStatus(c?.status);
   }).length;
 
   const partialMonthlyCount = displayMembers.filter((m) => {
     if (m.isMinor) return false;
     const c = monthlyContributions.find((con) => con.memberId === m.id);
-    const st = String(c?.status || '').toLowerCase();
-    return st === 'ከፊል' || st === 'partial';
+    return isPartialStatus(c?.status);
   }).length;
 
   const unpaidMonthlyCount = displayMembers.filter((m) => !m.isMinor).length - (paidMonthlyCount + partialMonthlyCount);
@@ -89,15 +92,15 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   const genPaidThisMonth = allGenContributions
     .filter(
       (c) =>
-        Number(c.ethiopianMonth) === currentMonth &&
-        Number(c.ethiopianYear) === currentYear &&
-        (c.status === 'ተከፍሏል' || c.status === 'ከፊል')
+        getContributionMonth(c) === currentMonth &&
+        getContributionYear(c) === currentYear &&
+        isPaidOrPartialStatus(c.status)
     )
-    .reduce((sum, c) => sum + (c.paidAmount || 0), 0);
+    .reduce((sum, c) => sum + getContributionPaidAmount(c), 0);
 
   const totalGenCollectedAllTime = allGenContributions
-    .filter((c) => c.status === 'ተከፍሏል' || c.status === 'ከፊል')
-    .reduce((sum, c) => sum + (c.paidAmount || 0), 0);
+    .filter((c) => isPaidOrPartialStatus(c.status))
+    .reduce((sum, c) => sum + getContributionPaidAmount(c), 0);
 
   const totalGenExpected = displayMembers.reduce((sum, m) => {
     if (m.isMinor || m.isSpouse) return sum;
@@ -340,10 +343,10 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                         ? settings.spouseMonthlyRate || 100
                         : settings.monthlyRate[m.generation] || 50;
 
-                      const paidAmt = con?.paidAmount || 0;
+                      const paidAmt = getContributionPaidAmount(con);
                       const remaining = Math.max(0, standardRate - paidAmt);
-                      const isPaid = con?.status === 'ተከፍሏል' || (standardRate > 0 && paidAmt >= standardRate);
-                      const isPartial = con?.status === 'ከፊል' || (paidAmt > 0 && paidAmt < standardRate);
+                      const isPaid = isPaidStatus(con?.status) || (standardRate > 0 && paidAmt >= standardRate);
+                      const isPartial = isPartialStatus(con?.status) || (paidAmt > 0 && paidAmt < standardRate);
 
                       return (
                         <tr key={`m-${m.id}`} className="hover:bg-neutral-50">
@@ -411,14 +414,14 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
               {/* Generation KPI Cards */}
               <div className="grid grid-cols-4 gap-3 text-xs">
                 <div className="p-3 rounded-lg border border-neutral-200 bg-neutral-50">
-                  <p className="text-neutral-500 font-medium">ጠቅላላ የሚጠበቅ የትውልድ መዋጮ</p>
+                  <p className="text-neutral-500 font-medium">ጠቅላላ መሰብሰብ የነበረበት</p>
                   <p className="text-base font-bold text-neutral-900 font-mono mt-0.5 tabular-nums">
                     {totalGenExpected.toLocaleString()} ብር
                   </p>
                   <p className="text-[10px] text-neutral-400 mt-0.5">የሁሉም አባላት ድምር ተመን</p>
                 </div>
                 <div className="p-3 rounded-lg border border-emerald-200 bg-emerald-50">
-                  <p className="text-emerald-800 font-medium">እስካሁን የተሰበሰበ ጠቅላላ</p>
+                  <p className="text-emerald-800 font-medium">እስካሁን የተሰበሰበ</p>
                   <p className="text-base font-bold text-[#1B5E20] font-mono mt-0.5 tabular-nums">
                     {totalGenCollectedAllTime.toLocaleString()} ብር
                   </p>
@@ -431,12 +434,12 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                   </p>
                   <p className="text-[10px] text-amber-700 mt-0.5">ለዚህ ወር የተመዘገበ ክፍፍል</p>
                 </div>
-                <div className="p-3 rounded-lg border border-neutral-200 bg-neutral-50">
-                  <p className="text-neutral-500 font-medium">ቀሪ ያልተጠናቀቀ እዳ</p>
-                  <p className="text-base font-bold text-neutral-800 font-mono mt-0.5 tabular-nums">
+                <div className="p-3 rounded-lg border border-rose-200 bg-rose-50">
+                  <p className="text-rose-800 font-medium">ቀሪ ያልተሰበሰበ</p>
+                  <p className="text-base font-bold text-rose-900 font-mono mt-0.5 tabular-nums">
                     {genRemainingBalance.toLocaleString()} ብር
                   </p>
-                  <p className="text-[10px] text-neutral-400 mt-0.5">በየወሩ የሚከፋፈል ቀሪ</p>
+                  <p className="text-[10px] text-rose-700 mt-0.5">ያልተጠናቀቀ የትውልድ ቀሪ</p>
                 </div>
               </div>
 
@@ -464,17 +467,17 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
 
                       const memberGenDocs = allGenContributions.filter((c) => c.memberId === m.id);
                       const totalPaidMem = memberGenDocs
-                        .filter((c) => c.status === 'ተከፍሏል' || c.status === 'ከፊል')
-                        .reduce((sum, c) => sum + (c.paidAmount || 0), 0);
+                        .filter((c) => isPaidOrPartialStatus(c.status))
+                        .reduce((sum, c) => sum + getContributionPaidAmount(c), 0);
 
                       const monthPaidMem = memberGenDocs
                         .filter(
                           (c) =>
-                            Number(c.ethiopianMonth) === currentMonth &&
-                            Number(c.ethiopianYear) === currentYear &&
-                            (c.status === 'ተከፍሏል' || c.status === 'ከፊል')
+                            getContributionMonth(c) === currentMonth &&
+                            getContributionYear(c) === currentYear &&
+                            isPaidOrPartialStatus(c.status)
                         )
-                        .reduce((sum, c) => sum + (c.paidAmount || 0), 0);
+                        .reduce((sum, c) => sum + getContributionPaidAmount(c), 0);
 
                       const remaining = Math.max(0, targetRate - totalPaidMem);
                       const isComplete = targetRate > 0 && totalPaidMem >= targetRate;

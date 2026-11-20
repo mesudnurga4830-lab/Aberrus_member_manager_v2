@@ -21,6 +21,10 @@ import {
   updateFamily,
   syncWithBackendServer,
   refreshAllDataFromServer,
+  isPaidOrPartialStatus,
+  getContributionMonth,
+  getContributionYear,
+  normalizeContributionRecord,
 } from './utils/storage';
 import { Member, Family, Contribution, SettingsRates, ContributionStatus, UserRole, ComplaintRecord } from './types';
 import { Navbar } from './components/Navbar';
@@ -270,6 +274,23 @@ export default function App() {
   };
 
   const handleRefreshData = async () => {
+    if (authFirebaseUser) {
+      try {
+        const [liveMembers, liveFamilies, liveContribs, liveSettings] = await Promise.all([
+          getMembersFromFirestore(),
+          getFamiliesFromFirestore(),
+          getContributionsFromFirestore(),
+          getSettingsFromFirestore(),
+        ]);
+        if (liveMembers.length > 0) setMembers(liveMembers);
+        if (liveFamilies.length > 0) setFamilies(liveFamilies);
+        if (liveContribs.length >= 0) setContributions(liveContribs.map(normalizeContributionRecord));
+        if (liveSettings) setSettings(liveSettings);
+        return;
+      } catch (err) {
+        console.warn('[App] Firestore refresh fallback:', err);
+      }
+    }
     await refreshAllDataFromServer();
     setMembers(getMembers());
     setFamilies(getFamilies());
@@ -408,11 +429,10 @@ export default function App() {
       }
     );
 
-    // 4. Fetch settings & sync backend only after Firebase Auth session is verified
+    // 4. Fetch settings from Firestore (do not overwrite live Firestore state with stale /api/data cache)
     getSettingsFromFirestore().then((live) => {
       if (isActive && live) setSettings(live);
     });
-    syncWithBackendServer();
 
     return () => {
       isActive = false;
@@ -572,13 +592,14 @@ export default function App() {
   };
 
   const handleSavePayment = async (conData: Omit<Contribution, 'id'>) => {
-    const newCon = addContribution(conData);
-    const allContribs = getContributions();
-    setContributions(allContribs);
+    const normalizedInput = normalizeContributionRecord({ ...(conData as Contribution), id: '' });
+    const newCon = addContribution(normalizedInput);
+    const updatedList = [newCon, ...contributions.filter((c) => c.id !== newCon.id)];
+    setContributions(updatedList);
     await saveContributionToFirestore(newCon);
-    if (newCon.status === 'ተከፍሏል' || newCon.status === 'Paid' || newCon.status === 'ከፊል') {
+    if (isPaidOrPartialStatus(newCon.status)) {
       const m = members.find((mem) => mem.id === newCon.memberId);
-      const reportText = formatSinglePaymentTelegramReport(newCon, m, allContribs, settings);
+      const reportText = formatSinglePaymentTelegramReport(newCon, m, updatedList, settings);
       void dispatchApprovedPaymentReportToGroup({
         target: 'payment',
         payment: newCon,
@@ -588,19 +609,19 @@ export default function App() {
   };
 
   const handleSavePaymentsBatch = async (conList: Omit<Contribution, 'id'>[]) => {
-    const newCons = addContributionsBatch(conList);
-    const allContribs = getContributions();
-    setContributions(allContribs);
+    const normalizedInputs = conList.map((c) => normalizeContributionRecord({ ...(c as Contribution), id: '' }));
+    const newCons = addContributionsBatch(normalizedInputs);
+    const newIds = new Set(newCons.map((c) => c.id));
+    const updatedList = [...newCons, ...contributions.filter((c) => !newIds.has(c.id))];
+    setContributions(updatedList);
     for (const c of newCons) {
       await saveContributionToFirestore(c);
     }
-    const approvedCons = newCons.filter(
-      (c) => c.status === 'ተከፍሏል' || c.status === 'Paid' || c.status === 'ከፊል'
-    );
+    const approvedCons = newCons.filter((c) => isPaidOrPartialStatus(c.status));
     if (approvedCons.length === 1) {
       const single = approvedCons[0];
       const m = members.find((mem) => mem.id === single.memberId);
-      const reportText = formatSinglePaymentTelegramReport(single, m, allContribs, settings);
+      const reportText = formatSinglePaymentTelegramReport(single, m, updatedList, settings);
       void dispatchApprovedPaymentReportToGroup({
         target: 'payment',
         payment: single,
@@ -619,12 +640,12 @@ export default function App() {
           },
           type: c.type,
           amount: Number(c.paidAmount ?? c.amount ?? 0),
-          ethiopianMonth: c.ethiopianMonth,
+          ethiopianMonth: getContributionMonth(c),
           ethiopianMonthName: c.ethiopianMonthName,
-          ethiopianYear: c.ethiopianYear,
+          ethiopianYear: getContributionYear(c),
           datePaid: c.datePaid,
         })),
-        allContributions: allContribs,
+        allContributions: updatedList,
         settings,
       });
       void dispatchApprovedPaymentReportToGroup({
@@ -639,9 +660,9 @@ export default function App() {
             isSpouse: m?.isSpouse,
             type: c.type,
             amount: Number(c.paidAmount ?? c.amount ?? 0),
-            ethiopianMonth: c.ethiopianMonth,
+            ethiopianMonth: getContributionMonth(c),
             ethiopianMonthName: c.ethiopianMonthName,
-            ethiopianYear: c.ethiopianYear,
+            ethiopianYear: getContributionYear(c),
             datePaid: c.datePaid,
           };
         }),
@@ -652,20 +673,19 @@ export default function App() {
 
   const handleDeleteContribution = async (id: string) => {
     deleteContribution(id);
-    setContributions(getContributions());
+    setContributions((prev) => prev.filter((c) => c.id !== id));
     try {
       await deleteContributionFromFirestore(id);
     } catch (err) {
       console.warn('[Firestore] Error deleting contribution from Firestore:', err);
     }
-    setContributions(getContributions());
   };
 
   const handleDeleteMember = async (id: string) => {
     deleteMember(id);
     setMembers(getMembers());
     setFamilies(getFamilies());
-    setContributions(getContributions());
+    setContributions((prev) => prev.filter((c) => c.memberId !== id));
     try {
       await deleteMemberFromFirestore(id);
     } catch (err) {
@@ -683,7 +703,7 @@ export default function App() {
       phoneNumber: finalPhone,
     };
     const newMember = addMember(cleanData);
-    setMembers(getMembers());
+    setMembers((prev) => [newMember, ...prev.filter((m) => m.id !== newMember.id)]);
     setFamilies(getFamilies());
     try {
       await saveMemberToFirestore(newMember);
@@ -693,9 +713,11 @@ export default function App() {
   };
 
   const handleUpdateContributionStatus = async (id: string, status: ContributionStatus) => {
-    const updated = updateContribution(id, { status });
-    setContributions(getContributions());
+    const existing = contributions.find((c) => c.id === id);
+    const localUpdated = updateContribution(id, { status });
+    const updated = existing ? { ...existing, status } : localUpdated;
     if (updated) {
+      setContributions((prev) => prev.map((c) => (c.id === id ? updated : c)));
       await saveContributionToFirestore(updated);
     }
   };
@@ -714,31 +736,42 @@ export default function App() {
   ) => {
     const member = members.find((m) => m.id === memberId);
     if (!member) return;
-    const rate = settings.monthlyRate[member.generation] || 50;
+    const rate = member.isMinor
+      ? 0
+      : member.isSpouse
+      ? settings.spouseMonthlyRate || 100
+      : settings.monthlyRate[member.generation] || 50;
 
     const existingCon = contributions.find(
       (c) =>
         c.memberId === memberId &&
-        c.type === 'ወርሃዊ' &&
-        c.ethiopianMonth === month &&
-        c.ethiopianYear === year
+        (!c.type || c.type === 'ወርሃዊ') &&
+        getContributionMonth(c) === month &&
+        getContributionYear(c) === year
     );
 
     if (markPaid) {
       let targetCon: Contribution | undefined;
+      let nextContribs = contributions;
       if (existingCon) {
-        const updated = updateContribution(existingCon.id, {
+        const updatedCon: Contribution = normalizeContributionRecord({
+          ...existingCon,
+          month,
+          year,
+          ethiopianMonth: month,
+          ethiopianMonthName: getEthiopianMonthName(month),
+          ethiopianYear: year,
           status: 'ተከፍሏል',
           paidAmount: rate,
           amount: rate,
           datePaid: `${currentDate.formatted}`,
           notes: 'በአስተዳዳሪው (መስኡድ ኑርጋ) የተመዘገበ ክፍያ',
         });
-        setContributions(getContributions());
-        if (updated) {
-          await saveContributionToFirestore(updated);
-          targetCon = updated;
-        }
+        updateContribution(existingCon.id, updatedCon);
+        nextContribs = contributions.map((c) => (c.id === existingCon.id ? updatedCon : c));
+        setContributions(nextContribs);
+        await saveContributionToFirestore(updatedCon);
+        targetCon = updatedCon;
       } else {
         const newCon = addContribution({
           memberId: member.id,
@@ -747,6 +780,8 @@ export default function App() {
           familyName: member.familyName,
           generation: member.generation,
           type: 'ወርሃዊ',
+          month,
+          year,
           ethiopianMonth: month,
           ethiopianMonthName: getEthiopianMonthName(month),
           ethiopianYear: year,
@@ -757,13 +792,13 @@ export default function App() {
           datePaid: `${currentDate.formatted}`,
           notes: 'በአስተዳዳሪው (መስኡድ ኑርጋ) የተመዘገበ ክፍያ',
         });
-        setContributions(getContributions());
+        nextContribs = [newCon, ...contributions.filter((c) => c.id !== newCon.id)];
+        setContributions(nextContribs);
         await saveContributionToFirestore(newCon);
         targetCon = newCon;
       }
       if (targetCon) {
-        const allContribs = getContributions();
-        const reportText = formatSinglePaymentTelegramReport(targetCon, member, allContribs, settings);
+        const reportText = formatSinglePaymentTelegramReport(targetCon, member, nextContribs, settings);
         void dispatchApprovedPaymentReportToGroup({
           target: 'payment',
           payment: targetCon,
@@ -773,7 +808,7 @@ export default function App() {
     } else {
       if (existingCon) {
         deleteContribution(existingCon.id);
-        setContributions(getContributions());
+        setContributions((prev) => prev.filter((c) => c.id !== existingCon.id));
         await deleteContributionFromFirestore(existingCon.id);
       }
     }
@@ -790,19 +825,21 @@ export default function App() {
 
     if (markPaid) {
       let targetCon: Contribution | undefined;
+      let nextContribs = contributions;
       if (existingCon) {
-        const updated = updateContribution(existingCon.id, {
+        const updatedCon: Contribution = normalizeContributionRecord({
+          ...existingCon,
           status: 'ተከፍሏል',
           paidAmount: genRate,
           amount: genRate,
           datePaid: `${currentDate.formatted}`,
           notes: 'በአስተዳዳሪው (መስኡድ ኑርጋ) የተመዘገበ የትውልድ ክፍያ',
         });
-        setContributions(getContributions());
-        if (updated) {
-          await saveContributionToFirestore(updated);
-          targetCon = updated;
-        }
+        updateContribution(existingCon.id, updatedCon);
+        nextContribs = contributions.map((c) => (c.id === existingCon.id ? updatedCon : c));
+        setContributions(nextContribs);
+        await saveContributionToFirestore(updatedCon);
+        targetCon = updatedCon;
       } else {
         const newCon = addContribution({
           memberId: member.id,
@@ -811,9 +848,11 @@ export default function App() {
           familyName: member.familyName,
           generation: member.generation,
           type: 'ትውልድ',
-          ethiopianMonth: 1, // Hamle
-          ethiopianMonthName: 'ሀምሌ',
-          ethiopianYear: 2018,
+          month: currentDate.month || 11,
+          year: currentDate.year || 2018,
+          ethiopianMonth: currentDate.month || 11,
+          ethiopianMonthName: getEthiopianMonthName(currentDate.month || 11),
+          ethiopianYear: currentDate.year || 2018,
           amount: genRate,
           paidAmount: genRate,
           status: 'ተከፍሏል',
@@ -821,13 +860,13 @@ export default function App() {
           datePaid: `${currentDate.formatted}`,
           notes: 'በአስተዳዳሪው (መስኡድ ኑርጋ) የተመዘገበ የትውልድ መዋጮ',
         });
-        setContributions(getContributions());
+        nextContribs = [newCon, ...contributions.filter((c) => c.id !== newCon.id)];
+        setContributions(nextContribs);
         await saveContributionToFirestore(newCon);
         targetCon = newCon;
       }
       if (targetCon) {
-        const allContribs = getContributions();
-        const reportText = formatSinglePaymentTelegramReport(targetCon, member, allContribs, settings);
+        const reportText = formatSinglePaymentTelegramReport(targetCon, member, nextContribs, settings);
         void dispatchApprovedPaymentReportToGroup({
           target: 'payment',
           payment: targetCon,
@@ -837,7 +876,7 @@ export default function App() {
     } else {
       if (existingCon) {
         deleteContribution(existingCon.id);
-        setContributions(getContributions());
+        setContributions((prev) => prev.filter((c) => c.id !== existingCon.id));
         await deleteContributionFromFirestore(existingCon.id);
       }
     }
@@ -1029,6 +1068,7 @@ export default function App() {
                 const isGen = type === 'ትውልድ';
                 const effectiveStatus: ContributionStatus = status || (isProxyPayment ? 'Pending' : 'ተከፍሏል');
 
+                const targetYear = currentDate.year || 2018;
                 const newCon: Contribution = {
                   id: `CON-${Date.now()}`,
                   memberId: targetMemberId,
@@ -1037,9 +1077,11 @@ export default function App() {
                   familyName: mem?.familyName || 'የአበሩስ ቤተሰብ',
                   generation: mem?.generation || 4,
                   type: isGen ? 'ትውልድ' : 'ወርሃዊ',
+                  month: isGen ? 0 : month,
+                  year: targetYear,
                   ethiopianMonth: isGen ? 0 : month,
                   ethiopianMonthName: isGen ? 'የትውልድ መዋጮ' : getEthiopianMonthName(month),
-                  ethiopianYear: currentDate.year || 2018,
+                  ethiopianYear: targetYear,
                   amount,
                   paidAmount: amount,
                   status: effectiveStatus,
@@ -1060,7 +1102,7 @@ export default function App() {
                 };
 
                 addContribution(newCon);
-                setContributions(getContributions());
+                setContributions((prev) => [newCon, ...prev.filter((c) => c.id !== newCon.id)]);
                 await saveContributionToFirestore(newCon);
               }}
             />

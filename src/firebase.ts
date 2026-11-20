@@ -1988,10 +1988,25 @@ export function subscribeToAllContributions(
 
       const docs = snapshot.docs.map((docSnap) => {
         const raw: any = docSnap.data();
-        const m = Number(raw.month ?? raw.ethiopianMonth ?? 11);
-        const y = Number(raw.year ?? raw.ethiopianYear ?? 2018);
+        const m = Number(raw.ethiopianMonth ?? raw.month ?? raw.monthNumber ?? 11);
+        const y = Number(raw.ethiopianYear ?? raw.year ?? 2018);
+        const stLower = String(raw.status || '').trim().toLowerCase();
+        const isPaidLike =
+          stLower === 'ተከፍሏል' ||
+          stLower === 'paid' ||
+          stLower === 'completed' ||
+          stLower === 'approved' ||
+          stLower === 'ከፊል' ||
+          stLower === 'partial';
+        const resolvedPaidAmount =
+          raw.paidAmount !== undefined && raw.paidAmount !== null
+            ? Number(raw.paidAmount) || 0
+            : isPaidLike
+            ? Number(raw.amount || 0)
+            : 0;
         return {
           id: docSnap.id,
+          ...raw,
           memberId: String(raw.memberId || ''),
           memberName: String(raw.memberName || ''),
           familyId: String(raw.familyId || ''),
@@ -2004,14 +2019,13 @@ export function subscribeToAllContributions(
           ethiopianMonthName: raw.ethiopianMonthName || '',
           ethiopianYear: y,
           amount: Number(raw.amount || 0),
-          paidAmount: Number(raw.paidAmount || 0),
+          paidAmount: resolvedPaidAmount,
           status: raw.status || 'ያልተከፈለ',
           paymentMethod: raw.paymentMethod || 'ቀጥታ',
           receiptNumber: raw.receiptNumber || '',
           transactionRef: raw.transactionRef || '',
           datePaid: raw.datePaid || '',
           notes: raw.notes || '',
-          ...raw,
         } as Contribution;
       });
 

@@ -48,6 +48,14 @@ import {
   dispatchApprovedPaymentReportToGroup,
   getAppUrl,
 } from '../utils/telegramShare';
+import {
+  isPaidStatus,
+  isPartialStatus,
+  isPaidOrPartialStatus,
+  getContributionMonth,
+  getContributionYear,
+  getContributionPaidAmount,
+} from '../utils/storage';
 
 interface ContributionsManagerProps {
   contributions: Contribution[];
@@ -266,11 +274,19 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
 
   // Filtered contributions for Table view
   const filteredContributions = liveContributions.filter((c) => {
-    if (selectedYear !== 'all' && c.ethiopianYear !== Number(selectedYear)) return false;
+    if (selectedYear !== 'all' && getContributionYear(c) !== Number(selectedYear)) return false;
     if (selectedFamily !== 'all' && c.familyId !== selectedFamily) return false;
-    if (selectedMonth !== 'all' && c.ethiopianMonth !== Number(selectedMonth)) return false;
+    if (selectedMonth !== 'all' && getContributionMonth(c) !== Number(selectedMonth)) return false;
     if (selectedType !== 'all' && c.type !== selectedType) return false;
-    if (selectedStatus !== 'all' && c.status !== selectedStatus) return false;
+    if (selectedStatus !== 'all') {
+      if (selectedStatus === 'ተከፍሏል') {
+        if (!isPaidStatus(c.status)) return false;
+      } else if (selectedStatus === 'ከፊል') {
+        if (!isPartialStatus(c.status)) return false;
+      } else if (c.status !== selectedStatus) {
+        return false;
+      }
+    }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       return (
@@ -286,11 +302,8 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
   });
 
   const totalCollectedFiltered = filteredContributions
-    .filter((c) => {
-      const st = String(c.status || '').toLowerCase();
-      return st === 'ተከፍሏል' || st === 'paid' || st === 'ከፊል' || st === 'partial';
-    })
-    .reduce((sum, c) => sum + (c.paidAmount || 0), 0);
+    .filter((c) => isPaidOrPartialStatus(c.status))
+    .reduce((sum, c) => sum + getContributionPaidAmount(c), 0);
 
   // Quick Cell Click Toggle Handler: Toggles status between Paid and Unpaid live in Firestore
   const handleToggleCellStatus = async (
@@ -322,6 +335,8 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
       familyName: member.familyName || '',
       generation: member.generation || 4,
       type: 'ወርሃዊ',
+      month: monthNum,
+      year: yearNum,
       ethiopianMonth: monthNum,
       ethiopianMonthName: getEthiopianMonthName(monthNum),
       ethiopianYear: yearNum,
@@ -364,7 +379,7 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
     if (viewMode === 'grid') {
       const memberIds = new Set(filteredGridMembers.map((m) => m.id));
       const gridItems = liveContributions.filter(
-        (c) => memberIds.has(c.memberId) && c.ethiopianYear === gridYear
+        (c) => memberIds.has(c.memberId) && getContributionYear(c) === gridYear
       );
       if (gridItems.length > 0) {
         listToExport = gridItems;
@@ -413,16 +428,18 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
 
       const rows = listToExport.map((c) => {
         const expected = Number(c.amount) || 0;
-        const paid = Number(c.paidAmount) || 0;
+        const paid = getContributionPaidAmount(c);
         const remaining = Math.max(0, expected - paid);
         totalExpected += expected;
         totalPaid += paid;
         totalRemaining += remaining;
 
         const member = memberMap.get(c.memberId);
+        const cMonth = getContributionMonth(c);
+        const cYear = getContributionYear(c);
         const monthName =
           c.ethiopianMonthName ||
-          (c.ethiopianMonth ? getEthiopianMonthName(c.ethiopianMonth) : '');
+          (cMonth ? getEthiopianMonthName(cMonth) : '');
 
         return [
           escapeVal(c.datePaid || ''),
@@ -433,7 +450,7 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
           escapeVal(`${c.generation || 4}ኛ ትውልድ`),
           escapeVal(c.type || 'ወርሃዊ'),
           escapeVal(monthName),
-          escapeVal(c.ethiopianYear || 2018),
+          escapeVal(cYear || 2018),
           escapeVal(paid),
           escapeVal(expected),
           escapeVal(remaining),
@@ -678,7 +695,7 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-neutral-600">የኢትዮጵያ ዓ.ም፡</span>
               <div className="inline-flex rounded-lg border border-neutral-300 p-0.5 bg-neutral-100">
-                {[2018, 2019].map((yr) => (
+                {[2018, 2019, 2020].map((yr) => (
                   <button
                     key={yr}
                     onClick={() => setGridYear(yr)}
@@ -874,7 +891,7 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
 
                             const cellStatus = matchResult.status;
                             const contribDoc = matchResult.contribution;
-                            const isStartingHamle = gridYear === 2018 && m.number < 11;
+                            const isStartingHamle = gridYear === 2018 && m.number < 11 && cellStatus === 'unpaid';
 
                             if (cellStatus === 'paid') memberPaidCount++;
                             else if (cellStatus === 'partial') memberPartialCount++;
@@ -990,6 +1007,7 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
                 <option value="all">ሁሉም ዓ.ም</option>
                 <option value="2018">2018 ዓ.ም</option>
                 <option value="2019">2019 ዓ.ም</option>
+                <option value="2020">2020 ዓ.ም</option>
               </select>
 
               {/* Family selector */}

@@ -35,14 +35,19 @@ import {
   getFamilyHeadDirectChatUrl,
   getAppUrl,
   copyToClipboardSafe,
+  buildAllPaidMonthsSummaryLines,
 } from '../utils/telegramShare';
 import {
   recordTelegramLinkSent,
   getTelegramDispatchedHeads,
-  getContributions,
-  getMembers,
   saveAllDataNow,
   getMemberGenContributionStats,
+  isPaidStatus,
+  isPartialStatus,
+  isPaidOrPartialStatus,
+  getContributionMonth,
+  getContributionYear,
+  getContributionPaidAmount,
 } from '../utils/storage';
 
 interface FamilyHeadPortalProps {
@@ -81,9 +86,10 @@ export const FamilyHeadPortal: React.FC<FamilyHeadPortalProps> = ({
   onOpenAddMember,
   onDispatchTelegram,
 }) => {
+  const currentDate = getCurrentEthiopianDate();
   const [activeSubTab, setActiveSubTab] = useState<FamilyHeadTab>('monthly-unpaid');
-  const [selectedMonth, setSelectedMonth] = useState<number>(11); // Default Hamle (ሀምሌ)
-  const [selectedYear, setSelectedYear] = useState<number>(2018);
+  const [selectedMonth, setSelectedMonth] = useState<number>(currentDate.month || 11);
+  const [selectedYear, setSelectedYear] = useState<number>(currentDate.year || 2018);
 
   // Edit Head Contact Form state
   const [isEditingContact, setIsEditingContact] = useState(false);
@@ -93,7 +99,6 @@ export const FamilyHeadPortal: React.FC<FamilyHeadPortalProps> = ({
   const [sentNotice, setSentNotice] = useState<string | null>(null);
   const [dispatchedRecords, setDispatchedRecords] = useState<Record<string, string>>(getTelegramDispatchedHeads());
 
-  const currentDate = getCurrentEthiopianDate();
   const currentMonthName = getEthiopianMonthName(selectedMonth);
 
   const currentFamily =
@@ -111,17 +116,17 @@ export const FamilyHeadPortal: React.FC<FamilyHeadPortalProps> = ({
   const familyMonthlyCon = contributions.filter(
     (c) =>
       c.familyId === currentFamily.id &&
-      c.type === 'ወርሃዊ' &&
-      c.ethiopianMonth === selectedMonth &&
-      c.ethiopianYear === selectedYear
+      (!c.type || c.type === 'ወርሃዊ') &&
+      getContributionMonth(c) === selectedMonth &&
+      getContributionYear(c) === selectedYear
   );
 
   const monthlyPaidMemberIds = new Set(
-    familyMonthlyCon.filter((c) => c.status === 'ተከፍሏል').map((c) => c.memberId)
+    familyMonthlyCon.filter((c) => isPaidStatus(c.status)).map((c) => c.memberId)
   );
 
   const monthlyPartialMap = new Map(
-    familyMonthlyCon.filter((c) => c.status === 'ከፊል').map((c) => [c.memberId, c])
+    familyMonthlyCon.filter((c) => isPartialStatus(c.status)).map((c) => [c.memberId, c])
   );
 
   // 1. የራሳቸውን ቤተሰብ የከፈሉ ዝርዝር (Monthly Paid)
@@ -136,11 +141,11 @@ export const FamilyHeadPortal: React.FC<FamilyHeadPortalProps> = ({
   );
 
   const genPaidMemberIds = new Set(
-    familyGenCon.filter((c) => c.status === 'ተከፍሏል').map((c) => c.memberId)
+    familyGenCon.filter((c) => isPaidStatus(c.status)).map((c) => c.memberId)
   );
 
   const genPartialMap = new Map(
-    familyGenCon.filter((c) => c.status === 'ከፊል').map((c) => [c.memberId, c])
+    familyGenCon.filter((c) => isPartialStatus(c.status)).map((c) => [c.memberId, c])
   );
 
   const genPaidMembers = familyMembers.filter((m) => genPaidMemberIds.has(m.id));
@@ -158,8 +163,8 @@ export const FamilyHeadPortal: React.FC<FamilyHeadPortalProps> = ({
   }, 0);
 
   const totalMonthlyPaid = familyMonthlyCon
-    .filter((c) => c.status === 'ተከፍሏል' || c.status === 'ከፊል')
-    .reduce((sum, c) => sum + (c.paidAmount || 0), 0);
+    .filter((c) => isPaidOrPartialStatus(c.status))
+    .reduce((sum, c) => sum + getContributionPaidAmount(c), 0);
 
   const totalMonthlyArrears = Math.max(totalMonthlyExpected - totalMonthlyPaid, 0);
 
@@ -178,26 +183,27 @@ export const FamilyHeadPortal: React.FC<FamilyHeadPortalProps> = ({
     setTimeout(() => setSentNotice(null), 3500);
   };
 
-  // Compose Full End-of-Month Telegram Report for this Family with freshly loaded records
+  // Compose Full End-of-Month Telegram Report for this Family directly from LIVE state props
   const composeTelegramReport = () => {
-    // Re-verify latest state from storage
-    const freshCons = getContributions();
-    const freshMembers = getMembers();
-    const currentFamMembers = freshMembers.filter((m) => m.familyId === currentFamily.id);
+    const freshCons = contributions;
+    const currentFamMembers = members.filter((m) => m.familyId === currentFamily.id);
+    const allFamilyCons = freshCons.filter((c) => c.familyId === currentFamily.id);
 
-    const freshMonthly = freshCons.filter(
+    const freshMonthly = allFamilyCons.filter(
       (c) =>
-        c.familyId === currentFamily.id &&
-        c.type === 'ወርሃዊ' &&
-        c.ethiopianMonth === selectedMonth &&
-        c.ethiopianYear === selectedYear
+        (!c.type || c.type === 'ወርሃዊ') &&
+        getContributionMonth(c) === selectedMonth &&
+        getContributionYear(c) === selectedYear
     );
-    const freshPaidIds = new Set(freshMonthly.filter((c) => c.status === 'ተከፍሏል').map((c) => c.memberId));
+    const freshPaidIds = new Set(
+      freshMonthly.filter((c) => isPaidStatus(c.status)).map((c) => c.memberId)
+    );
 
-    const fPaidMembers = currentFamMembers.filter((m) => freshPaidIds.has(m.id));
+    const fPaidMembers = currentFamMembers.filter((m) =>
+      freshMonthly.some((c) => c.memberId === m.id && isPaidOrPartialStatus(c.status))
+    );
     const fUnpaidMembers = currentFamMembers.filter((m) => !m.isMinor && !freshPaidIds.has(m.id));
 
-    const freshGen = freshCons.filter((c) => c.familyId === currentFamily.id && c.type === 'ትውልድ');
     const genEligibleMembers = currentFamMembers.filter((m) => !m.isMinor && !m.isSpouse);
 
     const paidOrPartialGenMembers: Array<{ member: Member; paidSoFar: number; remainingBalance: number }> = [];
@@ -225,8 +231,14 @@ export const FamilyHeadPortal: React.FC<FamilyHeadPortalProps> = ({
     }
 
     const fTotalPaid = freshMonthly
-      .filter((c) => c.status === 'ተከፍሏል' || c.status === 'ከፊል')
-      .reduce((sum, c) => sum + (c.paidAmount || 0), 0);
+      .filter((c) => isPaidOrPartialStatus(c.status))
+      .reduce((sum, c) => sum + getContributionPaidAmount(c), 0);
+
+    // All-months cumulative breakdown so Months 1 & 2 (መስከረም / ጥቅምት) and all paid periods are included
+    const allPaidMonthsLines = buildAllPaidMonthsSummaryLines(allFamilyCons);
+    const allTimeFamilyMonthlyPaid = allFamilyCons
+      .filter((c) => (!c.type || c.type === 'ወርሃዊ') && isPaidOrPartialStatus(c.status))
+      .reduce((sum, c) => sum + getContributionPaidAmount(c), 0);
 
     // Helper: Group members by generation without parentheses
     const formatGroupedByGeneration = (
@@ -252,10 +264,11 @@ export const FamilyHeadPortal: React.FC<FamilyHeadPortalProps> = ({
 
     const paidMonthlyLines = fPaidMembers
       .map((m) => {
-        const c = freshMonthly.find((con) => con.memberId === m.id);
-        const amt = Number(c?.paidAmount || c?.amount || 0);
+        const c = freshMonthly.find((con) => con.memberId === m.id && isPaidOrPartialStatus(con.status));
+        const amt = getContributionPaidAmount(c);
         const datePaid = c?.datePaid || '—';
-        return `• ${m.fullName} — ${amt.toLocaleString()} ብር · ${currentMonthName} ${selectedYear} · ቀን፡ ${datePaid}`;
+        const partialNote = c && !isPaidStatus(c.status) ? ' [ከፊል]' : '';
+        return `• ${m.fullName} — ${amt.toLocaleString()} ብር · ${currentMonthName} ${selectedYear} · ቀን፡ ${datePaid}${partialNote}`;
       })
       .join('\n');
 
@@ -283,6 +296,11 @@ export const FamilyHeadPortal: React.FC<FamilyHeadPortalProps> = ({
       }))
     );
 
+    const allMonthsBlock =
+      allPaidMonthsLines.length > 0
+        ? `\n📆 <b>ሁሉም የተከፈሉ ወራት ማጠቃለያ (ጠቅላላ፡ ${allTimeFamilyMonthlyPaid.toLocaleString()} ብር)፦</b>\n${allPaidMonthsLines.join('\n')}\n`
+        : '';
+
     return `🏛️ <b>የአበሩስ አንድነት ማህበር</b>
 የመዋጮ ሪፖርት
 
@@ -295,17 +313,17 @@ export const FamilyHeadPortal: React.FC<FamilyHeadPortalProps> = ({
 
 ━━━━━━━━━━━━━━━
 💰 <b>ወርሃዊ መዋጮ (${currentMonthName} ${selectedYear} ዓ.ም)</b>
-• የተከፈለ ጠቅላላ መጠን፦ ${fTotalPaid.toLocaleString()} ብር
-✅ <b>የከፈሉ (${fPaidMembers.length})፦</b>
+• በ${currentMonthName} የተከፈለ ጠቅላላ መጠን፦ ${fTotalPaid.toLocaleString()} ብር
+✅ <b>የከፈሉ (${freshPaidIds.size})፦</b>
 ${paidMonthlyLines || '• እስካሁን የከፈለ የለም'}
-
+${allMonthsBlock}
 ${monthlyUnpaidSection}
 
 ━━━━━━━━━━━━━━━
 🏛️ <b>የትውልድ መዋጮ</b>
-• ጠቅላላ የሚጠበቅ (Total Expected)፦ ${totalGenExpected.toLocaleString()} ብር
-• ጠቅላላ የተከፈለ (Total Paid)፦ ${totalGenPaid.toLocaleString()} ብር
-• ቀሪ መዋጮ (Remaining Balance)፦ ${totalGenRemaining.toLocaleString()} ብር
+• ጠቅላላ መሰብሰብ የነበረበት (Total Expected)፦ ${totalGenExpected.toLocaleString()} ብር
+• እስካሁን የተሰበሰበ (Total Collected)፦ ${totalGenPaid.toLocaleString()} ብር
+• ቀሪ ያልተሰበሰበ (Remaining Balance)፦ ${totalGenRemaining.toLocaleString()} ብር
 
 ✅ <b>የከፈሉ / በከፊል የከፈሉ (${paidOrPartialGenMembers.length})</b>
 ${paidGenLines || '• እስካሁን የለም'}
@@ -322,7 +340,7 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
   };
 
   const handleSendTelegramReport = async () => {
-    // 1. Immediately persist current data before sending report
+    // 1. Persist live data snapshot before sending report
     saveAllDataNow({ members, families, contributions, settings });
 
     const reportText = composeTelegramReport();
@@ -332,7 +350,7 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
     const familyPortalUrl = `${getAppUrl()}/?role=family_head&familyId=${encodeURIComponent(currentFamily.id)}`;
     const url = `https://t.me/share/url?url=${encodeURIComponent(familyPortalUrl)}&text=${encodeURIComponent(reportText)}`;
 
-    // Call backend endpoint gracefully (safe, never fails UI)
+    // Call backend endpoint gracefully with live reportText
     try {
       await fetch('/api/reports/send', {
         method: 'POST',
@@ -342,6 +360,7 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
           familyId: currentFamily.id,
           month: selectedMonth,
           year: selectedYear,
+          reportText,
         }),
       });
     } catch (e) {
@@ -370,7 +389,7 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
       });
     } catch {}
 
-    setSentNotice(`የ${currentMonthName} ወር የክፍያ ሪፖርት ወደ ${currentFamily.headName} (${tgTarget || 'ቴሌግራም/ስልክ'}) ተዘጋጅቷል!`);
+    setSentNotice(`የ${currentMonthName} ${selectedYear} ወር የክፍያ ሪፖርት ወደ ${currentFamily.headName} (${tgTarget || 'ቴሌግራም/ስልክ'}) ተዘጋጅቷል!`);
     setTimeout(() => setSentNotice(null), 5000);
   };
 
@@ -385,15 +404,15 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
   const handleDownloadPdf = () => {
     saveAllDataNow({ members, families, contributions, settings });
     generateFinancialReportPdf({
-      contributions: getContributions(),
-      members: getMembers(),
+      contributions,
+      members,
       families,
       settings,
       selectedMonth,
       selectedYear,
       familyFilterId: currentFamily.id,
     });
-    setSentNotice(`የ${currentFamily.familyName} ቤተሰብ የ${currentMonthName} ወር ሪፖርት በPDF ተዘጋጅቶ ተቀምጧል!`);
+    setSentNotice(`የ${currentFamily.familyName} ቤተሰብ የ${currentMonthName} ${selectedYear} ወር ሪፖርት በPDF ተዘጋጅቶ ተቀምጧል!`);
     setTimeout(() => setSentNotice(null), 4000);
   };
 
@@ -551,8 +570,8 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
             </div>
           )}
 
-          {/* Month selector starting from Hamle 2018 */}
-          <div className="flex items-center gap-1 bg-neutral-50 p-1.5 rounded-xl border border-neutral-200">
+          {/* Month & Year selectors starting from Hamle 2018 */}
+          <div className="flex items-center gap-1.5 bg-neutral-50 p-1.5 rounded-xl border border-neutral-200">
             <Calendar className="w-3.5 h-3.5 text-neutral-500 ml-1" />
             <select
               value={selectedMonth}
@@ -561,9 +580,18 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
             >
               {ETHIOPIAN_MONTHS.map((m) => (
                 <option key={m.number} value={m.number}>
-                  {m.number} = {m.amharic} {m.number === 11 ? '(መጀመሪያ ወር)' : ''}
+                  {m.number} = {m.amharic} {m.number === 11 && selectedYear === 2018 ? '(መጀመሪያ ወር)' : ''}
                 </option>
               ))}
+            </select>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number(e.target.value))}
+              className="text-xs font-bold bg-white border border-neutral-300 rounded-lg px-2.5 py-1 text-neutral-800 font-mono"
+            >
+              <option value={2018}>2018 ዓ.ም</option>
+              <option value={2019}>2019 ዓ.ም</option>
+              <option value={2020}>2020 ዓ.ም</option>
             </select>
           </div>
 
@@ -949,19 +977,19 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
                     </thead>
                     <tbody className="divide-y divide-neutral-100">
                       {monthlyPaidMembers.map((member) => {
-                        const con = familyMonthlyCon.find((c) => c.memberId === member.id && c.status === 'ተከፍሏል');
-                        const rate = settings.monthlyRate[member.generation] || 50;
+                        const con = familyMonthlyCon.find((c) => c.memberId === member.id && isPaidStatus(c.status));
+                        const rate = member.isSpouse ? (settings.spouseMonthlyRate || 100) : (settings.monthlyRate[member.generation] || 50);
                         return (
                           <tr key={member.id} className="hover:bg-neutral-50/70">
                             <td className="py-2.5 px-3 font-mono font-bold text-neutral-600">{member.id}</td>
                             <td className="py-2.5 px-3 font-bold text-neutral-900">{member.fullName}</td>
                             <td className="py-2.5 px-3">
                               <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 font-medium text-[11px]">
-                                {member.generation}ኛ ትውልድ
+                                {member.isSpouse ? 'የትዳር አጋር' : `${member.generation}ኛ ትውልድ`}
                               </span>
                             </td>
                             <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-900 tabular-nums">
-                              {con?.paidAmount || rate} ብር
+                              {(con ? getContributionPaidAmount(con) : rate).toLocaleString()} ብር
                             </td>
                             <td className="py-2.5 px-3 text-neutral-600">{con?.paymentMethod || 'የኢትዮጵያ ንግድ ባንክ (CBE)'}</td>
                             <td className="py-2.5 px-3 font-mono text-[11px] text-neutral-500">
@@ -1091,7 +1119,7 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
                     <tbody className="divide-y divide-neutral-100">
                       {genPaidMembers.map((member) => {
                         const genPayment = settings.generationPayment[member.generation] || 500;
-                        const con = familyGenCon.find((c) => c.memberId === member.id && c.status === 'ተከፍሏል');
+                        const con = familyGenCon.find((c) => c.memberId === member.id && isPaidStatus(c.status));
                         return (
                           <tr key={member.id} className="hover:bg-neutral-50/70">
                             <td className="py-2.5 px-3 font-mono font-bold text-neutral-600">{member.id}</td>
@@ -1105,7 +1133,7 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
                               {genPayment} ብር
                             </td>
                             <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-900 tabular-nums">
-                              {con?.paidAmount || genPayment} ብር
+                              {(con ? getContributionPaidAmount(con) : genPayment).toLocaleString()} ብር
                             </td>
                             <td className="py-2.5 px-3 text-neutral-600">{con?.paymentMethod || 'CBE'}</td>
                             <td className="py-2.5 px-3 text-right">
