@@ -151,6 +151,7 @@ export default function App() {
   const [paymentManagerMode, setPaymentManagerMode] = useState<'list' | 'add'>('list');
   const [isBatchPaymentOpen, setIsBatchPaymentOpen] = useState(false);
   const [batchPaymentPayerId, setBatchPaymentPayerId] = useState<string | undefined>(undefined);
+  const [paymentListInitialType, setPaymentListInitialType] = useState<'ወርሃዊ' | 'ትውልድ'>('ወርሃዊ');
 
   const handleOpenPaymentManager = (memberId?: string, mode: 'list' | 'add' = 'list') => {
     setPaymentManagerMemberId(memberId);
@@ -1177,6 +1178,10 @@ export default function App() {
                   }
                   setCurrentTab(tab);
                 }}
+                onNavigatePaymentLists={(type) => {
+                  setPaymentListInitialType(type);
+                  setCurrentTab('unpaid');
+                }}
                 onOpenQR={(m) => setActiveQRMember(m)}
                 onOpenChangePin={() => setIsChangePinOpen(true)}
                 onNavigateToMember={(memId) => {
@@ -1279,6 +1284,7 @@ export default function App() {
                 families={families}
                 contributions={contributions}
                 settings={settings}
+                initialContributionType={paymentListInitialType}
                 onRecordPayment={(id) => handleOpenRecordPaymentForMember(id)}
                 onOpenPaymentManager={handleOpenPaymentManager}
               />

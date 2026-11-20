@@ -9,7 +9,7 @@ import {
   Users,
   GitFork,
   CreditCard,
-  AlertTriangle,
+  ListChecks,
   Bot,
   User,
   ShieldCheck,
@@ -163,7 +163,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       case 'contributions':
         return isEn ? 'Contributions Manager' : 'የመዋጮዎች አስተዳደር';
       case 'unpaid':
-        return isEn ? 'Outstanding Dues' : 'ያልተከፈሉ መዋጮዎች';
+        return isEn ? 'Paid, Partial & Unpaid Lists' : 'የከፈሉ፣ በከፊል እና ያልከፈሉ ስም ዝርዝር';
       case 'corrections':
         return isEn ? 'Data Corrections' : 'የመረጃ ማስተካከያ';
       case 'automations':
@@ -179,7 +179,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'heads', label: isEn ? 'Families' : 'ቤተሰቦች', icon: ShieldCheck },
     { id: 'members', label: isEn ? 'Members' : 'አባላት', icon: Users },
     { id: 'contributions', label: isEn ? 'Payments' : 'ክፍያዎች', icon: CreditCard },
-    { id: 'unpaid', label: isEn ? 'Unpaid' : 'ያልተከፈሉ', icon: AlertTriangle },
+    { id: 'unpaid', label: isEn ? 'Status Lists' : 'የከፈሉ/ያልከፈሉ', icon: ListChecks },
   ];
 
   return (

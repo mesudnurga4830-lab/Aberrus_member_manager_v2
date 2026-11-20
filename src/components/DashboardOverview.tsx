@@ -38,6 +38,7 @@ import {
   Wrench,
   FileSpreadsheet,
   Layers,
+  ListChecks,
 } from 'lucide-react';
 
 interface DashboardOverviewProps {
@@ -52,6 +53,7 @@ interface DashboardOverviewProps {
   onOpenBulkImport?: () => void;
   onOpenPrintReport: () => void;
   onNavigateTab: (tab: string) => void;
+  onNavigatePaymentLists?: (type: 'ወርሃዊ' | 'ትውልድ') => void;
   onOpenQR: (member: Member) => void;
   onOpenChangePin?: () => void;
   onNavigateToMember?: (memberId: string) => void;
@@ -70,6 +72,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   onOpenBulkImport,
   onOpenPrintReport,
   onNavigateTab,
+  onNavigatePaymentLists,
   onOpenQR,
   onOpenChangePin,
   onNavigateToMember,
@@ -436,6 +439,15 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               </button>
             )}
             <button
+              onClick={() =>
+                onNavigatePaymentLists ? onNavigatePaymentLists('ወርሃዊ') : onNavigateTab('unpaid')
+              }
+              className="px-3.5 py-2.5 rounded-lg bg-white/15 hover:bg-white/25 text-white font-semibold text-xs border border-white/20 transition-all cursor-pointer flex items-center gap-1.5"
+            >
+              <ListChecks className="w-4 h-4 text-[#FFD700]" />
+              <span>የከፈሉ/ያልከፈሉ ስም ዝርዝር</span>
+            </button>
+            <button
               onClick={onOpenPrintReport}
               className="px-3.5 py-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium text-xs border border-white/10 transition-all flex items-center gap-1.5"
             >
@@ -538,10 +550,12 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             </p>
           </div>
           <button
-            onClick={() => onNavigateTab('unpaid')}
+            onClick={() =>
+              onNavigatePaymentLists ? onNavigatePaymentLists('ወርሃዊ') : onNavigateTab('unpaid')
+            }
             className="mt-3 text-[11px] font-bold text-[#F44336] hover:underline flex items-center justify-between cursor-pointer"
           >
-            <span>ያልተከፈሉትን ይመልከቱ</span>
+            <span>የከፈሉና ያልከፈሉ ስም ዝርዝር</span>
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -624,7 +638,16 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-start sm:self-center">
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
+            <button
+              onClick={() =>
+                onNavigatePaymentLists ? onNavigatePaymentLists('ወርሃዊ') : onNavigateTab('unpaid')
+              }
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 font-bold text-xs transition-colors cursor-pointer"
+            >
+              <ListChecks className="w-3.5 h-3.5 text-emerald-800" />
+              <span>የከፈሉ/ያልከፈሉ ስም ዝርዝር</span>
+            </button>
             <button
               onClick={() => onNavigateTab('contributions')}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-semibold text-xs transition-colors cursor-pointer"
@@ -800,7 +823,16 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-start sm:self-center">
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
+            <button
+              onClick={() =>
+                onNavigatePaymentLists ? onNavigatePaymentLists('ትውልድ') : onNavigateTab('unpaid')
+              }
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300 font-bold text-xs transition-colors cursor-pointer"
+            >
+              <ListChecks className="w-3.5 h-3.5 text-amber-800" />
+              <span>የከፈሉ/ያልከፈሉ ስም ዝርዝር</span>
+            </button>
             <button
               onClick={onOpenPrintReport}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-950 font-bold text-xs transition-colors cursor-pointer"
