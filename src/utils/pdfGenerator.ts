@@ -25,7 +25,94 @@ interface GenerateReportPdfOptions {
   familyFilterId?: string;
 }
 
-export function generateFinancialReportPdf({
+interface LoadedEthiopicFonts {
+  regularBase64: string;
+  boldBase64: string;
+}
+
+let cachedFontsPromise: Promise<LoadedEthiopicFonts | null> | null = null;
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  const chunks: string[] = [];
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    chunks.push(String.fromCharCode(...bytes.subarray(i, i + chunkSize)));
+  }
+  return btoa(chunks.join(''));
+}
+
+function isValidTtfBuffer(buffer: ArrayBuffer): boolean {
+  if (buffer.byteLength < 1024) return false;
+  const view = new Uint8Array(buffer.slice(0, 4));
+  // TrueType sfnt version: 0x00010000 or 'OTTO' (OpenType) or 'true'
+  const isSfnt = view[0] === 0x00 && view[1] === 0x01 && view[2] === 0x00 && view[3] === 0x00;
+  const isOtto = view[0] === 0x4f && view[1] === 0x54 && view[2] === 0x54 && view[3] === 0x4f;
+  return isSfnt || isOtto;
+}
+
+async function fetchFontBase64(urls: string[]): Promise<string | null> {
+  for (const url of urls) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const buf = await res.arrayBuffer();
+      if (!isValidTtfBuffer(buf)) continue;
+      return arrayBufferToBase64(buf);
+    } catch {
+      // Try next URL
+    }
+  }
+  return null;
+}
+
+async function loadEthiopicFonts(): Promise<LoadedEthiopicFonts | null> {
+  if (cachedFontsPromise) {
+    return cachedFontsPromise;
+  }
+
+  cachedFontsPromise = (async () => {
+    const [regularBase64, boldBase64] = await Promise.all([
+      fetchFontBase64([
+        '/fonts/NotoSansEthiopic-Regular.ttf',
+        'https://cdn.jsdelivr.net/gh/notofonts/notofonts.github.io@main/fonts/NotoSansEthiopic/full/ttf/NotoSansEthiopic-Regular.ttf',
+      ]),
+      fetchFontBase64([
+        '/fonts/NotoSansEthiopic-Bold.ttf',
+        'https://cdn.jsdelivr.net/gh/notofonts/notofonts.github.io@main/fonts/NotoSansEthiopic/full/ttf/NotoSansEthiopic-Bold.ttf',
+      ]),
+    ]);
+
+    if (!regularBase64) {
+      return null;
+    }
+
+    return {
+      regularBase64,
+      boldBase64: boldBase64 || regularBase64,
+    };
+  })();
+
+  const result = await cachedFontsPromise;
+  if (!result) {
+    cachedFontsPromise = null;
+  }
+  return result;
+}
+
+function fitTextToWidth(doc: jsPDF, text: string, maxWidthMm: number): string {
+  const safeText = String(text || '');
+  if (!safeText || doc.getTextWidth(safeText) <= maxWidthMm) {
+    return safeText;
+  }
+  let end = safeText.length;
+  while (end > 1 && doc.getTextWidth(safeText.slice(0, end) + '...') > maxWidthMm) {
+    end--;
+  }
+  return safeText.slice(0, end) + '...';
+}
+
+export async function generateFinancialReportPdf({
   contributions,
   members,
   families,
@@ -33,12 +120,26 @@ export function generateFinancialReportPdf({
   selectedMonth,
   selectedYear,
   familyFilterId,
-}: GenerateReportPdfOptions): void {
+}: GenerateReportPdfOptions): Promise<void> {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
     format: 'a4',
   });
+
+  // Register NotoSansEthiopic (full Amharic + Latin/digits vector TTF)
+  const ethiopicFonts = await loadEthiopicFonts();
+  const hasEthiopicFont = Boolean(ethiopicFonts);
+  if (ethiopicFonts) {
+    doc.addFileToVFS('NotoSansEthiopic-Regular.ttf', ethiopicFonts.regularBase64);
+    doc.addFont('NotoSansEthiopic-Regular.ttf', 'NotoSansEthiopic', 'normal', 'Identity-H');
+    doc.addFileToVFS('NotoSansEthiopic-Bold.ttf', ethiopicFonts.boldBase64);
+    doc.addFont('NotoSansEthiopic-Bold.ttf', 'NotoSansEthiopic', 'bold', 'Identity-H');
+  }
+
+  const setFontStyle = (style: 'normal' | 'bold' = 'normal') => {
+    doc.setFont(hasEthiopicFont ? 'NotoSansEthiopic' : 'helvetica', style);
+  };
 
   const currentDate = getCurrentEthiopianDate();
   const monthName = getEthiopianMonthName(selectedMonth);
@@ -65,19 +166,12 @@ export function generateFinancialReportPdf({
     .filter((c) => isPaidOrPartialStatus(c.status))
     .reduce((sum, c) => sum + getContributionPaidAmount(c), 0);
 
-  const totalMonthlyExpected = filteredMembers.reduce((sum, m) => {
-    if (m.isMinor) return sum;
-    if (m.isSpouse) return sum + (settings.spouseMonthlyRate || 100);
-    return sum + (settings.monthlyRate[m.generation] || 0);
-  }, 0);
-
-  const totalArrears = Math.max(totalMonthlyExpected - totalMonthlyCollected, 0);
-
-  const paidMonthlyCount = filteredMembers.filter((m) => {
-    if (m.isMinor) return false;
+  const nonMinorMembers = filteredMembers.filter((m) => !m.isMinor);
+  const paidMonthlyCount = nonMinorMembers.filter((m) => {
     const con = monthContributions.find((c) => c.memberId === m.id);
     return isPaidStatus(con?.status);
   }).length;
+  const unpaidMonthlyCount = Math.max(nonMinorMembers.length - paidMonthlyCount, 0);
 
   // 2. FILTER GENERATION CONTRIBUTIONS (የትውልድ መዋጮ)
   const allGenContributions = contributions.filter(
@@ -113,21 +207,21 @@ export function generateFinancialReportPdf({
   doc.rect(0, 0, 210, 36, 'F');
 
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.text('ABARRUS UNITY ASSOCIATION (ASIYA MESUD APP)', 105, 13, { align: 'center' });
+  doc.setFontSize(14);
+  setFontStyle('bold');
+  doc.text('የአበሩስ አንድነት ማህበር (ABARRUS UNITY ASSOCIATION)', 105, 13, { align: 'center' });
 
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  setFontStyle('normal');
   doc.setTextColor(255, 215, 0); // Gold
-  doc.text('YE ABARRUS ANDINET MAHBER - MONTHLY & GENERATION FINANCIAL REPORT', 105, 21, { align: 'center' });
+  doc.text('የወርሃዊ እና የትውልድ መዋጮ ፋይናንስ ሪፖርት (FINANCIAL REPORT)', 105, 21, { align: 'center' });
 
   doc.setFontSize(8.5);
   doc.setTextColor(230, 245, 230);
   const subtitle = targetFamily
-    ? `Family Statement: ${targetFamily.familyName} (${targetFamily.id}) | Representative: ${targetFamily.headName}`
-    : `Official Financial Report | Period: ${monthName} (${selectedMonth}) / ${selectedYear} E.C.`;
-  doc.text(subtitle, 105, 28, { align: 'center' });
+    ? `ቤተሰብ (Family): ${targetFamily.familyName} (${targetFamily.id}) | ወኪል: ${targetFamily.headName}`
+    : `ወቅት (Period): ${monthName} (${selectedMonth}ኛ ወር) / ${selectedYear} ዓ.ም`;
+  doc.text(fitTextToWidth(doc, subtitle, 185), 105, 28, { align: 'center' });
 
   // Metadata Strip
   doc.setFillColor(245, 245, 245);
@@ -136,27 +230,29 @@ export function generateFinancialReportPdf({
   doc.rect(14, 40, 182, 16, 'S');
 
   doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
+  setFontStyle('bold');
   doc.setTextColor(33, 33, 33);
-  doc.text(`Report Period: ${monthName} ${selectedYear} E.C.`, 18, 46);
-  doc.text(`Payment Start Date: Hamle 01, 2018 E.C.`, 18, 51);
-  doc.text(`Generated On: ${currentDate.formatted}`, 105, 46);
-  doc.text(`CBE Account: 1000778285146 (Aida, Ibrahim & zebiba)`, 105, 51);
+  doc.text(`የሪፖርት ወቅት: ${monthName} ${selectedYear} ዓ.ም`, 18, 46);
+  doc.text('መዋጮ የተጀመረበት: ሀምሌ 01፣ 2018 ዓ.ም', 18, 51);
+  doc.text(fitTextToWidth(doc, `የተዘጋጀበት ቀን: ${currentDate.formatted}`, 88), 105, 46);
+  const cbeAcc = settings.associationInfo?.cbeAccount || '1000778285146';
+  const cbeName = settings.associationInfo?.cbeAccountName || 'Aida, Ibrahim & Zebiba';
+  doc.text(fitTextToWidth(doc, `CBE ሂሳብ: ${cbeAcc} (${cbeName})`, 88), 105, 51);
 
-  // SECTION 1: MONTHLY CONTRIBUTIONS
+  // SECTION 1: MONTHLY CONTRIBUTIONS (Strictly NO monthly arrears/remaining balance)
   let y = 62;
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10.5);
+  setFontStyle('bold');
   doc.setTextColor(27, 94, 32);
-  doc.text(`1. MONTHLY CONTRIBUTIONS REPORT (${monthName.toUpperCase()} ${selectedYear} E.C.)`, 14, y);
+  doc.text(`1. የወርሃዊ መዋጮ ሪፖርት (${monthName} ${selectedYear} ዓ.ም)`, 14, y);
 
   y += 4;
   const colW = 43;
   const monthlyBoxes = [
-    { label: 'Expected Monthly', val: `${totalMonthlyExpected.toLocaleString()} ETB`, bg: [232, 245, 233], fg: [27, 94, 32] },
-    { label: 'Collected Monthly', val: `${totalMonthlyCollected.toLocaleString()} ETB`, bg: [232, 245, 233], fg: [27, 94, 32] },
-    { label: 'Monthly Arrears', val: `${totalArrears.toLocaleString()} ETB`, bg: [255, 235, 238], fg: [198, 40, 40] },
-    { label: 'Paid Members', val: `${paidMonthlyCount} / ${filteredMembers.length}`, bg: [255, 248, 225], fg: [160, 120, 0] },
+    { label: 'የተሰበሰበ ወርሃዊ (Collected)', val: `${totalMonthlyCollected.toLocaleString()} ብር`, bg: [232, 245, 233], fg: [27, 94, 32] },
+    { label: 'የከፈሉ አባላት (Paid)', val: `${paidMonthlyCount} / ${nonMinorMembers.length}`, bg: [232, 245, 233], fg: [27, 94, 32] },
+    { label: 'ያልከፈሉ (Not Yet Paid)', val: `${unpaidMonthlyCount} አባላት`, bg: [255, 248, 225], fg: [180, 83, 9] },
+    { label: 'ጠቅላላ አባላት (Members)', val: `${filteredMembers.length} አባላት`, bg: [243, 244, 246], fg: [55, 65, 81] },
   ];
 
   monthlyBoxes.forEach((b, idx) => {
@@ -166,53 +262,46 @@ export function generateFinancialReportPdf({
     doc.setDrawColor(220, 220, 220);
     doc.rect(x, y, colW, 14, 'S');
 
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(117, 117, 117);
-    doc.text(b.label, x + 3, y + 4.5);
+    doc.setFontSize(6.8);
+    setFontStyle('normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text(fitTextToWidth(doc, b.label, colW - 5), x + 3, y + 4.8);
 
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.8);
+    setFontStyle('bold');
     doc.setTextColor(b.fg[0], b.fg[1], b.fg[2]);
-    doc.text(b.val, x + 3, y + 10.5);
+    doc.text(fitTextToWidth(doc, b.val, colW - 5), x + 3, y + 10.8);
   });
 
   // Table of Monthly Contributions
   y += 18;
-  doc.setFillColor(27, 94, 32);
-  doc.rect(14, y, 182, 6.5, 'F');
+  const drawMonthlyTableHeader = (yPos: number) => {
+    doc.setFillColor(27, 94, 32);
+    doc.rect(14, yPos, 182, 6.5, 'F');
 
-  doc.setFontSize(7.5);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(255, 255, 255);
-  doc.text('ID', 17, y + 4.5);
-  doc.text('Full Name', 38, y + 4.5);
-  doc.text('Gen', 90, y + 4.5);
-  doc.text('Family ID', 108, y + 4.5);
-  doc.text('Monthly Rate', 128, y + 4.5);
-  doc.text('Paid (ETB)', 152, y + 4.5);
-  doc.text('Monthly Status', 173, y + 4.5);
+    doc.setFontSize(7.2);
+    setFontStyle('bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text('መለያ (ID)', 16, yPos + 4.5);
+    doc.text('ሙሉ ስም (Full Name)', 38, yPos + 4.5);
+    doc.text('ትውልድ', 92, yPos + 4.5);
+    doc.text('ቤተሰብ', 110, yPos + 4.5);
+    doc.text('ተመን (Rate)', 128, yPos + 4.5);
+    doc.text('የተከፈለ (Paid)', 150, yPos + 4.5);
+    doc.text('ሁኔታ (Status)', 173, yPos + 4.5);
+  };
+
+  drawMonthlyTableHeader(y);
 
   y += 6.5;
-  const pageLimit = 270;
+  const pageLimit = 272;
   let rowCount = 0;
 
   for (const m of filteredMembers) {
     if (y > pageLimit) {
       doc.addPage();
       y = 15;
-      doc.setFillColor(27, 94, 32);
-      doc.rect(14, y, 182, 6.5, 'F');
-      doc.setFontSize(7.5);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(255, 255, 255);
-      doc.text('ID', 17, y + 4.5);
-      doc.text('Full Name', 38, y + 4.5);
-      doc.text('Gen', 90, y + 4.5);
-      doc.text('Family ID', 108, y + 4.5);
-      doc.text('Monthly Rate', 128, y + 4.5);
-      doc.text('Paid (ETB)', 152, y + 4.5);
-      doc.text('Monthly Status', 173, y + 4.5);
+      drawMonthlyTableHeader(y);
       y += 6.5;
     }
 
@@ -228,36 +317,36 @@ export function generateFinancialReportPdf({
     const isPartial = isPartialStatus(con?.status) || (paidAmt > 0 && paidAmt < standardRate);
 
     doc.setFillColor(rowCount % 2 === 0 ? 255 : 248, rowCount % 2 === 0 ? 255 : 249, rowCount % 2 === 0 ? 255 : 250);
-    doc.rect(14, y, 182, 5.5, 'F');
+    doc.rect(14, y, 182, 5.8, 'F');
 
     doc.setFontSize(7);
-    doc.setFont('helvetica', 'normal');
+    setFontStyle('normal');
     doc.setTextColor(33, 33, 33);
-    doc.text(m.id, 17, y + 3.8);
-    doc.text(m.fullName.substring(0, 25), 38, y + 3.8);
-    doc.text(m.isSpouse ? 'Spouse' : `${m.generation}th`, 90, y + 3.8);
-    doc.text(m.familyId, 108, y + 3.8);
-    doc.text(`${standardRate} ETB`, 128, y + 3.8);
-    doc.text(`${paidAmt} ETB`, 152, y + 3.8);
+    doc.text(fitTextToWidth(doc, m.id, 20), 16, y + 4);
+    doc.text(fitTextToWidth(doc, m.fullName, 52), 38, y + 4);
+    doc.text(m.isSpouse ? 'ባለቤት' : `${m.generation}ኛ`, 92, y + 4);
+    doc.text(fitTextToWidth(doc, m.familyId, 16), 110, y + 4);
+    doc.text(`${standardRate} ብር`, 128, y + 4);
+    doc.text(`${paidAmt} ብር`, 150, y + 4);
 
     if (m.isMinor) {
       doc.setTextColor(117, 117, 117);
-      doc.text('Exempt (Minor)', 173, y + 3.8);
+      doc.text('ነጻ (ታዳጊ)', 173, y + 4);
     } else if (isPaid) {
       doc.setTextColor(27, 94, 32);
-      doc.setFont('helvetica', 'bold');
-      doc.text('PAID (Tekeflual)', 173, y + 3.8);
+      setFontStyle('bold');
+      doc.text('ተከፍሏል', 173, y + 4);
     } else if (isPartial) {
-      doc.setTextColor(245, 127, 23);
-      doc.setFont('helvetica', 'bold');
-      doc.text('PARTIAL', 173, y + 3.8);
+      doc.setTextColor(217, 119, 6);
+      setFontStyle('bold');
+      doc.text('ከፊል', 173, y + 4);
     } else {
       doc.setTextColor(198, 40, 40);
-      doc.setFont('helvetica', 'bold');
-      doc.text('UNPAID', 173, y + 3.8);
+      setFontStyle('bold');
+      doc.text('ያልተከፈለ', 173, y + 4);
     }
 
-    y += 5.5;
+    y += 5.8;
     rowCount++;
   }
 
@@ -270,17 +359,17 @@ export function generateFinancialReportPdf({
   // Banner Header for Generation Report
   doc.setFillColor(218, 165, 32); // Goldenrod
   doc.rect(14, y, 182, 10, 'F');
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10.5);
+  setFontStyle('bold');
   doc.setTextColor(255, 255, 255);
-  doc.text('2. GENERATION CONTRIBUTIONS REPORT (YE-TWLID MEWACHO)', 105, y + 6.5, { align: 'center' });
+  doc.text('2. የትውልድ መዋጮ ሪፖርት (GENERATION CONTRIBUTIONS)', 105, y + 6.5, { align: 'center' });
 
   y += 14;
   const genBoxes = [
-    { label: 'Total Expected Generation', val: `${totalGenExpected.toLocaleString()} ETB`, bg: [255, 248, 225], fg: [140, 100, 0] },
-    { label: 'Total Collected To Date', val: `${totalGenCollected.toLocaleString()} ETB`, bg: [232, 245, 233], fg: [27, 94, 32] },
-    { label: `Paid in ${monthName}`, val: `${genPaidThisMonth.toLocaleString()} ETB`, bg: [254, 243, 199], fg: [180, 83, 9] },
-    { label: 'Remaining Balance', val: `${genRemaining.toLocaleString()} ETB`, bg: [255, 235, 238], fg: [198, 40, 40] },
+    { label: 'ጠቅላላ መሰብሰብ የነበረበት', val: `${totalGenExpected.toLocaleString()} ብር`, bg: [255, 248, 225], fg: [140, 100, 0] },
+    { label: 'እስካሁን የተሰበሰበ', val: `${totalGenCollected.toLocaleString()} ብር`, bg: [232, 245, 233], fg: [27, 94, 32] },
+    { label: `በ${monthName} የተከፈለ`, val: `${genPaidThisMonth.toLocaleString()} ብር`, bg: [254, 243, 199], fg: [180, 83, 9] },
+    { label: 'ቀሪ ያልተሰበሰበ', val: `${genRemaining.toLocaleString()} ብር`, bg: [255, 235, 238], fg: [198, 40, 40] },
   ];
 
   genBoxes.forEach((b, idx) => {
@@ -290,32 +379,36 @@ export function generateFinancialReportPdf({
     doc.setDrawColor(220, 220, 220);
     doc.rect(x, y, colW, 14, 'S');
 
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(117, 117, 117);
-    doc.text(b.label, x + 3, y + 4.5);
+    doc.setFontSize(6.8);
+    setFontStyle('normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text(fitTextToWidth(doc, b.label, colW - 5), x + 3, y + 4.8);
 
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.8);
+    setFontStyle('bold');
     doc.setTextColor(b.fg[0], b.fg[1], b.fg[2]);
-    doc.text(b.val, x + 3, y + 10.5);
+    doc.text(fitTextToWidth(doc, b.val, colW - 5), x + 3, y + 10.8);
   });
 
   // Table of Generation Contributions
   y += 18;
-  doc.setFillColor(180, 130, 20);
-  doc.rect(14, y, 182, 6.5, 'F');
+  const drawGenTableHeader = (yPos: number) => {
+    doc.setFillColor(180, 130, 20);
+    doc.rect(14, yPos, 182, 6.5, 'F');
 
-  doc.setFontSize(7.5);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(255, 255, 255);
-  doc.text('ID', 17, y + 4.5);
-  doc.text('Full Name', 38, y + 4.5);
-  doc.text('Gen', 90, y + 4.5);
-  doc.text('Target Dues', 108, y + 4.5);
-  doc.text(`In ${monthName}`, 130, y + 4.5);
-  doc.text('Total Paid', 152, y + 4.5);
-  doc.text('Gen Status', 173, y + 4.5);
+    doc.setFontSize(7.2);
+    setFontStyle('bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text('መለያ (ID)', 16, yPos + 4.5);
+    doc.text('ሙሉ ስም (Full Name)', 38, yPos + 4.5);
+    doc.text('ትውልድ', 92, yPos + 4.5);
+    doc.text('የሚጠበቅ', 110, yPos + 4.5);
+    doc.text(fitTextToWidth(doc, `በ${monthName}`, 18), 130, yPos + 4.5);
+    doc.text('የተከፈለ', 150, yPos + 4.5);
+    doc.text('ሁኔታ (Status)', 173, yPos + 4.5);
+  };
+
+  drawGenTableHeader(y);
 
   y += 6.5;
   rowCount = 0;
@@ -324,18 +417,7 @@ export function generateFinancialReportPdf({
     if (y > pageLimit) {
       doc.addPage();
       y = 15;
-      doc.setFillColor(180, 130, 20);
-      doc.rect(14, y, 182, 6.5, 'F');
-      doc.setFontSize(7.5);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(255, 255, 255);
-      doc.text('ID', 17, y + 4.5);
-      doc.text('Full Name', 38, y + 4.5);
-      doc.text('Gen', 90, y + 4.5);
-      doc.text('Target Dues', 108, y + 4.5);
-      doc.text(`In ${monthName}`, 130, y + 4.5);
-      doc.text('Total Paid', 152, y + 4.5);
-      doc.text('Gen Status', 173, y + 4.5);
+      drawGenTableHeader(y);
       y += 6.5;
     }
 
@@ -361,35 +443,36 @@ export function generateFinancialReportPdf({
     const isPartial = totalGenPaid > 0 && totalGenPaid < targetDues;
 
     doc.setFillColor(rowCount % 2 === 0 ? 255 : 252, rowCount % 2 === 0 ? 255 : 250, rowCount % 2 === 0 ? 255 : 242);
-    doc.rect(14, y, 182, 5.5, 'F');
+    doc.rect(14, y, 182, 5.8, 'F');
 
     doc.setFontSize(7);
-    doc.setFont('helvetica', 'normal');
+    setFontStyle('normal');
     doc.setTextColor(33, 33, 33);
-    doc.text(m.id, 17, y + 3.8);
-    doc.text(m.fullName.substring(0, 25), 38, y + 3.8);
-    doc.text(m.isSpouse ? 'Spouse' : `${m.generation}th`, 90, y + 3.8);
-    doc.text(`${targetDues} ETB`, 108, y + 3.8);
-    doc.text(`${thisMonthGenPaid} ETB`, 130, y + 3.8);
-    doc.text(`${totalGenPaid} ETB`, 152, y + 3.8);
+    doc.text(fitTextToWidth(doc, m.id, 20), 16, y + 4);
+    doc.text(fitTextToWidth(doc, m.fullName, 52), 38, y + 4);
+    doc.text(m.isSpouse ? 'ባለቤት' : `${m.generation}ኛ`, 92, y + 4);
+    doc.text(`${targetDues} ብር`, 110, y + 4);
+    doc.text(`${thisMonthGenPaid} ብር`, 130, y + 4);
+    doc.text(`${totalGenPaid} ብር`, 150, y + 4);
 
     if (m.isMinor || m.isSpouse) {
       doc.setTextColor(117, 117, 117);
-      doc.text('Exempt', 173, y + 3.8);
+      doc.text('ነጻ (Exempt)', 173, y + 4);
     } else if (isComplete) {
       doc.setTextColor(27, 94, 32);
-      doc.setFont('helvetica', 'bold');
-      doc.text('COMPLETED', 173, y + 3.8);
+      setFontStyle('bold');
+      doc.text('ተከፍሏል', 173, y + 4);
     } else if (isPartial) {
       doc.setTextColor(180, 83, 9);
-      doc.setFont('helvetica', 'bold');
-      doc.text('PARTIAL', 173, y + 3.8);
+      setFontStyle('bold');
+      doc.text('ከፊል', 173, y + 4);
     } else {
-      doc.setTextColor(117, 117, 117);
-      doc.text('UNPAID', 173, y + 3.8);
+      doc.setTextColor(198, 40, 40);
+      setFontStyle('bold');
+      doc.text('ያልተከፈለ', 173, y + 4);
     }
 
-    y += 5.5;
+    y += 5.8;
     rowCount++;
   }
 
@@ -406,40 +489,40 @@ export function generateFinancialReportPdf({
   y += 5;
 
   doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
+  setFontStyle('bold');
   doc.setTextColor(33, 33, 33);
-  doc.text('ASSOCIATION LEADERSHIP SIGNATORIES', 14, y);
+  doc.text('የማህበሩ አመራር ፊርማዎች (ASSOCIATION LEADERSHIP SIGNATORIES)', 14, y);
   y += 5;
 
   const lead = settings.leadership || {
-    executive: { fullName: 'Executive Officer', phoneNumber: '' },
-    secretary: { fullName: 'Secretary', phoneNumber: '' },
-    financeOfficer: { fullName: 'Finance Officer', phoneNumber: '' },
+    executive: { fullName: 'ስራ አስፈጻሚ', phoneNumber: '' },
+    secretary: { fullName: 'ጸሐፊ', phoneNumber: '' },
+    financeOfficer: { fullName: 'ፋይናንስ ሀላፊ', phoneNumber: '' },
   };
 
   const leadCols = [
-    { title: 'Executive Officer', name: lead.executive?.fullName || 'Assigned Executive', phone: lead.executive?.phoneNumber || '' },
-    { title: 'Secretary', name: lead.secretary?.fullName || 'Assigned Secretary', phone: lead.secretary?.phoneNumber || '' },
-    { title: 'Finance Officer', name: lead.financeOfficer?.fullName || 'Assigned Finance Officer', phone: lead.financeOfficer?.phoneNumber || '' },
+    { title: 'ስራ አስፈጻሚ (Executive)', name: lead.executive?.fullName || lead.executive?.name || 'ስራ አስፈጻሚ', phone: lead.executive?.phoneNumber || lead.executive?.phone || '' },
+    { title: 'ጸሐፊ (Secretary)', name: lead.secretary?.fullName || lead.secretary?.name || 'ጸሐፊ', phone: lead.secretary?.phoneNumber || lead.secretary?.phone || '' },
+    { title: 'ፋይናንስ ሀላፊ (Finance)', name: lead.financeOfficer?.fullName || lead.financeOfficer?.name || 'ፋይናንስ ሀላፊ', phone: lead.financeOfficer?.phoneNumber || lead.financeOfficer?.phone || '' },
   ];
 
   leadCols.forEach((col, idx) => {
     const x = 14 + idx * 62;
     doc.setFontSize(7.5);
-    doc.setFont('helvetica', 'bold');
+    setFontStyle('bold');
     doc.setTextColor(17, 24, 39);
-    doc.text(col.title, x, y);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(117, 117, 117);
-    doc.text(col.name, x, y + 4);
+    doc.text(fitTextToWidth(doc, col.title, 58), x, y);
+    setFontStyle('normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text(fitTextToWidth(doc, col.name, 58), x, y + 4.5);
     if (col.phone) {
-      doc.text(col.phone, x, y + 8);
+      doc.text(fitTextToWidth(doc, col.phone, 58), x, y + 9);
     }
   });
 
   const filename = familyFilterId
-    ? `Abarrus_Monthly_and_Generation_Report_${familyFilterId}_${monthName}_${selectedYear}.pdf`
-    : `Abarrus_Financial_Report_${monthName}_${selectedYear}.pdf`;
+    ? `Abarrus_Monthly_and_Generation_Report_${familyFilterId}_${selectedMonth}_${selectedYear}.pdf`
+    : `Abarrus_Financial_Report_${selectedMonth}_${selectedYear}.pdf`;
 
   doc.save(filename);
 }

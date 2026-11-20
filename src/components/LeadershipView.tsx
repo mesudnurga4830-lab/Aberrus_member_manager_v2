@@ -204,8 +204,8 @@ export const LeadershipView: React.FC<LeadershipViewProps> = ({
     });
   };
 
-  const handleDownloadPDF = () => {
-    generateFinancialReportPdf({
+  const handleDownloadPDF = async () => {
+    await generateFinancialReportPdf({
       contributions,
       members,
       families,

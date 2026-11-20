@@ -401,9 +401,9 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
     setTimeout(() => setCopiedReport(false), 2000);
   };
 
-  const handleDownloadPdf = () => {
+  const handleDownloadPdf = async () => {
     saveAllDataNow({ members, families, contributions, settings });
-    generateFinancialReportPdf({
+    await generateFinancialReportPdf({
       contributions,
       members,
       families,

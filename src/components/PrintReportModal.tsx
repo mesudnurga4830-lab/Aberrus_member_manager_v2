@@ -113,8 +113,8 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
     window.print();
   };
 
-  const handleDownloadPdf = () => {
-    generateFinancialReportPdf({
+  const handleDownloadPdf = async () => {
+    await generateFinancialReportPdf({
       contributions,
       members,
       families,
