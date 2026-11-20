@@ -166,6 +166,32 @@
         "createdAt": { "type": "string", "description": "ISO timestamp of upload" }
       },
       "required": ["chatId", "fromId", "fileId", "status", "createdAt"]
+    },
+    "RoleAssignment": {
+      "title": "RoleAssignment",
+      "description": "Delegated member or staff role and granular permissions assignment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique role assignment document ID", "maxLength": 128 },
+        "memberId": { "type": "string", "description": "Optional Member ID", "maxLength": 128 },
+        "memberName": { "type": "string", "description": "Display name of assigned person", "maxLength": 120 },
+        "phone": { "type": "string", "description": "Phone number of assigned person", "maxLength": 40 },
+        "email": { "type": "string", "description": "Optional Google email for Google sign-in", "maxLength": 160 },
+        "authEmail": { "type": "string", "description": "Normalized Firebase Auth email (<phone>@abarrus.local)", "maxLength": 160 },
+        "authUid": { "type": "string", "description": "Optional Firebase Auth UID", "maxLength": 128 },
+        "role": { "type": "string", "description": "Assigned role type", "enum": ["super_admin", "co_admin", "finance_officer", "secretary", "family_head", "member"] },
+        "roleLabel": { "type": "string", "description": "Human-readable role title", "maxLength": 80 },
+        "permissions": { "type": "array", "description": "Granted permission keys" },
+        "status": { "type": "string", "description": "Assignment status", "enum": ["active", "revoked"] },
+        "grantedByEmail": { "type": "string", "description": "Admin email who granted the role", "maxLength": 160 },
+        "grantedByName": { "type": "string", "description": "Admin name who granted the role", "maxLength": 120 },
+        "grantedAt": { "type": "string", "description": "ISO timestamp when granted", "maxLength": 64 },
+        "revokedAt": { "type": "string", "description": "ISO timestamp when revoked", "maxLength": 64 },
+        "revokedByEmail": { "type": "string", "description": "Admin email who revoked the role", "maxLength": 160 },
+        "notes": { "type": "string", "description": "Optional administrative notes", "maxLength": 500 },
+        "updatedAt": { "type": "string", "description": "ISO timestamp of last update", "maxLength": 64 }
+      },
+      "required": ["id", "memberName", "role", "permissions", "status", "grantedByEmail", "grantedAt"]
     }
   },
   "firestore": {
@@ -203,6 +229,11 @@
     "/receipts/{receiptId}": {
       "schema": "Receipt",
       "description": "Collection storing payment receipt submissions from Telegram"
+    },
+    "/roleAssignments/{assignmentId}": {
+      "schema": "RoleAssignment",
+      "description": "Member and staff role assignments and revocable permission sets"
     }
   }
 }
+

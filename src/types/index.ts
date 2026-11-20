@@ -220,3 +220,43 @@ export interface ComplaintRecord {
   createdAt: string;
   updatedAt?: string;
 }
+
+export type AppRoleType =
+  | 'super_admin'
+  | 'co_admin'
+  | 'finance_officer'
+  | 'secretary'
+  | 'family_head'
+  | 'member';
+
+export type PermissionKey =
+  | 'view_dashboard'
+  | 'record_payments'
+  | 'manage_members'
+  | 'view_payment_lists'
+  | 'manage_complaints'
+  | 'manage_family_heads'
+  | 'manage_settings'
+  | 'manage_roles';
+
+export interface RoleAssignment {
+  id: string;
+  memberId?: string;
+  memberName: string;
+  phone?: string;
+  email?: string;
+  authEmail?: string;
+  authUid?: string;
+  role: AppRoleType;
+  roleLabel?: string;
+  permissions: PermissionKey[];
+  status: 'active' | 'revoked';
+  grantedByEmail: string;
+  grantedByName?: string;
+  grantedAt: string;
+  revokedAt?: string;
+  revokedByEmail?: string;
+  notes?: string;
+  updatedAt?: string;
+}
+

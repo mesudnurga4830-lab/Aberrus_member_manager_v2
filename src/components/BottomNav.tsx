@@ -13,6 +13,8 @@ interface BottomNavProps {
   userRole: UserRole;
   lang?: 'am' | 'en';
   unreadComplaintsCount?: number;
+  allowedTabs?: string[];
+  defaultLandingTab?: string;
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({
@@ -21,32 +23,41 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   userRole,
   lang = 'am',
   unreadComplaintsCount = 0,
+  allowedTabs,
+  defaultLandingTab,
 }) => {
   const isEn = lang === 'en';
+  const homeTab =
+    defaultLandingTab ||
+    (userRole === 'member' ? 'portal' : userRole === 'family_head' ? 'heads' : 'dashboard');
+
+  const canPay = !allowedTabs || allowedTabs.includes('contributions');
+  const canLists = !allowedTabs || allowedTabs.includes('unpaid');
+  const canPortal = !allowedTabs || allowedTabs.includes('portal');
 
   const items = [
     {
-      id: userRole === 'member' ? 'portal' : userRole === 'family_head' ? 'heads' : 'dashboard',
+      id: homeTab,
       label: isEn ? 'Home' : 'መነሻ',
       icon: Home,
-      match: ['dashboard', 'heads', 'portal'],
+      match: ['dashboard', 'heads', 'portal', 'roles'],
     },
     {
-      id: userRole === 'member' ? 'portal' : 'contributions',
+      id: canPay && userRole !== 'member' ? 'contributions' : homeTab,
       subTab: 'payments',
       label: isEn ? 'Payments' : 'ክፍያዎች',
       icon: CreditCard,
       match: ['contributions'],
     },
     {
-      id: userRole === 'member' ? 'portal' : 'unpaid',
+      id: canLists && userRole !== 'member' ? 'unpaid' : homeTab,
       subTab: 'receipts',
       label: isEn ? 'Receipts' : 'ደረሰኞች',
       icon: Receipt,
       match: ['receipts', 'unpaid'],
     },
     {
-      id: 'portal',
+      id: canPortal ? 'portal' : homeTab,
       label: isEn ? 'Profile' : 'መገለጫ',
       icon: User,
       match: ['portal', 'profile'],

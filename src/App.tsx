@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   getMembers,
   getFamilies,
@@ -26,7 +26,23 @@ import {
   getContributionYear,
   normalizeContributionRecord,
 } from './utils/storage';
-import { Member, Family, Contribution, SettingsRates, ContributionStatus, UserRole, ComplaintRecord } from './types';
+import {
+  Member,
+  Family,
+  Contribution,
+  SettingsRates,
+  ContributionStatus,
+  UserRole,
+  ComplaintRecord,
+  RoleAssignment,
+} from './types';
+import {
+  EffectiveAccess,
+  getAllowedTabsForAccess,
+  getDefaultLandingTab,
+  hasAppPermission,
+  resolveEffectiveAccess,
+} from './utils/roles';
 import { Navbar } from './components/Navbar';
 import { DashboardOverview } from './components/DashboardOverview';
 import { MembersList } from './components/MembersList';
@@ -46,6 +62,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { ChangeAdminPinModal } from './components/ChangeAdminPinModal';
 import { LeadershipView } from './components/LeadershipView';
 import { DataCorrectionView } from './components/DataCorrectionView';
+import { RoleManagementView } from './components/RoleManagementView';
 import { TelegramDispatchModal } from './components/TelegramDispatchModal';
 import { BulkImportModal } from './components/BulkImportModal';
 import { AdminMemberPaymentManagerModal } from './components/AdminMemberPaymentManagerModal';
@@ -82,6 +99,8 @@ import {
   subscribeToComplaints,
   markComplaintAsReadInFirestore,
   markAllComplaintsAsReadInFirestore,
+  getMyRoleAssignmentsFromFirestore,
+  subscribeToMyRoleAssignments,
 } from './firebase';
 import type { User as FirebaseUser } from 'firebase/auth';
 import {
@@ -116,6 +135,33 @@ export default function App() {
   const [userRole, setUserRole] = useState<UserRole>('member');
   const [currentTab, setCurrentTab] = useState<string>('portal');
   const [selectedPortalMemberId, setSelectedPortalMemberId] = useState<string>('');
+  const [roleAssignments, setRoleAssignments] = useState<RoleAssignment[]>([]);
+  const [authAccessError, setAuthAccessError] = useState<string | null>(null);
+  const [hasMemberProfile, setHasMemberProfile] = useState<boolean>(false);
+  const matchedAuthMemberRef = useRef<Member | null>(null);
+
+  const effectiveAccess: EffectiveAccess = useMemo(() => {
+    const matchedMem =
+      matchedAuthMemberRef.current ||
+      members.find((m) => m.id === selectedPortalMemberId) ||
+      null;
+    return resolveEffectiveAccess({
+      authEmail: authFirebaseUser?.email,
+      authUid: authFirebaseUser?.uid,
+      matchedMember: matchedMem,
+      roleAssignments,
+    });
+  }, [authFirebaseUser, members, selectedPortalMemberId, roleAssignments]);
+
+  const allowedTabs = useMemo(
+    () => getAllowedTabsForAccess(effectiveAccess, hasMemberProfile || Boolean(selectedPortalMemberId)),
+    [effectiveAccess, hasMemberProfile, selectedPortalMemberId]
+  );
+
+  const defaultLandingTab = useMemo(
+    () => getDefaultLandingTab(effectiveAccess),
+    [effectiveAccess]
+  );
 
   // Admin real-time complaint notification states
   const [adminComplaints, setAdminComplaints] = useState<ComplaintRecord[]>([]);
@@ -178,16 +224,20 @@ export default function App() {
     directUrl: string;
   } | null>(null);
 
-  // Firebase Auth state listener to protect routes, maintain persistent login, and map member
+  // Firebase Auth state listener to protect routes, maintain persistent login, and resolve RBAC roles
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       console.log('[Auth] onAuthStateChanged fired:', firebaseUser ? firebaseUser.email : 'null');
       if (firebaseUser) {
         setAuthFirebaseUser(firebaseUser);
+        setAuthAccessError(null);
         const email = (firebaseUser.email || '').toLowerCase();
-        const isMasterAdminEmail = email === 'mesudnurga4830@gmail.com';
+        const isMasterAdminEmail = email === MASTER_ADMIN.email.toLowerCase();
 
         if (isMasterAdminEmail) {
+          matchedAuthMemberRef.current = null;
+          setHasMemberProfile(false);
+          setRoleAssignments([]);
           setUserRole('admin');
           setCurrentTab('dashboard');
           setIsLoginPage(false);
@@ -195,16 +245,19 @@ export default function App() {
           return;
         }
 
-        // Member Login: dummy email is <phone>@abarrus.local
+        // Member Login: dummy email is <phone>@abarrus.local OR delegated Google email
         let phone = '';
         if (email.endsWith('@abarrus.local')) {
           phone = email.replace('@abarrus.local', '');
         }
 
         try {
-          const matchedMem = await getMemberByAuthUidOrPhone(firebaseUser.uid, phone);
+          const [matchedMem, myAssignments] = await Promise.all([
+            getMemberByAuthUidOrPhone(firebaseUser.uid, phone),
+            getMyRoleAssignmentsFromFirestore(firebaseUser),
+          ]);
+
           if (matchedMem) {
-            // Keep existing valid phone number on member if present, or fill if empty
             let shouldSave = false;
             if (!matchedMem.phone && phone) {
               matchedMem.phone = normalizePhoneNumber(phone);
@@ -219,13 +272,11 @@ export default function App() {
               await saveMemberToFirestore(matchedMem);
             }
 
+            matchedAuthMemberRef.current = matchedMem;
+            setHasMemberProfile(true);
             setSelectedPortalMemberId(matchedMem.id);
             setSelectedHeadFamilyId(matchedMem.familyId || 'FA001');
-            setUserRole('member');
-            setCurrentTab('portal');
-            setIsLoginPage(false);
 
-            // Ensure member document is in local members state
             setMembers((prev) => {
               const idx = prev.findIndex((m) => m.id === matchedMem.id);
               if (idx >= 0) {
@@ -236,19 +287,51 @@ export default function App() {
               return [matchedMem, ...prev];
             });
           } else {
-            console.warn('[Auth] No member record found in Firestore for:', phone, firebaseUser.uid);
+            matchedAuthMemberRef.current = null;
+            setHasMemberProfile(false);
+            setSelectedPortalMemberId('');
+          }
+
+          setRoleAssignments(myAssignments);
+
+          const access = resolveEffectiveAccess({
+            authEmail: firebaseUser.email,
+            authUid: firebaseUser.uid,
+            matchedMember: matchedMem,
+            roleAssignments: myAssignments,
+          });
+
+          if (!matchedMem && access.permissions.length === 0) {
+            console.warn('[Auth] Unauthorized Google/Auth account rejected:', email, firebaseUser.uid);
+            setAuthAccessError(
+              'ይህ አካውንት በአድሚን የተሰጠ ንቁ ሚና የለውም ወይም ፍቃዱ ተነስቷል። እባክዎ ዋና አስተዳዳሪውን ያነጋግሩ።'
+            );
+            await signOut(auth);
+            setAuthFirebaseUser(null);
             setSelectedPortalMemberId('');
             setIsLoginPage(true);
+            setIsAuthChecking(false);
+            return;
           }
+
+          setUserRole(access.userRole);
+          setCurrentTab(getDefaultLandingTab(access));
+          setIsLoginPage(false);
         } catch (fetchErr) {
-          console.error('[Auth] Error fetching member after Firebase auth:', fetchErr);
+          console.error('[Auth] Error fetching member/roles after Firebase auth:', fetchErr);
+          matchedAuthMemberRef.current = null;
+          setHasMemberProfile(false);
           setSelectedPortalMemberId('');
+          setRoleAssignments([]);
           setIsLoginPage(true);
         }
       } else {
         // No active Firebase Auth session - strictly protect routes
+        matchedAuthMemberRef.current = null;
         setAuthFirebaseUser(null);
+        setHasMemberProfile(false);
         setSelectedPortalMemberId('');
+        setRoleAssignments([]);
         setUserRole('member');
         setIsLoginPage(true);
       }
@@ -471,9 +554,52 @@ export default function App() {
     };
   }, [isAuthChecking, authFirebaseUser]);
 
+  // Live RBAC Role Assignment subscription for instant Grant / Revoke enforcement
+  useEffect(() => {
+    if (isAuthChecking || !authFirebaseUser) return;
+    const email = (authFirebaseUser.email || '').toLowerCase();
+    if (email === MASTER_ADMIN.email.toLowerCase()) return;
+
+    let hadActiveAssignment = false;
+    const unsubRoles = subscribeToMyRoleAssignments(authFirebaseUser, (liveAssignments) => {
+      setRoleAssignments(liveAssignments);
+      const matchedMem = matchedAuthMemberRef.current;
+      const nextAccess = resolveEffectiveAccess({
+        authEmail: authFirebaseUser.email,
+        authUid: authFirebaseUser.uid,
+        matchedMember: matchedMem,
+        roleAssignments: liveAssignments,
+      });
+
+      if (nextAccess.permissions.length > 0) {
+        hadActiveAssignment = true;
+      }
+
+      if (!matchedMem && nextAccess.permissions.length === 0 && hadActiveAssignment) {
+        setAuthAccessError('የአስተዳዳሪ ፍቃድዎ በዋና አስተዳዳሪው ተነስቷል (Revoked)።');
+        void signOut(auth);
+        setIsLoginPage(true);
+        return;
+      }
+
+      setUserRole(nextAccess.userRole);
+      const nextAllowed = getAllowedTabsForAccess(nextAccess, Boolean(matchedMem));
+      setCurrentTab((prevTab) => {
+        if (nextAllowed.includes(prevTab)) return prevTab;
+        return getDefaultLandingTab(nextAccess);
+      });
+    });
+
+    return () => unsubRoles();
+  }, [isAuthChecking, authFirebaseUser]);
+
   // Real-time Admin Notification listener for newly submitted Member Complaints
   useEffect(() => {
-    if (isAuthChecking || !authFirebaseUser || userRole !== 'admin') {
+    const canViewComplaints =
+      effectiveAccess.isMasterAdmin ||
+      hasAppPermission(effectiveAccess.permissions, 'manage_complaints', effectiveAccess.isMasterAdmin);
+
+    if (isAuthChecking || !authFirebaseUser || userRole !== 'admin' || !canViewComplaints) {
       setAdminComplaints([]);
       setLiveComplaintToast(null);
       knownComplaintIdsRef.current.clear();
@@ -924,12 +1050,9 @@ export default function App() {
             setIsLoginPage(true);
             return;
           }
-          if (userRole !== 'admin') {
-            if (userRole === 'family_head') {
-              setCurrentTab('heads');
-            } else if (userRole === 'member') {
-              setCurrentTab('portal');
-            }
+          if (!effectiveAccess.isMasterAdmin && !allowedTabs.includes(tab)) {
+            setCurrentTab(defaultLandingTab);
+            setIsLoginPage(false);
             return;
           }
           setCurrentTab(tab);
@@ -937,12 +1060,24 @@ export default function App() {
         }}
         userRole={userRole}
         onChangeRole={handleChangeRole}
-        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenSettings={() => {
+          if (
+            effectiveAccess.isMasterAdmin ||
+            hasAppPermission(effectiveAccess.permissions, 'manage_settings', effectiveAccess.isMasterAdmin)
+          ) {
+            setIsSettingsOpen(true);
+          }
+        }}
         onOpenChangePin={() => setIsChangePinOpen(true)}
         onRefreshData={handleRefreshData}
         lang={lang}
         onToggleLang={() => setLang((l) => (l === 'am' ? 'en' : 'am'))}
-        activeMemberName={members.find((m) => m.id === selectedPortalMemberId)?.fullName}
+        activeMemberName={
+          members.find((m) => m.id === selectedPortalMemberId)?.fullName ||
+          effectiveAccess.assignment?.memberName ||
+          authFirebaseUser?.displayName ||
+          undefined
+        }
         onLogout={handleLogout}
         adminComplaints={adminComplaints}
         onOpenComplaintNotification={(c) => handleJumpToAdminComplaints(c)}
@@ -950,6 +1085,10 @@ export default function App() {
           void markAllComplaintsAsReadInFirestore(ids);
         }}
         onViewAllComplaints={() => handleJumpToAdminComplaints()}
+        appRole={effectiveAccess.appRole}
+        permissions={effectiveAccess.permissions}
+        isMasterAdmin={effectiveAccess.isMasterAdmin}
+        allowedTabs={allowedTabs}
       />
 
       {/* Real-time Admin Floating Alert Banner when a Member submits a Complaint */}
@@ -1043,22 +1182,17 @@ export default function App() {
         ) : !authFirebaseUser || isLoginPage ? (
           <MemberLoginView
             lang={lang}
+            externalAuthError={authAccessError}
             onLoginSuccess={(m) => {
+              matchedAuthMemberRef.current = m;
+              setHasMemberProfile(true);
               setMembers((prev) => (prev.some((x) => x.id === m.id) ? prev : [m, ...prev]));
               setSelectedPortalMemberId(m.id);
               setSelectedHeadFamilyId(m.familyId || 'FA001');
-              setUserRole('member');
-              setCurrentTab('portal');
               setIsLoginPage(false);
             }}
-            onAdminGoogleLoginSuccess={(user) => {
-              setUserRole('admin');
-              setCurrentTab('dashboard');
-              setIsLoginPage(false);
-              try {
-                localStorage.setItem('abarrus_admin_authorized', 'true');
-                localStorage.setItem('abarrus_admin_auth_timestamp', Date.now().toString());
-              } catch {}
+            onAdminGoogleLoginSuccess={() => {
+              setAuthAccessError(null);
             }}
           />
         ) : userRole === 'member' || currentTab === 'portal' ? (
@@ -1163,6 +1297,8 @@ export default function App() {
                 families={families}
                 contributions={contributions}
                 settings={settings}
+                permissions={effectiveAccess.permissions}
+                isMasterAdmin={effectiveAccess.isMasterAdmin}
                 onOpenRecordPayment={() => {
                   setRecordPaymentMemberId(undefined);
                   setIsRecordPaymentOpen(true);
@@ -1173,8 +1309,8 @@ export default function App() {
                 onOpenBulkImport={() => setIsBulkImportOpen(true)}
                 onOpenPrintReport={() => setIsPrintReportOpen(true)}
                 onNavigateTab={(tab) => {
-                  if (tab === 'heads') {
-                    setUserRole('family_head');
+                  if (!effectiveAccess.isMasterAdmin && !allowedTabs.includes(tab)) {
+                    return;
                   }
                   setCurrentTab(tab);
                 }}
@@ -1194,7 +1330,6 @@ export default function App() {
                 }}
                 onNavigateToFamily={(famId) => {
                   setSelectedHeadFamilyId(famId);
-                  setUserRole('family_head');
                   setCurrentTab('heads');
                 }}
               />
@@ -1328,7 +1463,7 @@ export default function App() {
               />
             )}
 
-            {currentTab === 'automations' && (
+            {currentTab === 'automations' && effectiveAccess.isMasterAdmin && (
               <AutomationsPanel
                 families={families}
                 members={members}
@@ -1337,6 +1472,25 @@ export default function App() {
                 onUpdateSettings={handleSaveSettings}
               />
             )}
+
+            {currentTab === 'roles' &&
+              hasAppPermission(
+                effectiveAccess.permissions,
+                'manage_roles',
+                effectiveAccess.isMasterAdmin
+              ) && (
+                <RoleManagementView
+                  members={members}
+                  currentUserEmail={authFirebaseUser?.email}
+                  currentUserName={
+                    authFirebaseUser?.displayName ||
+                    matchedAuthMemberRef.current?.fullName ||
+                    MASTER_ADMIN.name
+                  }
+                  isMasterAdmin={effectiveAccess.isMasterAdmin}
+                  lang={lang}
+                />
+              )}
           </>
         )}
       </main>
@@ -1359,29 +1513,42 @@ export default function App() {
             <span>ጠቅላላ ቤተሰቦች፡ {families.length}</span>
             <span>·</span>
             <span>አባላት፡ {members.length}</span>
-            <span>·</span>
-            <button
-              onClick={() => setIsSettingsOpen(true)}
-              className="text-emerald-800 hover:text-emerald-950 font-semibold underline"
-            >
-              ተመን ማስተካከያ (Settings)
-            </button>
+            {(effectiveAccess.isMasterAdmin ||
+              hasAppPermission(
+                effectiveAccess.permissions,
+                'manage_settings',
+                effectiveAccess.isMasterAdmin
+              )) && (
+              <>
+                <span>·</span>
+                <button
+                  onClick={() => setIsSettingsOpen(true)}
+                  className="text-emerald-800 hover:text-emerald-950 font-semibold underline cursor-pointer"
+                >
+                  ተመን ማስተካከያ (Settings)
+                </button>
+              </>
+            )}
           </div>
         </div>
       </footer>
 
-      {/* Mobile Bottom Navigation Bar (4 icons: Home, Payments, Receipts, Profile) */}
+      {/* Mobile Bottom Navigation Bar */}
       <BottomNav
         currentTab={currentTab}
         onSelectTab={(tab) => {
-          if (tab === 'heads') setUserRole('family_head');
-          else if (tab === 'portal') setUserRole('member');
-          else if (tab === 'dashboard' && isThisDeviceAdminAuthorized()) setUserRole('admin');
+          if (!effectiveAccess.isMasterAdmin && !allowedTabs.includes(tab)) {
+            setCurrentTab(defaultLandingTab);
+            setIsLoginPage(false);
+            return;
+          }
           setCurrentTab(tab);
           setIsLoginPage(false);
         }}
         userRole={userRole}
         lang={lang}
+        allowedTabs={allowedTabs}
+        defaultLandingTab={defaultLandingTab}
         unreadComplaintsCount={
           adminComplaints.filter(
             (c) =>
@@ -1420,7 +1587,12 @@ export default function App() {
         />
       )}
 
-      {isBulkImportOpen && userRole === 'admin' && (
+      {isBulkImportOpen &&
+        hasAppPermission(
+          effectiveAccess.permissions,
+          'manage_members',
+          effectiveAccess.isMasterAdmin
+        ) && (
         <BulkImportModal
           userRole={userRole}
           adminEmail={authFirebaseUser?.email || undefined}
@@ -1436,7 +1608,12 @@ export default function App() {
         />
       )}
 
-      {isSettingsOpen && (
+      {isSettingsOpen &&
+        hasAppPermission(
+          effectiveAccess.permissions,
+          'manage_settings',
+          effectiveAccess.isMasterAdmin
+        ) && (
         <SettingsModal
           settings={settings}
           members={members}

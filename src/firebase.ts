@@ -14,6 +14,7 @@ import {
   doc,
   getDocs,
   getDoc,
+  getDocFromServer,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -47,6 +48,7 @@ import {
   MasterReceiptStatus,
   ContributionType,
   ComplaintRecord,
+  RoleAssignment,
 } from './types';
 import { initialSettings, initialMembers } from './data/initialData';
 import { getMembers, saveMembers, addMembersBatch, addContributionsBatch, updateMember } from './utils/storage';
@@ -87,6 +89,17 @@ function createPersistentFirestoreInstance(): Firestore {
 }
 
 export const db: Firestore = createPersistentFirestoreInstance();
+
+async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.error('Please check your Firebase configuration (client is offline).');
+    }
+  }
+}
+void testConnection();
 
 // Initialize Firebase Auth
 export const auth = getAuth(app);
@@ -268,6 +281,8 @@ export const RECEIPTS_COLLECTION = 'receipts';
 export const TELEGRAM_USERS_COLLECTION = 'telegramUsers';
 export const NOTIFICATION_LOGS_COLLECTION = 'notificationLogs';
 export const MASTER_RECEIPTS_COLLECTION = 'masterReceipts';
+export const ROLE_ASSIGNMENTS_COLLECTION = 'roleAssignments';
+export const ROLE_MANAGERS_COLLECTION = 'roleManagers';
 
 /**
  * 1. QUERY CODE USED FOR MEMBER LOGIN BY TOKEN OR ID OR PHONE
@@ -2820,6 +2835,270 @@ export async function paySelectedFromWalletInFirestore(params: {
     updatedReceipt,
   };
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ROLE MANAGEMENT & RBAC (Grant, Edit, Revoke, Restore, Real-Time Enforcement)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export function buildRoleAssignmentDocId(params: { memberId?: string; email?: string; phone?: string }): string {
+  const cleanMemberId = String(params.memberId || '').trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+  if (cleanMemberId) return cleanMemberId.slice(0, 128);
+
+  const cleanEmail = String(params.email || '').trim().toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '_');
+  if (cleanEmail) return `email_${cleanEmail}`.slice(0, 128);
+
+  const cleanPhone = String(params.phone || '').trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+  if (cleanPhone) return `phone_${cleanPhone}`.slice(0, 128);
+
+  return `role_${Date.now()}`;
+}
+
+export async function saveRoleAssignmentToFirestore(assignment: RoleAssignment): Promise<RoleAssignment> {
+  const nowIso = new Date().toISOString();
+  const cleanPhone = assignment.phone ? normalizePhoneNumber(assignment.phone) : '';
+  const cleanEmail = assignment.email ? assignment.email.trim().toLowerCase() : '';
+  const derivedAuthEmail =
+    assignment.authEmail ||
+    (cleanPhone ? getDummyEmailFromPhone(cleanPhone).toLowerCase() : '');
+
+  const docId =
+    (assignment.id && /^[a-zA-Z0-9_-]+$/.test(assignment.id) ? assignment.id : '') ||
+    buildRoleAssignmentDocId({
+      memberId: assignment.memberId,
+      email: cleanEmail,
+      phone: cleanPhone,
+    });
+
+  const record: RoleAssignment = {
+    ...assignment,
+    id: docId,
+    memberName: String(assignment.memberName || '').trim().slice(0, 120),
+    phone: cleanPhone ? cleanPhone.slice(0, 40) : '',
+    email: cleanEmail ? cleanEmail.slice(0, 160) : '',
+    authEmail: derivedAuthEmail ? derivedAuthEmail.slice(0, 160) : '',
+    authUid: assignment.authUid ? String(assignment.authUid).trim().slice(0, 128) : '',
+    grantedByEmail: String(assignment.grantedByEmail || auth.currentUser?.email || 'mesudnurga4830@gmail.com').trim().toLowerCase().slice(0, 160),
+    grantedByName: String(assignment.grantedByName || 'Mesud Nurga').trim().slice(0, 120),
+    grantedAt: assignment.grantedAt || nowIso,
+    notes: assignment.notes ? String(assignment.notes).trim().slice(0, 500) : '',
+    updatedAt: nowIso,
+  };
+
+  const sanitized = sanitizeForFirestore(record);
+  const path = `${ROLE_ASSIGNMENTS_COLLECTION}/${docId}`;
+
+  try {
+    await setDoc(doc(db, ROLE_ASSIGNMENTS_COLLECTION, docId), sanitized, { merge: false });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, path);
+  }
+
+  // Sync roleManagers marker for delegated users who have authUid + manage_roles permission
+  if (record.authUid) {
+    const canManageRoles = record.status === 'active' && record.permissions.includes('manage_roles');
+    try {
+      if (canManageRoles) {
+        await setDoc(
+          doc(db, ROLE_MANAGERS_COLLECTION, record.authUid),
+          { status: 'active', updatedAt: nowIso },
+          { merge: true }
+        );
+      } else {
+        await deleteDoc(doc(db, ROLE_MANAGERS_COLLECTION, record.authUid));
+      }
+    } catch {
+      // Only Master Admin writes roleManagers; ignore if a non-master manager edits another non-manager role
+    }
+  }
+
+  return record;
+}
+
+export async function revokeRoleAssignmentInFirestore(
+  assignment: RoleAssignment,
+  revokedByEmail?: string
+): Promise<void> {
+  const nowIso = new Date().toISOString();
+  const path = `${ROLE_ASSIGNMENTS_COLLECTION}/${assignment.id}`;
+  const updated: RoleAssignment = {
+    ...assignment,
+    status: 'revoked',
+    revokedAt: nowIso,
+    revokedByEmail: String(revokedByEmail || auth.currentUser?.email || 'mesudnurga4830@gmail.com').trim().toLowerCase().slice(0, 160),
+    updatedAt: nowIso,
+  };
+
+  try {
+    await setDoc(doc(db, ROLE_ASSIGNMENTS_COLLECTION, assignment.id), sanitizeForFirestore(updated), { merge: false });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, path);
+  }
+
+  if (assignment.authUid) {
+    try {
+      await deleteDoc(doc(db, ROLE_MANAGERS_COLLECTION, assignment.authUid));
+    } catch {}
+  }
+}
+
+export async function restoreRoleAssignmentInFirestore(assignment: RoleAssignment): Promise<void> {
+  const nowIso = new Date().toISOString();
+  const path = `${ROLE_ASSIGNMENTS_COLLECTION}/${assignment.id}`;
+  const restorable: RoleAssignment = {
+    ...assignment,
+    status: 'active',
+    updatedAt: nowIso,
+  };
+  delete restorable.revokedAt;
+  delete restorable.revokedByEmail;
+
+  try {
+    await setDoc(doc(db, ROLE_ASSIGNMENTS_COLLECTION, assignment.id), sanitizeForFirestore(restorable), { merge: false });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, path);
+  }
+
+  if (assignment.authUid && assignment.permissions.includes('manage_roles')) {
+    try {
+      await setDoc(
+        doc(db, ROLE_MANAGERS_COLLECTION, assignment.authUid),
+        { status: 'active', updatedAt: nowIso },
+        { merge: true }
+      );
+    } catch {}
+  }
+}
+
+export async function deleteRoleAssignmentFromFirestore(assignment: RoleAssignment): Promise<void> {
+  const path = `${ROLE_ASSIGNMENTS_COLLECTION}/${assignment.id}`;
+  try {
+    await deleteDoc(doc(db, ROLE_ASSIGNMENTS_COLLECTION, assignment.id));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, path);
+  }
+
+  if (assignment.authUid) {
+    try {
+      await deleteDoc(doc(db, ROLE_MANAGERS_COLLECTION, assignment.authUid));
+    } catch {}
+  }
+}
+
+export function subscribeToAllRoleAssignments(
+  onData: (assignments: RoleAssignment[]) => void,
+  onError?: (err: Error) => void
+): () => void {
+  return onSnapshot(
+    collection(db, ROLE_ASSIGNMENTS_COLLECTION),
+    (snapshot) => {
+      const list = snapshot.docs
+        .map((d) => ({ id: d.id, ...d.data() } as RoleAssignment))
+        .sort((a, b) => String(b.updatedAt || b.grantedAt || '').localeCompare(String(a.updatedAt || a.grantedAt || '')));
+      onData(list);
+    },
+    (err) => {
+      logSnapshotError(err, OperationType.LIST, ROLE_ASSIGNMENTS_COLLECTION);
+      if (onError) onError(err);
+    }
+  );
+}
+
+export async function getMyRoleAssignmentsFromFirestore(user: User): Promise<RoleAssignment[]> {
+  const results = new Map<string, RoleAssignment>();
+  const coll = collection(db, ROLE_ASSIGNMENTS_COLLECTION);
+  const cleanEmail = String(user.email || '').trim().toLowerCase();
+
+  try {
+    if (user.uid) {
+      const snapUid = await getDocs(query(coll, where('authUid', '==', user.uid)));
+      snapUid.forEach((d) => results.set(d.id, { id: d.id, ...d.data() } as RoleAssignment));
+    }
+  } catch {}
+
+  try {
+    if (cleanEmail) {
+      const snapAuthEmail = await getDocs(query(coll, where('authEmail', '==', cleanEmail)));
+      snapAuthEmail.forEach((d) => results.set(d.id, { id: d.id, ...d.data() } as RoleAssignment));
+    }
+  } catch {}
+
+  try {
+    if (cleanEmail && user.emailVerified) {
+      const snapEmail = await getDocs(query(coll, where('email', '==', cleanEmail)));
+      snapEmail.forEach((d) => results.set(d.id, { id: d.id, ...d.data() } as RoleAssignment));
+    }
+  } catch {}
+
+  return Array.from(results.values());
+}
+
+export function subscribeToMyRoleAssignments(
+  user: User,
+  onData: (assignments: RoleAssignment[]) => void
+): () => void {
+  const coll = collection(db, ROLE_ASSIGNMENTS_COLLECTION);
+  const cleanEmail = String(user.email || '').trim().toLowerCase();
+  const buckets = new Map<string, Map<string, RoleAssignment>>();
+  const unsubs: Array<() => void> = [];
+
+  const emitMerged = () => {
+    const merged = new Map<string, RoleAssignment>();
+    buckets.forEach((bucketMap) => {
+      bucketMap.forEach((val, key) => merged.set(key, val));
+    });
+    onData(Array.from(merged.values()));
+  };
+
+  if (user.uid) {
+    unsubs.push(
+      onSnapshot(
+        query(coll, where('authUid', '==', user.uid)),
+        (snap) => {
+          const m = new Map<string, RoleAssignment>();
+          snap.forEach((d) => m.set(d.id, { id: d.id, ...d.data() } as RoleAssignment));
+          buckets.set('uid', m);
+          emitMerged();
+        },
+        () => {}
+      )
+    );
+  }
+
+  if (cleanEmail) {
+    unsubs.push(
+      onSnapshot(
+        query(coll, where('authEmail', '==', cleanEmail)),
+        (snap) => {
+          const m = new Map<string, RoleAssignment>();
+          snap.forEach((d) => m.set(d.id, { id: d.id, ...d.data() } as RoleAssignment));
+          buckets.set('authEmail', m);
+          emitMerged();
+        },
+        () => {}
+      )
+    );
+  }
+
+  if (cleanEmail && user.emailVerified) {
+    unsubs.push(
+      onSnapshot(
+        query(coll, where('email', '==', cleanEmail)),
+        (snap) => {
+          const m = new Map<string, RoleAssignment>();
+          snap.forEach((d) => m.set(d.id, { id: d.id, ...d.data() } as RoleAssignment));
+          buckets.set('email', m);
+          emitMerged();
+        },
+        () => {}
+      )
+    );
+  }
+
+  return () => {
+    unsubs.forEach((u) => u());
+  };
+}
+
 
 
 

@@ -27,8 +27,10 @@ import {
   MessageSquareWarning,
   ArrowRight,
   Clock,
+  UserCog,
 } from 'lucide-react';
-import { ComplaintRecord, UserRole } from '../types';
+import { AppRoleType, ComplaintRecord, PermissionKey, UserRole } from '../types';
+import { getRoleDisplayLabel, hasAppPermission } from '../utils/roles';
 import { getLastSavedTimestamp, formatSavedTime, touchSaveTimestamp } from '../utils/storage';
 import { isThisDeviceAdminAuthorized } from '../utils/adminAuth';
 import { googleSignIn, logoutGoogle, initGoogleAuth } from '../firebase';
@@ -49,6 +51,10 @@ interface NavbarProps {
   onOpenComplaintNotification?: (complaint: ComplaintRecord) => void;
   onMarkAllComplaintsRead?: (ids: string[]) => void;
   onViewAllComplaints?: () => void;
+  appRole?: AppRoleType;
+  permissions?: PermissionKey[];
+  isMasterAdmin?: boolean;
+  allowedTabs?: string[];
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -67,6 +73,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenComplaintNotification,
   onMarkAllComplaintsRead,
   onViewAllComplaints,
+  appRole,
+  permissions = [],
+  isMasterAdmin = false,
+  allowedTabs,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -127,7 +137,6 @@ export const Navbar: React.FC<NavbarProps> = ({
       }
     } catch (err: any) {
       console.error('Google sign-in error:', err);
-      alert('የGoogle/Gmail መግቢያ አልተሳካም፦ ' + (err?.message || 'Error'));
     } finally {
       setIsGoogleSigningIn(false);
     }
@@ -168,6 +177,8 @@ export const Navbar: React.FC<NavbarProps> = ({
         return isEn ? 'Data Corrections' : 'የመረጃ ማስተካከያ';
       case 'automations':
         return isEn ? 'Automations & Telegram' : 'ቴሌግራም አውቶሜሽን';
+      case 'roles':
+        return isEn ? 'Role Management' : 'የሚና እና ፍቃድ አስተዳደር';
       default:
         return isEn ? 'Abarrus Unity' : 'የአበሩስ አንድነት ማህበር';
     }
@@ -180,7 +191,19 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'members', label: isEn ? 'Members' : 'አባላት', icon: Users },
     { id: 'contributions', label: isEn ? 'Payments' : 'ክፍያዎች', icon: CreditCard },
     { id: 'unpaid', label: isEn ? 'Status Lists' : 'የከፈሉ/ያልከፈሉ', icon: ListChecks },
+    { id: 'roles', label: isEn ? 'Roles' : 'ሚናዎች', icon: UserCog },
   ];
+
+  const visibleNavItems = allowedTabs
+    ? navItems.filter((item) => allowedTabs.includes(item.id))
+    : navItems.filter((item) => item.id !== 'roles' || isMasterAdmin);
+
+  const showNavLinks = userRole === 'admin' || visibleNavItems.length > 1;
+  const canSeeComplaintBell =
+    userRole === 'admin' &&
+    (isMasterAdmin ||
+      hasAppPermission(permissions, 'manage_complaints', isMasterAdmin) ||
+      hasAppPermission(permissions, 'view_dashboard', isMasterAdmin));
 
   return (
     <header className="sticky top-0 z-50 bg-[#1B5E20] text-white border-b-2 border-[#FFD700] shadow-md no-print">
@@ -192,6 +215,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => {
                 if (userRole === 'member') onSelectTab('portal');
                 else if (userRole === 'family_head') onSelectTab('heads');
+                else if (allowedTabs && allowedTabs.length > 0) onSelectTab(allowedTabs[0]);
                 else onSelectTab('dashboard');
               }}
               className="flex items-center gap-2 text-left hover:opacity-90 transition-opacity"
@@ -269,7 +293,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
 
             {/* Admin Complaint Notification Bell */}
-            {userRole === 'admin' && (
+            {canSeeComplaintBell && (
               <div className="relative" ref={notifRef}>
                 <button
                   type="button"
@@ -451,7 +475,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {activeMemberName || (userRole === 'admin' ? 'አስተዳዳሪ' : 'የአበሩስ አባል')}
                 </span>
                 <span className="text-[10px] text-[#FFD700] font-semibold uppercase tracking-wider block">
-                  {userRole === 'admin' ? (isEn ? 'Admin' : 'አስተዳዳሪ') : (isEn ? 'Member' : 'አባል')}
+                  {getRoleDisplayLabel(
+                    appRole || (isMasterAdmin ? 'super_admin' : userRole === 'admin' ? 'co_admin' : userRole === 'family_head' ? 'family_head' : 'member'),
+                    lang
+                  )}
                 </span>
               </div>
             </div>
@@ -468,16 +495,16 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            {/* Desktop Navigation Links for Admin */}
-            {userRole === 'admin' && (
+            {/* Desktop Navigation Links */}
+            {showNavLinks && (
               <div className="hidden xl:flex items-center gap-1 ml-2">
-                {navItems.map((item) => {
+                {visibleNavItems.map((item) => {
                   const isActive = currentTab === item.id;
                   return (
                     <button
                       key={item.id}
                       onClick={() => onSelectTab(item.id)}
-                      className={`px-2 py-1 text-xs font-semibold rounded-md transition-all ${
+                      className={`px-2 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
                         isActive
                           ? 'bg-[#FFD700] text-[#1B5E20] font-bold'
                           : 'text-white/80 hover:text-white hover:bg-white/10'
@@ -490,8 +517,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
             )}
 
-            {/* Mobile Menu Toggle for extra admin tabs */}
-            {userRole === 'admin' && (
+            {/* Mobile Menu Toggle for extra tabs */}
+            {showNavLinks && (
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 className="xl:hidden p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white"
@@ -503,11 +530,11 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Mobile Dropdown for Admin */}
-        {mobileMenuOpen && userRole === 'admin' && (
+        {/* Mobile Dropdown */}
+        {mobileMenuOpen && showNavLinks && (
           <div className="xl:hidden py-3 px-2 border-t border-white/15 space-y-1 bg-[#144818] rounded-b-xl animate-in fade-in slide-in-from-top-1">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-xs">
-              {navItems.map((item) => {
+              {visibleNavItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = currentTab === item.id;
                 return (

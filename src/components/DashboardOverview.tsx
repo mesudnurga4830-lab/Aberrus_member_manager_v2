@@ -4,7 +4,8 @@
  */
 
 import React from 'react';
-import { Member, Family, Contribution, SettingsRates } from '../types';
+import { Member, Family, Contribution, SettingsRates, PermissionKey } from '../types';
+import { hasAppPermission } from '../utils/roles';
 import { getCurrentEthiopianDate, getEthiopianMonthName, ETHIOPIAN_MONTHS } from '../utils/ethiopianCalendar';
 import {
   computeGenerationPortfolioSummary,
@@ -39,6 +40,7 @@ import {
   FileSpreadsheet,
   Layers,
   ListChecks,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface DashboardOverviewProps {
@@ -46,6 +48,8 @@ interface DashboardOverviewProps {
   families: Family[];
   contributions: Contribution[];
   settings: SettingsRates;
+  permissions?: PermissionKey[];
+  isMasterAdmin?: boolean;
   onOpenRecordPayment: () => void;
   onOpenPaymentManager?: (memberId?: string, mode?: 'list' | 'add') => void;
   onOpenBatchPayment?: (payerId?: string) => void;
@@ -65,6 +69,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   families,
   contributions,
   settings,
+  permissions,
+  isMasterAdmin = false,
   onOpenRecordPayment,
   onOpenPaymentManager,
   onOpenBatchPayment,
@@ -78,6 +84,16 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   onNavigateToMember,
   onNavigateToFamily,
 }) => {
+  const can = (k: PermissionKey) =>
+    !permissions ? true : hasAppPermission(permissions, k, isMasterAdmin);
+
+  const canViewDashboard = can('view_dashboard');
+  const canRecordPayments = can('record_payments');
+  const canManageMembers = can('manage_members');
+  const canViewPaymentLists = can('view_payment_lists');
+  const canManageComplaints = can('manage_complaints');
+  const canManageFamilyHeads = can('manage_family_heads');
+  const canManageRoles = can('manage_roles');
   const [searchQuery, setSearchQuery] = React.useState('');
   const currentDate = getCurrentEthiopianDate();
   const [selectedMonth, setSelectedMonth] = React.useState<number>(currentDate.month || 11);
@@ -377,35 +393,54 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
           {/* Quick Actions in Header */}
           <div className="flex flex-wrap items-center gap-2.5">
-            <button
-              onClick={() => onNavigateTab('heads')}
-              className="px-4 py-2.5 rounded-lg bg-[#FFD700] hover:bg-[#e6c200] text-[#1B5E20] font-bold text-xs transition-all shadow-sm cursor-pointer flex items-center gap-1.5"
-            >
-              <Users className="w-4 h-4" />
-              <span>የቤተሰብ ወኪሎች</span>
-            </button>
-            <button
-              onClick={() => onNavigateTab('leadership')}
-              className="px-4 py-2.5 rounded-lg bg-white/15 hover:bg-white/25 text-white font-semibold text-xs border border-white/20 transition-all cursor-pointer flex items-center gap-1.5"
-            >
-              <Crown className="w-4 h-4 text-[#FFD700]" />
-              <span>የአመራር ክፍል</span>
-            </button>
-            <button
-              onClick={onOpenRecordPayment}
-              className="px-4 py-2.5 rounded-lg bg-[#FFD700] text-[#1B5E20] hover:bg-[#e6c200] font-bold text-xs transition-all shadow-sm cursor-pointer flex items-center gap-1.5"
-            >
-              <Plus className="w-4 h-4" />
-              <span>ክፍያ መዝግብ</span>
-            </button>
-            <button
-              onClick={onOpenAddMember}
-              className="px-4 py-2.5 rounded-lg bg-white/15 hover:bg-white/25 text-white font-semibold text-xs border border-white/20 transition-all cursor-pointer flex items-center gap-1.5"
-            >
-              <Users className="w-4 h-4 text-[#FFD700]" />
-              <span>አዲስ አባል</span>
-            </button>
-            {onOpenBulkImport && (
+            {canManageFamilyHeads && (
+              <button
+                onClick={() => onNavigateTab('heads')}
+                className="px-4 py-2.5 rounded-lg bg-[#FFD700] hover:bg-[#e6c200] text-[#1B5E20] font-bold text-xs transition-all shadow-sm cursor-pointer flex items-center gap-1.5"
+              >
+                <Users className="w-4 h-4" />
+                <span>የቤተሰብ ወኪሎች</span>
+              </button>
+            )}
+            {canViewDashboard && (
+              <button
+                onClick={() => onNavigateTab('leadership')}
+                className="px-4 py-2.5 rounded-lg bg-white/15 hover:bg-white/25 text-white font-semibold text-xs border border-white/20 transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <Crown className="w-4 h-4 text-[#FFD700]" />
+                <span>የአመራር ክፍል</span>
+              </button>
+            )}
+            {canManageRoles && (
+              <button
+                type="button"
+                onClick={() => onNavigateTab('roles')}
+                className="px-4 py-2.5 rounded-lg bg-[#FFD700] hover:bg-[#e6c200] text-[#1B5E20] font-extrabold text-xs transition-all shadow-sm cursor-pointer flex items-center gap-1.5"
+                title="ለአባላት እና አመራሮች ሚና/ፍቃድ መስጫ እና መሻሪያ"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                <span>የሚና አስተዳደር (Roles)</span>
+              </button>
+            )}
+            {canRecordPayments && (
+              <button
+                onClick={onOpenRecordPayment}
+                className="px-4 py-2.5 rounded-lg bg-[#FFD700] text-[#1B5E20] hover:bg-[#e6c200] font-bold text-xs transition-all shadow-sm cursor-pointer flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                <span>ክፍያ መዝግብ</span>
+              </button>
+            )}
+            {canManageMembers && (
+              <button
+                onClick={onOpenAddMember}
+                className="px-4 py-2.5 rounded-lg bg-white/15 hover:bg-white/25 text-white font-semibold text-xs border border-white/20 transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <Users className="w-4 h-4 text-[#FFD700]" />
+                <span>አዲስ አባል</span>
+              </button>
+            )}
+            {onOpenBulkImport && canManageMembers && (
               <button
                 type="button"
                 onClick={onOpenBulkImport}
@@ -416,7 +451,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 <span>ፋይል አስመጣ (Bulk Import)</span>
               </button>
             )}
-            {onOpenPaymentManager && (
+            {onOpenPaymentManager && canRecordPayments && (
               <button
                 type="button"
                 onClick={() => onOpenPaymentManager(undefined, 'list')}
@@ -427,7 +462,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 <span>የክፍያዎች መዝገብ</span>
               </button>
             )}
-            {onOpenBatchPayment && (
+            {onOpenBatchPayment && canRecordPayments && (
               <button
                 type="button"
                 onClick={() => onOpenBatchPayment()}
@@ -438,15 +473,17 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 <span>የክፍፍል ክፍያ (Batch)</span>
               </button>
             )}
-            <button
-              onClick={() =>
-                onNavigatePaymentLists ? onNavigatePaymentLists('ወርሃዊ') : onNavigateTab('unpaid')
-              }
-              className="px-3.5 py-2.5 rounded-lg bg-white/15 hover:bg-white/25 text-white font-semibold text-xs border border-white/20 transition-all cursor-pointer flex items-center gap-1.5"
-            >
-              <ListChecks className="w-4 h-4 text-[#FFD700]" />
-              <span>የከፈሉ/ያልከፈሉ ስም ዝርዝር</span>
-            </button>
+            {canViewPaymentLists && (
+              <button
+                onClick={() =>
+                  onNavigatePaymentLists ? onNavigatePaymentLists('ወርሃዊ') : onNavigateTab('unpaid')
+                }
+                className="px-3.5 py-2.5 rounded-lg bg-white/15 hover:bg-white/25 text-white font-semibold text-xs border border-white/20 transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <ListChecks className="w-4 h-4 text-[#FFD700]" />
+                <span>የከፈሉ/ያልከፈሉ ስም ዝርዝር</span>
+              </button>
+            )}
             <button
               onClick={onOpenPrintReport}
               className="px-3.5 py-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium text-xs border border-white/10 transition-all flex items-center gap-1.5"
@@ -1060,9 +1097,11 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       </div>
 
       {/* Member Complaints Viewer & Reply Section */}
-      <DashboardComplaintsPanel
-        onNavigateToMember={onNavigateToMember}
-      />
+      {canManageComplaints && (
+        <DashboardComplaintsPanel
+          onNavigateToMember={onNavigateToMember}
+        />
+      )}
     </div>
   );
 };

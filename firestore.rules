@@ -3,7 +3,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
     function incoming() {
@@ -18,9 +18,94 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isMasterAdmin() {
+      return isSignedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email == 'mesudnurga4830@gmail.com';
+    }
+
+    function isRoleManager() {
+      return isMasterAdmin() || (
+        isSignedIn()
+        && exists(/databases/$(database)/documents/roleManagers/$(request.auth.uid))
+        && get(/databases/$(database)/documents/roleManagers/$(request.auth.uid)).data.status == 'active'
+      );
+    }
+
+    function isOwnRoleAssignment(data) {
+      return isSignedIn() && (
+        ('authUid' in data && data.authUid is string && data.authUid.size() > 0 && data.authUid == request.auth.uid) ||
+        (request.auth.token.email != null && 'authEmail' in data && data.authEmail is string && data.authEmail.size() > 0 && data.authEmail == request.auth.token.email) ||
+        (request.auth.token.email != null && request.auth.token.email_verified == true && 'email' in data && data.email is string && data.email.size() > 0 && data.email == request.auth.token.email)
+      );
+    }
+
+    function isValidRoleAssignment(data) {
+      return data.keys().hasAll(['id', 'memberName', 'role', 'permissions', 'status', 'grantedByEmail', 'grantedAt'])
+        && data.keys().hasOnly([
+          'id', 'memberId', 'memberName', 'phone', 'email', 'authEmail', 'authUid',
+          'role', 'roleLabel', 'permissions', 'status',
+          'grantedByEmail', 'grantedByName', 'grantedAt',
+          'revokedAt', 'revokedByEmail', 'notes', 'updatedAt'
+        ])
+        && data.id is string && data.id.size() >= 1 && data.id.size() <= 128
+        && data.memberName is string && data.memberName.size() >= 1 && data.memberName.size() <= 120
+        && data.role in ['super_admin', 'co_admin', 'finance_officer', 'secretary', 'family_head', 'member']
+        && data.status in ['active', 'revoked']
+        && data.permissions is list && data.permissions.size() <= 20
+        && data.permissions.hasOnly([
+          'view_dashboard', 'record_payments', 'manage_members', 'view_payment_lists',
+          'manage_complaints', 'manage_family_heads', 'manage_settings', 'manage_roles'
+        ])
+        && data.grantedByEmail is string && data.grantedByEmail.size() >= 3 && data.grantedByEmail.size() <= 160
+        && data.grantedAt is string && data.grantedAt.size() >= 10 && data.grantedAt.size() <= 64
+        && (!('memberId' in data) || (data.memberId is string && data.memberId.size() <= 128))
+        && (!('phone' in data) || (data.phone is string && data.phone.size() <= 40))
+        && (!('email' in data) || (data.email is string && data.email.size() <= 160))
+        && (!('authEmail' in data) || (data.authEmail is string && data.authEmail.size() <= 160))
+        && (!('authUid' in data) || (data.authUid is string && data.authUid.size() <= 128))
+        && (!('roleLabel' in data) || (data.roleLabel is string && data.roleLabel.size() <= 80))
+        && (!('grantedByName' in data) || (data.grantedByName is string && data.grantedByName.size() <= 120))
+        && (!('revokedAt' in data) || (data.revokedAt is string && data.revokedAt.size() <= 64))
+        && (!('revokedByEmail' in data) || (data.revokedByEmail is string && data.revokedByEmail.size() <= 160))
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 500))
+        && (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64));
+    }
+
     // Default deny all
     match /{document=**} {
       allow read, write: if false;
+    }
+
+    // Connectivity check path
+    match /test/connection {
+      allow get: if true;
+    }
+
+    // Hardened Role Assignments (RBAC)
+    match /roleAssignments/{assignmentId} {
+      allow get: if isValidId(assignmentId) && (isRoleManager() || isOwnRoleAssignment(resource.data));
+      allow list: if isRoleManager() || isOwnRoleAssignment(resource.data);
+      allow create: if isRoleManager()
+        && isValidId(assignmentId)
+        && isValidRoleAssignment(incoming())
+        && (isMasterAdmin() || (incoming().role != 'super_admin' && !('manage_roles' in incoming().permissions)));
+      allow update: if isRoleManager()
+        && isValidId(assignmentId)
+        && isValidRoleAssignment(incoming())
+        && incoming().id == existing().id
+        && incoming().grantedAt == existing().grantedAt
+        && (isMasterAdmin() || (incoming().role != 'super_admin' && !('manage_roles' in incoming().permissions)));
+      allow delete: if isRoleManager()
+        && isValidId(assignmentId)
+        && (isMasterAdmin() || existing().role != 'super_admin');
+    }
+
+    // Delegated role managers marker (controlled strictly by Master Admin)
+    match /roleManagers/{uid} {
+      allow get: if isSignedIn() && (isMasterAdmin() || request.auth.uid == uid);
+      allow list: if isMasterAdmin();
+      allow create, update, delete: if isMasterAdmin();
     }
 
     // Members collection
@@ -53,12 +138,12 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
-    // Member complaints submitted via Telegram
+    // Member complaints
     match /complaints/{complaintId} {
       allow read, write: if true;
     }
 
-    // Receipt submissions via Telegram
+    // Receipt submissions
     match /receipts/{receiptId} {
       allow read, write: if true;
     }

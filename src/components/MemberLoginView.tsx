@@ -32,12 +32,14 @@ interface MemberLoginViewProps {
   onAdminGoogleLoginSuccess?: (user: any) => void;
   lang?: 'am' | 'en';
   initialPhone?: string;
+  externalAuthError?: string | null;
 }
 
 export const MemberLoginView: React.FC<MemberLoginViewProps> = ({
   onLoginSuccess,
   onAdminGoogleLoginSuccess,
   lang = 'am',
+  externalAuthError = null,
 }) => {
   const [activeTab, setActiveTab] = useState<'member' | 'admin'>('member');
 
@@ -52,6 +54,7 @@ export const MemberLoginView: React.FC<MemberLoginViewProps> = ({
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
 
   const isEn = lang === 'en';
+  const displayedError = errorMessage || externalAuthError;
 
   // Handle Member Login with Phone + Default 4-digit password
   const handleMemberLogin = async (e: React.FormEvent) => {
@@ -133,15 +136,15 @@ export const MemberLoginView: React.FC<MemberLoginViewProps> = ({
 
         setSuccessNotice(
           isEn
-            ? `Admin signed in successfully (${res.user.email})`
-            : `አድሚን በተሳካ ሁኔታ ገብቷል (${res.user.email})`
+            ? `Google account signed in (${res.user.email}). Verifying permissions...`
+            : `በGoogle አካውንት ገብተዋል (${res.user.email})፤ ፍቃድዎ እየተረጋገጠ ነው...`
         );
 
         setTimeout(() => {
           if (onAdminGoogleLoginSuccess) {
             onAdminGoogleLoginSuccess(res.user);
           }
-        }, 700);
+        }, 400);
       }
     } catch (err: any) {
       console.error('Google sign in error:', err);
@@ -213,10 +216,10 @@ export const MemberLoginView: React.FC<MemberLoginViewProps> = ({
           </div>
 
           {/* Feedback messages */}
-          {errorMessage && (
+          {displayedError && (
             <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-2 animate-in fade-in">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
-              <span className="leading-relaxed font-medium">{errorMessage}</span>
+              <span className="leading-relaxed font-medium">{displayedError}</span>
             </div>
           )}
 
@@ -320,8 +323,8 @@ export const MemberLoginView: React.FC<MemberLoginViewProps> = ({
                 </div>
                 <p className="leading-relaxed">
                   {isEn
-                    ? 'Sign in using your authorized Google Workspace account (mesudnurga4830@gmail.com) for full administrative privileges.'
-                    : 'ሙሉ የአስተዳዳሪ ፍቃድ ለማግኘት በተፈቀደለት የGoogle አካውንት (mesudnurga4830@gmail.com) ይግቡ።'}
+                    ? 'Sign in using the Master Admin account or any Google account granted a role by the Admin.'
+                    : 'በዋና አስተዳዳሪ ወይም በአድሚን የስራ ሚና/ፍቃድ በተሰጠው የGoogle አካውንት ይግቡ።'}
                 </p>
               </div>
 
