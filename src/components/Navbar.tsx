@@ -497,17 +497,17 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {/* Desktop Navigation Links */}
             {showNavLinks && (
-              <div className="hidden xl:flex items-center gap-1 ml-2">
+              <div className="hidden lg:flex items-center gap-1 ml-2">
                 {visibleNavItems.map((item) => {
                   const isActive = currentTab === item.id;
                   return (
                     <button
                       key={item.id}
                       onClick={() => onSelectTab(item.id)}
-                      className={`px-2 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                      className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
                         isActive
                           ? 'bg-[#FFD700] text-[#1B5E20] font-bold'
-                          : 'text-white/80 hover:text-white hover:bg-white/10'
+                          : 'text-white/85 hover:text-white hover:bg-white/10'
                       }`}
                     >
                       {item.label}
@@ -521,10 +521,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             {showNavLinks && (
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="xl:hidden p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white"
+                className="lg:hidden px-2.5 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white inline-flex items-center gap-1 text-xs font-bold cursor-pointer"
                 aria-label="Toggle menu"
               >
-                {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+                {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4 text-[#FFD700]" />}
+                <span className="hidden sm:inline">{isEn ? 'Menu' : 'ገጾች'}</span>
               </button>
             )}
           </div>
@@ -532,7 +533,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Mobile Dropdown */}
         {mobileMenuOpen && showNavLinks && (
-          <div className="xl:hidden py-3 px-2 border-t border-white/15 space-y-1 bg-[#144818] rounded-b-xl animate-in fade-in slide-in-from-top-1">
+          <div className="lg:hidden py-3 px-2 border-t border-white/15 space-y-1 bg-[#144818] rounded-b-xl animate-in fade-in slide-in-from-top-1">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-xs">
               {visibleNavItems.map((item) => {
                 const Icon = item.icon;

@@ -1171,7 +1171,7 @@ export default function App() {
       )}
 
       {/* Main Content Viewport */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 xl:pb-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 lg:pb-8">
         {isAuthChecking ? (
           <div className="min-h-[50vh] flex flex-col items-center justify-center space-y-4">
             <div className="w-12 h-12 border-4 border-[#1B5E20] border-t-[#FFD700] rounded-full animate-spin"></div>
@@ -1479,17 +1479,19 @@ export default function App() {
                 'manage_roles',
                 effectiveAccess.isMasterAdmin
               ) && (
-                <RoleManagementView
-                  members={members}
-                  currentUserEmail={authFirebaseUser?.email}
-                  currentUserName={
-                    authFirebaseUser?.displayName ||
-                    matchedAuthMemberRef.current?.fullName ||
-                    MASTER_ADMIN.name
-                  }
-                  isMasterAdmin={effectiveAccess.isMasterAdmin}
-                  lang={lang}
-                />
+                <ErrorBoundary fallbackTitle="የሚና አስተዳደር ገጽ ስህተት (Role Management Error)">
+                  <RoleManagementView
+                    members={members}
+                    currentUserEmail={authFirebaseUser?.email}
+                    currentUserName={
+                      authFirebaseUser?.displayName ||
+                      matchedAuthMemberRef.current?.fullName ||
+                      MASTER_ADMIN.name
+                    }
+                    isMasterAdmin={effectiveAccess.isMasterAdmin}
+                    lang={lang}
+                  />
+                </ErrorBoundary>
               )}
           </>
         )}

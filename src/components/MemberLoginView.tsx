@@ -148,9 +148,18 @@ export const MemberLoginView: React.FC<MemberLoginViewProps> = ({
       }
     } catch (err: any) {
       console.error('Google sign in error:', err);
-      setErrorMessage(
-        err.message || (isEn ? 'Google Sign-In failed. Please try again.' : 'በGoogle መግባት አልተሳካም። እባክዎ እንደገና ይሞክሩ።')
-      );
+      if (err?.code === 'auth/unauthorized-domain') {
+        const host = typeof window !== 'undefined' ? window.location.hostname : 'vercel.app';
+        setErrorMessage(
+          isEn
+            ? `This domain (${host}) is not listed in Firebase Authentication -> Authorized domains.`
+            : `ይህ ዶሜይን (${host}) በFirebase Console -> Authentication -> Settings -> Authorized domains ውስጥ ስላልተጨመረ Google መግቢያ ተገድቧል።`
+        );
+      } else {
+        setErrorMessage(
+          err.message || (isEn ? 'Google Sign-In failed. Please try again.' : 'በGoogle መግባት አልተሳካም። እባክዎ እንደገና ይሞክሩ።')
+        );
+      }
     } finally {
       setIsLoading(false);
     }
