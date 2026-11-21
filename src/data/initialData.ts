@@ -10,8 +10,9 @@ export const initialSettings: SettingsRates = {
     3: 5000,
     4: 1000,
     5: 500,
-    6: 250,
+    6: 200,
   },
+  gen6Rate200Fixed: true,
   monthlyRate: {
     3: 100,
     4: 75,

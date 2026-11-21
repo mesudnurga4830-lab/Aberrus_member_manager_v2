@@ -141,7 +141,7 @@ export interface SettingsRates {
     3: number; // 5000
     4: number; // 1000
     5: number; // 500
-    6: number; // 250
+    6: number; // 200
   };
   monthlyRate: {
     3: number; // 100
@@ -175,6 +175,7 @@ export interface SettingsRates {
   };
   paymentStartDate?: string;
   generationPaymentNote?: string;
+  gen6Rate200Fixed?: boolean;
 }
 
 export interface EthiopianMonthInfo {

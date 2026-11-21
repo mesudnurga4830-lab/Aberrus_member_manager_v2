@@ -1032,13 +1032,19 @@ function normalizeLeaderEntry(raw: any, fallbackRoleTitle: string) {
 export function normalizeSettingsData(raw: any): SettingsRates {
   const src = raw && typeof raw === 'object' ? raw : {};
   const rawLead = src.leadership && typeof src.leadership === 'object' ? src.leadership : {};
+  const hasExplicitFlag = typeof src.gen6Rate200Fixed === 'boolean' ? src.gen6Rate200Fixed : false;
+  const mergedGenPayment = {
+    ...initialSettings.generationPayment,
+    ...(src.generationPayment || {}),
+  };
+  if (!hasExplicitFlag && Number(mergedGenPayment[6]) === 250) {
+    mergedGenPayment[6] = 200;
+  }
   return {
     ...initialSettings,
     ...src,
-    generationPayment: {
-      ...initialSettings.generationPayment,
-      ...(src.generationPayment || {}),
-    },
+    gen6Rate200Fixed: hasExplicitFlag || Object.keys(src).length === 0 ? true : false,
+    generationPayment: mergedGenPayment,
     monthlyRate: {
       ...initialSettings.monthlyRate,
       ...(src.monthlyRate || {}),
@@ -1077,7 +1083,27 @@ export async function getSettingsFromFirestore(): Promise<SettingsRates> {
     const docRef = doc(db, SETTINGS_COLLECTION, 'rates');
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
-      return normalizeSettingsData(docSnap.data());
+      const raw = docSnap.data();
+      const normalized = normalizeSettingsData(raw);
+      if (!raw?.gen6Rate200Fixed && Number(raw?.generationPayment?.[6]) === 250) {
+        normalized.gen6Rate200Fixed = true;
+        void safeClientFirestoreWrite(
+          () =>
+            setDoc(
+              docRef,
+              {
+                generationPayment: {
+                  ...normalized.generationPayment,
+                  6: 200,
+                },
+                gen6Rate200Fixed: true,
+              },
+              { merge: true }
+            ),
+          'migrating generation 6 rate from 250 to 200'
+        );
+      }
+      return normalized;
     }
   } catch (err) {
     console.error('Error reading settings from Firestore:', err);
@@ -2204,7 +2230,8 @@ export function matchMonthContribution(
  * Save Settings (including leadership appointments) to Firestore
  */
 export async function saveSettingsToFirestore(settings: SettingsRates): Promise<void> {
-  const normalized = normalizeSettingsData(settings);
+  const normalized = normalizeSettingsData({ ...settings, gen6Rate200Fixed: true });
+  normalized.gen6Rate200Fixed = true;
   const sanitized = sanitizeForFirestore(normalized);
   await safeClientFirestoreWrite(
     () => setDoc(doc(db, SETTINGS_COLLECTION, 'rates'), sanitized, { merge: true }),

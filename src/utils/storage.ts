@@ -110,6 +110,13 @@ export function getSettings(): SettingsRates {
       parsed.leadership = initialSettings.leadership;
       changed = true;
     }
+    if (!parsed.gen6Rate200Fixed) {
+      if (parsed.generationPayment && Number(parsed.generationPayment[6]) === 250) {
+        parsed.generationPayment[6] = 200;
+      }
+      parsed.gen6Rate200Fixed = true;
+      changed = true;
+    }
     if (changed || !localStorage.getItem(STORAGE_KEYS.SETTINGS)) {
       localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(parsed));
     }
@@ -120,7 +127,8 @@ export function getSettings(): SettingsRates {
 }
 
 export function saveSettings(settings: SettingsRates): void {
-  localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+  const nextSettings: SettingsRates = { ...settings, gen6Rate200Fixed: true };
+  localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(nextSettings));
   const ts = recordSaveTimestamp();
   window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail: { type: 'settings', timestamp: ts } }));
   syncToBackendServerAsync();
@@ -725,7 +733,7 @@ export function computeGenerationPortfolioSummary(
     3: { generation: 3, rate: settings.generationPayment[3] ?? 5000, eligibleCount: 0, paidFullCount: 0, partialCount: 0, unpaidCount: 0, expectedAmount: 0, collectedAmount: 0, remainingAmount: 0, percentage: 0 },
     4: { generation: 4, rate: settings.generationPayment[4] ?? 1000, eligibleCount: 0, paidFullCount: 0, partialCount: 0, unpaidCount: 0, expectedAmount: 0, collectedAmount: 0, remainingAmount: 0, percentage: 0 },
     5: { generation: 5, rate: settings.generationPayment[5] ?? 500, eligibleCount: 0, paidFullCount: 0, partialCount: 0, unpaidCount: 0, expectedAmount: 0, collectedAmount: 0, remainingAmount: 0, percentage: 0 },
-    6: { generation: 6, rate: settings.generationPayment[6] ?? 250, eligibleCount: 0, paidFullCount: 0, partialCount: 0, unpaidCount: 0, expectedAmount: 0, collectedAmount: 0, remainingAmount: 0, percentage: 0 },
+    6: { generation: 6, rate: settings.generationPayment[6] ?? 200, eligibleCount: 0, paidFullCount: 0, partialCount: 0, unpaidCount: 0, expectedAmount: 0, collectedAmount: 0, remainingAmount: 0, percentage: 0 },
   };
 
   let totalExpected = 0;

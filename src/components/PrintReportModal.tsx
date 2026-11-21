@@ -407,7 +407,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                   </h2>
                 </div>
                 <span className="text-[11px] bg-white/70 px-2.5 py-0.5 rounded font-mono font-bold text-neutral-900">
-                  ተመን፡ 3ኛ=5000 | 4ኛ=1000 | 5ኛ=500 | 6ኛ=250 ብር
+                  ተመን፡ 3ኛ={settings.generationPayment[3] ?? 5000} | 4ኛ={settings.generationPayment[4] ?? 1000} | 5ኛ={settings.generationPayment[5] ?? 500} | 6ኛ={settings.generationPayment[6] ?? 200} ብር
                 </span>
               </div>
 

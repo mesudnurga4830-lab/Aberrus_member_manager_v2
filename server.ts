@@ -729,7 +729,7 @@ function buildPersonalPaymentMessage(member: any, loginUrl: string) {
     3: { monthly: 100, gen: 5000 },
     4: { monthly: 75, gen: 1000 },
     5: { monthly: 50, gen: 500 },
-    6: { monthly: 25, gen: 250 },
+    6: { monthly: 25, gen: 200 },
   };
 
   const rateInfo = genRates[member.generation] || { monthly: 50, gen: 500 };
@@ -791,7 +791,7 @@ function buildGeneralWelcomeMessage(fromName: string) {
 • <b>3ኛ ትውልድ፡</b> ወርሃዊ 100 ብር | የትውልድ 5,000 ብር
 • <b>4ኛ ትውልድ፡</b> ወርሃዊ 75 ብር | የትውልድ 1,000 ብር
 • <b>5ኛ ትውልድ፡</b> ወርሃዊ 50 ብር | የትውልድ 500 ብር
-• <b>6ኛ ትውልድ፡</b> ወርሃዊ 25 ብር | የትውልድ 250 ብር
+• <b>6ኛ ትውልድ፡</b> ወርሃዊ 25 ብር | የትውልድ 200 ብር
 • <b>የትዳር አጋር፡</b> ወርሃዊ 100 ብር (የትውልድ ነጻ)
 • <b>18 ዓመት በታች፡</b> ከክፍያ ነጻ
 
@@ -1316,7 +1316,7 @@ async function processTelegramUpdate(update: any) {
 • 3ኛ ትውልድ፡ ወርሃዊ 100 ብር | የትውልድ 5,000 ብር
 • 4ኛ ትውልድ፡ ወርሃዊ 75 ብር | የትውልድ 1,000 ብር
 • 5ኛ ትውልድ፡ ወርሃዊ 50 ብር | የትውልድ 500 ብር
-• 6ኛ ትውልድ፡ ወርሃዊ 25 ብር | የትውልድ 250 ብር
+• 6ኛ ትውልድ፡ ወርሃዊ 25 ብር | የትውልድ 200 ብር
 • የትዳር አጋር፡ ወርሃዊ 100 ብር (የትውልድ ነጻ)
 • 18 ዓመት በታች፡ ነጻ
 
@@ -1798,7 +1798,7 @@ app.post('/api/notifications/proxy-payment', async (req: Request, res: Response)
       const datePaid = req.body?.datePaid || new Date().toLocaleDateString('am-ET');
       let tgText = '';
       if (type === 'ትውልድ') {
-        let genRates: Record<number, number> = { 3: 5000, 4: 1000, 5: 500, 6: 250 };
+        let genRates: Record<number, number> = { 3: 5000, 4: 1000, 5: 500, 6: 200 };
         let beneficiaryMember: any = (currentStore.members || []).find((m: any) => m.id === beneficiaryId) || null;
         let genPaidSoFar = 0;
 
@@ -1812,7 +1812,11 @@ app.post('/api/notifications/proxy-payment', async (req: Request, res: Response)
                 : Promise.resolve(null),
             ]);
             if (ratesSnap.exists() && ratesSnap.data()?.generationPayment) {
-              genRates = { ...genRates, ...ratesSnap.data().generationPayment };
+              const ratesDoc = ratesSnap.data();
+              genRates = { ...genRates, ...ratesDoc.generationPayment };
+              if (!ratesDoc.gen6Rate200Fixed && Number(genRates[6]) === 250) {
+                genRates[6] = 200;
+              }
             }
             if (mSnap && mSnap.exists()) {
               beneficiaryMember = { id: mSnap.id, ...mSnap.data() };
@@ -2239,11 +2243,14 @@ app.get('/api/reports', async (req: Request, res: Response) => {
     }
 
     const allContributionsRaw = [...contributions];
-    const defaultGenRatesReport: Record<number, number> = { 3: 5000, 4: 1000, 5: 500, 6: 250 };
+    const defaultGenRatesReport: Record<number, number> = { 3: 5000, 4: 1000, 5: 500, 6: 200 };
     const effectiveGenRatesReport: Record<number, number> = {
       ...defaultGenRatesReport,
       ...(settings?.generationPayment || {}),
     };
+    if (!settings?.gen6Rate200Fixed && Number(effectiveGenRatesReport[6]) === 250) {
+      effectiveGenRatesReport[6] = 200;
+    }
     let genPortfolioExpected = 0;
     let genPortfolioCollected = 0;
     let genPortfolioRemaining = 0;
@@ -2334,7 +2341,7 @@ app.get('/api/reports', async (req: Request, res: Response) => {
         generation3: { count: gen3Count, monthlyRate: settings?.monthlyRate?.[3] ?? 100, generationRate: settings?.generationPayment?.[3] ?? 5000 },
         generation4: { count: gen4Count, monthlyRate: settings?.monthlyRate?.[4] ?? 75, generationRate: settings?.generationPayment?.[4] ?? 1000 },
         generation5: { count: gen5Count, monthlyRate: settings?.monthlyRate?.[5] ?? 50, generationRate: settings?.generationPayment?.[5] ?? 500 },
-        generation6: { count: gen6Count, monthlyRate: settings?.monthlyRate?.[6] ?? 25, generationRate: settings?.generationPayment?.[6] ?? 250 },
+        generation6: { count: gen6Count, monthlyRate: settings?.monthlyRate?.[6] ?? 25, generationRate: effectiveGenRatesReport[6] ?? 200 },
       },
       bankAccountInfo: {
         bank: 'የኢትዮጵያ ንግድ ባንክ (CBE)',
@@ -2427,17 +2434,24 @@ app.post('/api/reports/send', async (req: Request, res: Response) => {
     };
     const monthName = monthNames[effectiveMonth] || `ወር ${effectiveMonth}`;
 
-    const defaultGenRates: Record<number, number> = { 3: 5000, 4: 1000, 5: 500, 6: 250 };
+    const defaultGenRates: Record<number, number> = { 3: 5000, 4: 1000, 5: 500, 6: 200 };
     let genRates: Record<number, number> = { ...defaultGenRates };
     if (db) {
       try {
         const settingsSnap = await getDoc(doc(db, 'settings', 'rates'));
         if (settingsSnap.exists() && settingsSnap.data()?.generationPayment) {
-          genRates = { ...genRates, ...settingsSnap.data().generationPayment };
+          const settingsDoc = settingsSnap.data();
+          genRates = { ...genRates, ...settingsDoc.generationPayment };
+          if (!settingsDoc.gen6Rate200Fixed && Number(genRates[6]) === 250) {
+            genRates[6] = 200;
+          }
         }
       } catch {}
     } else if (currentStore?.settings?.generationPayment) {
       genRates = { ...genRates, ...(currentStore.settings.generationPayment as any) };
+      if (!currentStore.settings?.gen6Rate200Fixed && Number(genRates[6]) === 250) {
+        genRates[6] = 200;
+      }
     }
 
     const computeMemberGenStats = (m: any, contribs: any[]) => {

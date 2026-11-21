@@ -477,7 +477,7 @@ export const BulkPaySelectedModal: React.FC<BulkPaySelectedModalProps> = ({
                 </div>
               ) : (
                 <div className="p-2.5 rounded-lg bg-white border border-emerald-200 text-[11px] text-emerald-900">
-                  የእያንዳንዱ አባል የትውልድ መዋጮ ቀሪ እዳ (ለምሳሌ 5,000 / 1,000 / 500 / 250 ብር) በራስ-ሰር ይሞላል፤ ከፊል ለመክፈል መጠኑን ማስተካከል ይችላሉ።
+                  የእያንዳንዱ አባል የትውልድ መዋጮ ቀሪ እዳ (ለምሳሌ 5,000 / 1,000 / 500 / 200 ብር) በራስ-ሰር ይሞላል፤ ከፊል ለመክፈል መጠኑን ማስተካከል ይችላሉ።
                 </div>
               )}
 

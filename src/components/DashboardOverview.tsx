@@ -855,7 +855,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 የትውልድ መዋጮ እስካሁን የተሰበሰበ፣ ቀሪ እና ጠቅላላ መሰብሰብ የነበረበት
               </h2>
               <p className="text-xs text-neutral-500">
-                3ኛ ትውልድ ({(settings.generationPayment[3] || 5000).toLocaleString()} ብር) · 4ኛ ({(settings.generationPayment[4] || 1000).toLocaleString()} ብር) · 5ኛ ({(settings.generationPayment[5] || 500).toLocaleString()} ብር) · 6ኛ ({(settings.generationPayment[6] || 250).toLocaleString()} ብር)
+                3ኛ ትውልድ ({(settings.generationPayment[3] || 5000).toLocaleString()} ብር) · 4ኛ ({(settings.generationPayment[4] || 1000).toLocaleString()} ብር) · 5ኛ ({(settings.generationPayment[5] || 500).toLocaleString()} ብር) · 6ኛ ({(settings.generationPayment[6] || 200).toLocaleString()} ብር)
               </p>
             </div>
           </div>
