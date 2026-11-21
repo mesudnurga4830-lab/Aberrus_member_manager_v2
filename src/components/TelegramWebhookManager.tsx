@@ -704,7 +704,7 @@ export const TelegramWebhookManager: React.FC<TelegramWebhookManagerProps> = ({ 
                   )}
                   <div className="text-[10px] text-neutral-400 flex items-center justify-between pt-1 border-t border-neutral-200/50">
                     <span>From ID: {rcpt.fromId}</span>
-                    <span>{rcpt.createdAt ? new Date(rcpt.createdAt).toLocaleDateString('am-ET') : ''}</span>
+                    <span>{rcpt.createdAt ? new Date(rcpt.createdAt).toLocaleString('en-US', { timeZone: 'Africa/Addis_Ababa', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true }) : ''}</span>
                   </div>
                 </div>
               ))}

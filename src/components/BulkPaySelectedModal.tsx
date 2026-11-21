@@ -46,6 +46,9 @@ interface BulkPaySelectedModalProps {
   settings: SettingsRates;
   defaultMonth: number;
   defaultYear: number;
+  isMasterAdmin?: boolean;
+  recordedByName?: string;
+  recordedByEmail?: string;
   onOpenBatchPayment?: (payerId?: string) => void;
   onSuccess: (result: {
     payerId: string;
@@ -63,6 +66,9 @@ export const BulkPaySelectedModal: React.FC<BulkPaySelectedModalProps> = ({
   settings,
   defaultMonth,
   defaultYear,
+  isMasterAdmin = false,
+  recordedByName,
+  recordedByEmail,
   onOpenBatchPayment,
   onSuccess,
 }) => {
@@ -256,6 +262,9 @@ export const BulkPaySelectedModal: React.FC<BulkPaySelectedModalProps> = ({
         ethiopianMonth: paymentType === 'ወርሃዊ' ? selectedMonth : 0,
         ethiopianYear: selectedYear,
         linkedMasterReceipt,
+        isMasterAdmin,
+        recordedByName,
+        recordedByEmail,
       });
 
       try {
@@ -312,6 +321,15 @@ export const BulkPaySelectedModal: React.FC<BulkPaySelectedModalProps> = ({
 
         {/* Scrollable Body */}
         <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
+          {!isMasterAdmin && (
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-xs flex items-center gap-2 font-semibold">
+              <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+              <span>
+                ከዋናው አድሚን ውጭ የሚመዘገቡ ክፍያዎች ዋናው አድሚን እስኪያጸድቃቸው ድረስ &quot;Pending&quot; ሆነው ይቆያሉ፤ ትክክለኛ ቀንና ሰዓት አብሮ ይመዘገባል።
+              </span>
+            </div>
+          )}
+
           {/* Error Banner */}
           {errorMsg && (
             <div className="p-3 rounded-xl bg-red-50 border border-red-300 text-red-900 text-xs flex items-center gap-2 font-semibold">

@@ -42,3 +42,46 @@ export function formatEthiopianCurrency(amount: number): string {
     maximumFractionDigits: 0,
   }).format(amount).replace('ETB', 'ብር');
 }
+
+export function formatPaymentDateTime(dateInput?: Date | string): string {
+  const date = dateInput instanceof Date ? dateInput : dateInput ? new Date(dateInput) : new Date();
+  const validDate = isNaN(date.getTime()) ? new Date() : date;
+  try {
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Africa/Addis_Ababa',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+    }).format(validDate);
+  } catch {
+    return validDate.toISOString().replace('T', ' ').slice(0, 19);
+  }
+}
+
+export function buildPaymentTimestamps(nowInput?: Date): { paidAt: string; datePaid: string } {
+  const now = nowInput || new Date();
+  return {
+    paidAt: now.toISOString(),
+    datePaid: formatPaymentDateTime(now),
+  };
+}
+
+export function formatDisplayPaymentDateTime(datePaid?: string, paidAt?: string): string {
+  if (paidAt) {
+    const formatted = formatPaymentDateTime(paidAt);
+    if (datePaid && !/\d{1,2}:\d{2}/.test(datePaid)) {
+      return `${datePaid} (${formatted})`;
+    }
+    return formatted;
+  }
+  if (!datePaid) return '-';
+  if (/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(datePaid)) {
+    return formatPaymentDateTime(datePaid);
+  }
+  return datePaid;
+}
+

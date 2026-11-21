@@ -74,7 +74,12 @@ export interface Contribution {
   paymentMethod?: PaymentMethod;
   transactionRef?: string;
   datePaid?: string;
+  paidAt?: string; // Exact ISO timestamp when payment was recorded
   recordedBy?: string;
+  recordedByEmail?: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  intendedStatus?: ContributionStatus;
   receiptNumber?: string;
   notes?: string;
   isInstallment?: boolean; // የትውልድ መዋጮ በከፊል/በየወሩ የሚከፈል
@@ -113,9 +118,14 @@ export interface MasterReceipt {
   status: MasterReceiptStatus;
   walletCredited: boolean; // True once payer's walletBalance has been credited
   notes?: string;
+  datePaid?: string;
   createdAt: string;
   updatedAt: string;
   createdBy?: 'member' | 'admin';
+  recordedByName?: string;
+  recordedByEmail?: string;
+  approvedBy?: string;
+  approvedAt?: string;
   allocationsCount?: number;
 }
 

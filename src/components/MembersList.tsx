@@ -31,6 +31,7 @@ import {
   CheckSquare,
   Coins,
   Loader2,
+  Clock,
 } from 'lucide-react';
 import {
   shareAppLinkToMember,
@@ -45,6 +46,11 @@ import {
   getEffectiveMonthlyRate,
   getEffectiveGenRate,
   getMemberGenContributionStats,
+  isPaidStatus,
+  isPendingStatus,
+  isPaidOrPartialStatus,
+  getContributionMonth,
+  getContributionYear,
 } from '../utils/storage';
 
 interface MembersListProps {
@@ -53,6 +59,9 @@ interface MembersListProps {
   contributions: Contribution[];
   settings: SettingsRates;
   isLoading?: boolean;
+  isMasterAdmin?: boolean;
+  currentUserName?: string;
+  currentUserEmail?: string;
   onOpenAddMember: () => void;
   onOpenBulkImport?: () => void;
   onOpenQR: (member: Member) => void;
@@ -116,6 +125,9 @@ export const MembersList: React.FC<MembersListProps> = ({
   contributions,
   settings,
   isLoading = false,
+  isMasterAdmin = false,
+  currentUserName,
+  currentUserEmail,
   onOpenAddMember,
   onOpenBulkImport,
   onOpenQR,
@@ -249,11 +261,30 @@ export const MembersList: React.FC<MembersListProps> = ({
   // Helper to check active month Paid status (supports both 'ተከፍሏል' and 'Paid')
   const isMemberPaidForActiveMonth = (memberId: string): boolean => {
     return contributions.some((c) => {
-      const m = Number(c.month ?? c.ethiopianMonth);
-      const y = Number(c.year ?? c.ethiopianYear);
-      const st = String(c.status || '').trim().toLowerCase();
-      const isPaid = st === 'paid' || st === 'ተከፍሏል';
-      return c.memberId === memberId && (!c.type || c.type === 'ወርሃዊ') && m === activeMonth && y === activeYear && isPaid;
+      const m = getContributionMonth(c);
+      const y = getContributionYear(c);
+      return (
+        c.memberId === memberId &&
+        (!c.type || c.type === 'ወርሃዊ') &&
+        m === activeMonth &&
+        y === activeYear &&
+        isPaidStatus(c.status)
+      );
+    });
+  };
+
+  // Helper to check active month Pending status
+  const isMemberPendingForActiveMonth = (memberId: string): boolean => {
+    return contributions.some((c) => {
+      const m = getContributionMonth(c);
+      const y = getContributionYear(c);
+      return (
+        c.memberId === memberId &&
+        (!c.type || c.type === 'ወርሃዊ') &&
+        m === activeMonth &&
+        y === activeYear &&
+        isPendingStatus(c.status)
+      );
     });
   };
 
@@ -848,9 +879,13 @@ export const MembersList: React.FC<MembersListProps> = ({
                 filteredMembers.map((member) => {
                   const monthlyRate = getEffectiveMonthlyRate(member, settings);
                   const isMonthlyPaid = isMemberPaidForActiveMonth(member.id);
+                  const isMonthlyPending = !isMonthlyPaid && isMemberPendingForActiveMonth(member.id);
                   const isSelected = selectedMemberIds.has(member.id);
 
                   const genStats = getMemberGenContributionStats(member, settings, contributions);
+                  const hasPendingGen = contributions.some(
+                    (c) => c.memberId === member.id && c.type === 'ትውልድ' && isPendingStatus(c.status)
+                  );
 
                   return (
                     <tr
@@ -980,35 +1015,71 @@ export const MembersList: React.FC<MembersListProps> = ({
                         )}
                       </td>
 
-                      {/* Monthly Payment Status Badge (Paid / Unpaid) for Active Month */}
+                      {/* Monthly Payment Status Badge (Paid / Pending / Unpaid) for Active Month */}
                       <td className="py-3 px-3 text-center">
                         {member.isMinor ? (
                           <span className="inline-block px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 font-bold text-[10px] border border-emerald-200">
                             👶 ከክፍያ ነፃ
                           </span>
                         ) : isMonthlyPaid ? (
-                          <button
-                            type="button"
-                            onClick={() => onToggleMonthlyStatus(member.id, activeMonth, activeYear, false)}
-                            title={`${activeMonthName} ${activeYear} ተከፍሏል (Paid) - ለመቀየር ይጫኑ`}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 hover:bg-red-50 hover:text-red-700 hover:border-red-300 text-emerald-800 font-bold text-[11px] transition-all border border-emerald-300 group cursor-pointer shadow-2xs"
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 group-hover:hidden" />
-                            <X className="w-3.5 h-3.5 text-red-600 hidden group-hover:inline" />
-                            <span className="group-hover:hidden">Paid · ተከፍሏል</span>
-                            <span className="hidden group-hover:inline">ሰርዝ</span>
-                          </button>
+                          isMasterAdmin ? (
+                            <button
+                              type="button"
+                              onClick={() => onToggleMonthlyStatus(member.id, activeMonth, activeYear, false)}
+                              title={`${activeMonthName} ${activeYear} ተከፍሏል (Paid) - ለመቀየር ይጫኑ`}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 hover:bg-red-50 hover:text-red-700 hover:border-red-300 text-emerald-800 font-bold text-[11px] transition-all border border-emerald-300 group cursor-pointer shadow-2xs"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 group-hover:hidden" />
+                              <X className="w-3.5 h-3.5 text-red-600 hidden group-hover:inline" />
+                              <span className="group-hover:hidden">Paid · ተከፍሏል</span>
+                              <span className="hidden group-hover:inline">ሰርዝ</span>
+                            </button>
+                          ) : (
+                            <span
+                              title={`${activeMonthName} ${activeYear} ተከፍሏል (የጸደቀ ክፍያ)`}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[11px] border border-emerald-300 shadow-2xs"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Paid · ተከፍሏል</span>
+                            </span>
+                          )
+                        ) : isMonthlyPending ? (
+                          isMasterAdmin ? (
+                            <button
+                              type="button"
+                              onClick={() => onToggleMonthlyStatus(member.id, activeMonth, activeYear, true)}
+                              title={`${activeMonthName} ${activeYear} የዋና አድሚን ማረጋገጫ ይጠብቃል — ለማጽደቅ ይጫኑ`}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 hover:bg-emerald-100 hover:text-emerald-800 hover:border-emerald-300 text-amber-900 font-bold text-[11px] transition-all border border-amber-300 group cursor-pointer shadow-2xs"
+                            >
+                              <Clock className="w-3.5 h-3.5 text-amber-700 group-hover:hidden" />
+                              <Check className="w-3.5 h-3.5 text-emerald-600 hidden group-hover:inline" />
+                              <span className="group-hover:hidden">Pending · በመጠባበቅ</span>
+                              <span className="hidden group-hover:inline">አጽድቅ</span>
+                            </button>
+                          ) : (
+                            <span
+                              title="የዋናው አስተዳዳሪ ማረጋገጫ በመጠባበቅ ላይ (Pending)"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 font-bold text-[11px] border border-amber-300 shadow-2xs"
+                            >
+                              <Clock className="w-3.5 h-3.5 text-amber-700" />
+                              <span>Pending · በመጠባበቅ</span>
+                            </span>
+                          )
                         ) : (
                           <button
                             type="button"
                             onClick={() => onToggleMonthlyStatus(member.id, activeMonth, activeYear, true)}
-                            title={`${activeMonthName} ${activeYear} አልተከፈለም (Unpaid) - ለመክፈል ይጫኑ`}
+                            title={
+                              isMasterAdmin
+                                ? `${activeMonthName} ${activeYear} አልተከፈለም (Unpaid) - ለመክፈል ይጫኑ`
+                                : `${activeMonthName} ${activeYear} አልተከፈለም - በPending ለመመዝገብ ይጫኑ`
+                            }
                             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-100 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-300 text-red-700 font-bold text-[11px] transition-all border border-red-300 group cursor-pointer shadow-2xs"
                           >
                             <AlertTriangle className="w-3.5 h-3.5 text-red-600 group-hover:hidden" />
                             <Check className="w-3.5 h-3.5 text-emerald-600 hidden group-hover:inline" />
                             <span className="group-hover:hidden">Unpaid · አልከፈለም</span>
-                            <span className="hidden group-hover:inline">ክፈል</span>
+                            <span className="hidden group-hover:inline">{isMasterAdmin ? 'ክፈል' : 'መዝግብ (Pending)'}</span>
                           </button>
                         )}
                       </td>
@@ -1034,12 +1105,24 @@ export const MembersList: React.FC<MembersListProps> = ({
                             <span className="text-[10px] text-red-700 font-mono font-bold">
                               ቀሪ፡ {genStats.remainingBalance.toLocaleString()} ብር
                             </span>
+                            {hasPendingGen && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 text-[9px] font-bold border border-amber-300">
+                                <Clock className="w-2.5 h-2.5" /> Pending
+                              </span>
+                            )}
                           </div>
                         ) : (
                           <div className="inline-flex flex-col items-center gap-0.5">
-                            <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-700 font-bold text-[10px] border border-red-200">
-                              አልተከፈለም
-                            </span>
+                            {hasPendingGen ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 font-bold text-[10px] border border-amber-300">
+                                <Clock className="w-3 h-3 text-amber-700" />
+                                <span>በመጠባበቅ (Pending)</span>
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-700 font-bold text-[10px] border border-red-200">
+                                አልተከፈለም
+                              </span>
+                            )}
                             <span className="text-[10px] text-neutral-500 font-mono">
                               ቀሪ፡ {genStats.remainingBalance.toLocaleString()} ብር
                             </span>
@@ -1147,6 +1230,7 @@ export const MembersList: React.FC<MembersListProps> = ({
           families={families}
           contributions={contributions}
           settings={settings}
+          isMasterAdmin={isMasterAdmin}
           onUpdateMember={onUpdateMember}
           onDeleteMember={onDeleteMember}
           onToggleMonthlyStatus={onToggleMonthlyStatus}
@@ -1246,74 +1330,84 @@ export const MembersList: React.FC<MembersListProps> = ({
           settings={settings}
           defaultMonth={activeMonth}
           defaultYear={activeYear}
+          isMasterAdmin={isMasterAdmin}
+          recordedByName={currentUserName}
+          recordedByEmail={currentUserEmail}
           onOpenBatchPayment={onOpenBatchPayment}
           onSuccess={(result) => {
             if (onBulkWalletPaymentComplete) {
               onBulkWalletPaymentComplete(result);
             }
             const payerMember = members.find((m) => m.id === result.payerId) || null;
-            const updatedContribs = [
-              ...result.createdContributions,
-              ...contributions.filter(
-                (existing) => !result.createdContributions.some((c) => c.id === existing.id)
-              ),
-            ];
-            const bulkReportText = formatBulkPaymentTelegramReport({
-              payer: payerMember,
-              items: result.createdContributions.map((c) => ({
-                member:
-                  members.find((m) => m.id === c.memberId) || {
-                    id: c.memberId,
-                    fullName: c.memberName,
-                    generation: c.generation,
-                    familyId: c.familyId,
-                    familyName: c.familyName,
-                    phone: '',
-                  },
-                type: c.type,
-                amount: Number(c.paidAmount ?? c.amount ?? 0),
-                ethiopianMonth: c.ethiopianMonth,
-                ethiopianMonthName: c.ethiopianMonthName,
-                ethiopianYear: c.ethiopianYear,
-                datePaid: c.datePaid,
-              })),
-              allContributions: updatedContribs,
-              settings,
-            });
-            setLastBulkTelegramPayload({
-              name: 'የማህበሩ Telegram Group',
-              role: 'የጅምላ ክፍያ ሪፖርት (Group Report)',
-              phone: payerMember?.phone || '',
-              telegram: payerMember?.telegram || '',
-              messageText: bulkReportText,
-              directUrl: getAppUrl(),
-            });
+            const anyApproved = result.createdContributions.some((c) => isPaidOrPartialStatus(c.status));
 
-            // Rule 3: Dispatch approved bulk payment report ONLY to VITE_TELEGRAM_GROUP_CHAT_ID
-            void dispatchApprovedPaymentReportToGroup({
-              target: 'bulk_payment',
-              payerName: payerMember?.fullName || 'አስተዳዳሪ / ወኪል',
-              bulkItems: result.createdContributions.map((c) => {
-                const mem = members.find((m) => m.id === c.memberId);
-                return {
-                  memberId: c.memberId,
-                  memberName: c.memberName,
-                  generation: c.generation,
-                  isMinor: mem?.isMinor,
-                  isSpouse: mem?.isSpouse,
+            if (anyApproved) {
+              const updatedContribs = [
+                ...result.createdContributions,
+                ...contributions.filter(
+                  (existing) => !result.createdContributions.some((c) => c.id === existing.id)
+                ),
+              ];
+              const bulkReportText = formatBulkPaymentTelegramReport({
+                payer: payerMember,
+                items: result.createdContributions.map((c) => ({
+                  member:
+                    members.find((m) => m.id === c.memberId) || {
+                      id: c.memberId,
+                      fullName: c.memberName,
+                      generation: c.generation,
+                      familyId: c.familyId,
+                      familyName: c.familyName,
+                      phone: '',
+                    },
                   type: c.type,
                   amount: Number(c.paidAmount ?? c.amount ?? 0),
                   ethiopianMonth: c.ethiopianMonth,
                   ethiopianMonthName: c.ethiopianMonthName,
                   ethiopianYear: c.ethiopianYear,
                   datePaid: c.datePaid,
-                };
-              }),
-              reportText: bulkReportText,
-            });
+                })),
+                allContributions: updatedContribs,
+                settings,
+              });
+              setLastBulkTelegramPayload({
+                name: 'የማህበሩ Telegram Group',
+                role: 'የጅምላ ክፍያ ሪፖርት (Group Report)',
+                phone: payerMember?.phone || '',
+                telegram: payerMember?.telegram || '',
+                messageText: bulkReportText,
+                directUrl: getAppUrl(),
+              });
+
+              // Rule 3: Dispatch approved bulk payment report ONLY to VITE_TELEGRAM_GROUP_CHAT_ID
+              void dispatchApprovedPaymentReportToGroup({
+                target: 'bulk_payment',
+                payerName: payerMember?.fullName || 'አስተዳዳሪ / ወኪል',
+                bulkItems: result.createdContributions.map((c) => {
+                  const mem = members.find((m) => m.id === c.memberId);
+                  return {
+                    memberId: c.memberId,
+                    memberName: c.memberName,
+                    generation: c.generation,
+                    isMinor: mem?.isMinor,
+                    isSpouse: mem?.isSpouse,
+                    type: c.type,
+                    amount: Number(c.paidAmount ?? c.amount ?? 0),
+                    ethiopianMonth: c.ethiopianMonth,
+                    ethiopianMonthName: c.ethiopianMonthName,
+                    ethiopianYear: c.ethiopianYear,
+                    datePaid: c.datePaid,
+                  };
+                }),
+                reportText: bulkReportText,
+              });
+            }
+
             setSelectedMemberIds(new Set());
             setDeleteNotice(
-              `ለ${result.createdContributions.length} የተመረጡ አባላት ከCredit Wallet በተሳካ ሁኔታ ተከፍሏል! ቀሪ ሂሳብ፡ ${result.newWalletBalance.toLocaleString()} ብር (የጅምላ ሪፖርት ወደ Telegram Group ተልኳል)`
+              anyApproved
+                ? `ለ${result.createdContributions.length} የተመረጡ አባላት ከCredit Wallet በተሳካ ሁኔታ ተከፍሏል! ቀሪ ሂሳብ፡ ${result.newWalletBalance.toLocaleString()} ብር (የጅምላ ሪፖርት ወደ Telegram Group ተልኳል)`
+                : `ለ${result.createdContributions.length} የተመረጡ አባላት የቀረበው የክፍፍል ክፍያ በPending ሁኔታ ተመዝግቧል! የዋና አድሚን (Master Admin) ማረጋገጫ ይጠብቃል።`
             );
           }}
         />

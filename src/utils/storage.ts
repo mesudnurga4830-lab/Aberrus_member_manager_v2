@@ -348,6 +348,11 @@ export function isPartialStatus(status: unknown): boolean {
   return s === 'ከፊል' || s === 'partial';
 }
 
+export function isPendingStatus(status: unknown): boolean {
+  const s = String(status || '').trim().toLowerCase();
+  return s === 'pending' || s === 'በመጠባበቅ ላይ' || s.includes('pending') || s.includes('በመጠባበቅ');
+}
+
 export function isPaidOrPartialStatus(status: unknown): boolean {
   return isPaidStatus(status) || isPartialStatus(status);
 }
@@ -412,11 +417,15 @@ export function getContributions(): Contribution[] {
           monthlyMap.set(key, c);
         } else {
           hasDeduplicated = true;
-          // Keep the paid record or the one with higher paid amount
-          if (
-            getContributionPaidAmount(c) > getContributionPaidAmount(existing) ||
-            (isPaidStatus(c.status) && !isPaidStatus(existing.status))
-          ) {
+          const rank = (rec: Contribution) => {
+            if (isPaidStatus(rec.status)) return 4;
+            if (isPartialStatus(rec.status)) return 3;
+            if (isPendingStatus(rec.status)) return 2;
+            return 1;
+          };
+          const cRank = rank(c);
+          const eRank = rank(existing);
+          if (cRank > eRank || (cRank === eRank && getContributionPaidAmount(c) > getContributionPaidAmount(existing))) {
             monthlyMap.set(key, c);
           }
         }
@@ -920,11 +929,15 @@ export function deduplicateAndCleanAllContributions(): { beforeCount: number; af
       if (!existing) {
         monthlyMap.set(key, c);
       } else {
-        // Keep the paid record or higher paid amount
-        if (
-          getContributionPaidAmount(c) > getContributionPaidAmount(existing) ||
-          (isPaidStatus(c.status) && !isPaidStatus(existing.status))
-        ) {
+        const rank = (rec: Contribution) => {
+          if (isPaidStatus(rec.status)) return 4;
+          if (isPartialStatus(rec.status)) return 3;
+          if (isPendingStatus(rec.status)) return 2;
+          return 1;
+        };
+        const cRank = rank(c);
+        const eRank = rank(existing);
+        if (cRank > eRank || (cRank === eRank && getContributionPaidAmount(c) > getContributionPaidAmount(existing))) {
           monthlyMap.set(key, c);
         }
       }

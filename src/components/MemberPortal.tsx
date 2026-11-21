@@ -21,7 +21,18 @@ import {
   subscribeToComplaints,
 } from '../firebase';
 import { generateSvgQRCode } from '../utils/qrCode';
-import { getCurrentEthiopianDate, getEthiopianMonthName } from '../utils/ethiopianCalendar';
+import {
+  getCurrentEthiopianDate,
+  getEthiopianMonthName,
+  buildPaymentTimestamps,
+  formatDisplayPaymentDateTime,
+} from '../utils/ethiopianCalendar';
+import {
+  isPendingStatus,
+  isPaidStatus,
+  isPartialStatus,
+  isPaidOrPartialStatus,
+} from '../utils/storage';
 import {
   User,
   Users,
@@ -395,6 +406,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
 
   const paidMonthsCount = monthStatuses.filter((m) => m.status === 'paid').length;
   const partialMonthsCount = monthStatuses.filter((m) => m.status === 'partial').length;
+  const pendingMonthsCount = monthStatuses.filter((m) => m.status === 'pending').length;
   const unpaidMonthsCount = monthStatuses.filter((m) => m.status === 'unpaid').length;
 
   // Monthly progress calculation
@@ -595,7 +607,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
       try {
         const masterId = `MR-${Date.now()}`;
         const masterReceiptNumber = `M-RCPT-${Date.now().toString().slice(-6)}`;
-        const nowIso = new Date().toISOString();
+        const ts = buildPaymentTimestamps();
         const newMasterReceipt: MasterReceipt = {
           id: masterId,
           receiptNumber: masterReceiptNumber,
@@ -608,15 +620,17 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
           remainingBalance: parsedTotal,
           paymentMethod: claimedMethod as PaymentMethod,
           transactionRef: claimedTxRef.trim(),
+          datePaid: ts.datePaid,
           slipPhoto: slipPhoto || null,
           status: 'Pending',
           walletCredited: false,
           notes:
             batchIntendedNotes.trim() ||
             'በአባሉ የቀረበ የጅምላ ደረሰኝ (Submitted via Member Portal for Batch Allocation)',
-          createdAt: nowIso,
-          updatedAt: nowIso,
+          createdAt: ts.paidAt,
+          updatedAt: ts.paidAt,
           createdBy: 'member',
+          recordedByName: activeMember.fullName,
           allocationsCount: 0,
         };
 
@@ -673,9 +687,10 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
     const parsedAmount = parseFloat(claimAmount) || defaultRate;
 
     const newContribId = `CON-${Date.now()}`;
+    const ts = buildPaymentTimestamps();
     const newContribution: Contribution = {
       id: newContribId,
-      memberId: targetMember.id, // points to beneficiary so their grid & progress bar update
+      memberId: targetMember.id,
       memberName: targetMember.fullName,
       familyId: targetMember.familyId || activeMember.familyId || 'FA001',
       familyName: targetMember.familyName || activeMember.familyName || 'የአበሩስ ቤተሰብ',
@@ -686,16 +701,19 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
       ethiopianYear: 2018,
       amount: defaultRate,
       paidAmount: parsedAmount,
-      status: isProxy ? 'Pending' : 'ተከፍሏል',
+      status: 'Pending',
+      intendedStatus: 'ተከፍሏል',
       paymentMethod: claimedMethod as any,
       transactionRef: claimedTxRef.trim(),
-      datePaid: new Date().toISOString(),
+      datePaid: ts.datePaid,
+      paidAt: ts.paidAt,
+      recordedBy: activeMember.fullName,
       receiptNumber: `RCPT-${Date.now().toString().slice(-6)}`,
       notes: isProxy
-        ? `ተኪ ክፍያ (Proxy): ከፋይ ${activeMember.fullName} (${activeMember.id}) ለ ${targetMember.fullName} (${targetMember.id})`
+        ? `ተኪ ክፍያ (Proxy): ከፋይ ${activeMember.fullName} (${activeMember.id}) ለ ${targetMember.fullName} (${targetMember.id}) — የዋና አድሚን ማረጋገጫ የሚጠብቅ`
         : slipPhoto
-        ? 'ደረሰኝ ፎቶ ተያይዟል (Submitted via Member Portal)'
-        : 'Submitted via Member Portal',
+        ? 'ደረሰኝ ፎቶ ተያይዟል (Submitted via Member Portal — Pending Approval)'
+        : 'Submitted via Member Portal (Pending Master Admin Approval)',
       slipPhoto: slipPhoto || null,
       payerId: activeMember.id,
       payerName: activeMember.fullName,
@@ -723,7 +741,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
       beneficiaryId: targetMember.id,
       beneficiaryName: targetMember.fullName,
       isProxyPayment: isProxy,
-      status: isProxy ? 'Pending' : 'ተከፍሏል',
+      status: 'Pending',
     });
 
     // Save directly to Firestore contributions collection
@@ -1672,6 +1690,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                     <th className="py-2.5 px-3">የተከፈለለት አባል (Beneficiary)</th>
                     <th className="py-2.5 px-3">ዓይነት / ወር</th>
                     <th className="py-2.5 px-3">የተከፈለ መጠን</th>
+                    <th className="py-2.5 px-3">ቀንና ሰዓት</th>
                     <th className="py-2.5 px-3">የክፍያ ዘዴ</th>
                     <th className="py-2.5 px-3">ማረጋገጫ Ref</th>
                     <th className="py-2.5 px-3">የማረጋገጫ ሁኔታ</th>
@@ -1697,20 +1716,31 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                       <td className="py-2.5 px-3 font-mono font-bold text-[#1B5E20]">
                         {p.paidAmount || p.amount} ብር
                       </td>
+                      <td className="py-2.5 px-3 font-mono text-[11px] text-[#616161]">
+                        {formatDisplayPaymentDateTime(p.datePaid, p.paidAt)}
+                      </td>
                       <td className="py-2.5 px-3 text-[#757575]">{p.paymentMethod || 'CBE'}</td>
                       <td className="py-2.5 px-3 font-mono text-[11px] text-[#757575]">
                         {p.transactionRef || p.receiptNumber || p.id}
                       </td>
                       <td className="py-2.5 px-3">
-                        {p.status === 'Pending' ? (
+                        {isPendingStatus(p.status) ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
                             <Clock className="w-3 h-3" />
                             <span>በመጠባበቅ ላይ (Pending)</span>
                           </span>
-                        ) : (
+                        ) : isPartialStatus(p.status) ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
+                            <span>ከፊል (Partial)</span>
+                          </span>
+                        ) : isPaidStatus(p.status) ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
                             <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                             <span>{p.status || 'ተከፍሏል'}</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-700 border border-red-200">
+                            <span>{p.status || 'ያልተከፈለ'}</span>
                           </span>
                         )}
                       </td>
@@ -1951,11 +1981,17 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
           </div>
 
           {/* Summary Badges */}
-          <div className="flex items-center gap-2 text-xs font-bold">
+          <div className="flex items-center flex-wrap gap-2 text-xs font-bold">
             <span className="px-2.5 py-1 rounded-md bg-[#4CAF50]/15 text-[#1B5E20] border border-[#4CAF50]/30 flex items-center gap-1">
               <CheckCircle2 className="w-3.5 h-3.5 text-[#4CAF50]" />
               <span>{paidMonthsCount} {isEn ? 'Paid' : 'ተከፍሏል'}</span>
             </span>
+            {pendingMonthsCount > 0 && (
+              <span className="px-2.5 py-1 rounded-md bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 text-amber-700" />
+                <span>{pendingMonthsCount} {isEn ? 'Pending' : 'በመጠባበቅ'}</span>
+              </span>
+            )}
             <span className="px-2.5 py-1 rounded-md bg-[#FFEBEE] text-[#F44336] border border-[#F44336]/30 flex items-center gap-1">
               <XCircle className="w-3.5 h-3.5 text-[#F44336]" />
               <span>{unpaidMonthsCount} {isEn ? 'Unpaid' : 'ያልተከፈለ'}</span>
@@ -1968,6 +2004,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
           {monthStatuses.map((item) => {
             const isPaid = item.status === 'paid';
             const isPartial = item.status === 'partial';
+            const isPending = item.status === 'pending';
             const isUnpaid = item.status === 'unpaid';
 
             return (
@@ -1980,6 +2017,8 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                 } ${
                   isPaid
                     ? 'bg-[#4CAF50] text-white shadow-xs'
+                    : isPending
+                    ? 'bg-amber-100 text-amber-950 border-amber-400'
                     : isPartial
                     ? 'bg-[#FFF9C4] text-[#212121]'
                     : 'bg-[#FFEBEE] text-[#212121]'
@@ -2010,6 +2049,11 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                       <span className="text-white font-extrabold text-base leading-none">✓</span>
                     </div>
                   )}
+                  {isPending && (
+                    <div className="w-7 h-7 rounded-full bg-amber-500/25 flex items-center justify-center">
+                      <Clock className="w-4 h-4 text-amber-800" />
+                    </div>
+                  )}
                   {isPartial && (
                     <div className="w-7 h-7 rounded-full bg-[#FF9800]/20 flex items-center justify-center">
                       <span className="text-[#FF9800] font-black text-sm leading-none">◐</span>
@@ -2026,13 +2070,23 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                 <div className="w-full">
                   <span
                     className={`block text-[10px] font-bold uppercase tracking-tight truncate ${
-                      isPaid ? 'text-white' : isPartial ? 'text-[#FF9800]' : 'text-[#F44336]'
+                      isPaid
+                        ? 'text-white'
+                        : isPending
+                        ? 'text-amber-900'
+                        : isPartial
+                        ? 'text-[#FF9800]'
+                        : 'text-[#F44336]'
                     }`}
                   >
                     {isPaid
                       ? isEn
                         ? 'Paid'
                         : 'ተከፍሏል'
+                      : isPending
+                      ? isEn
+                        ? 'Pending'
+                        : 'በመጠባበቅ'
                       : isPartial
                       ? isEn
                         ? 'Partial'
@@ -2057,6 +2111,12 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
           <div className="flex items-center gap-1.5">
             <span className="w-3.5 h-3.5 rounded bg-[#4CAF50] text-white flex items-center justify-center text-[10px] font-bold">✓</span>
             <span>{isEn ? 'Paid' : 'ተከፍሏል'}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-3.5 h-3.5 rounded bg-amber-100 text-amber-800 border border-amber-400 flex items-center justify-center">
+              <Clock className="w-2.5 h-2.5" />
+            </span>
+            <span>{isEn ? 'Pending Approval' : 'በመጠባበቅ ላይ (Pending)'}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-3.5 h-3.5 rounded bg-[#FFF9C4] text-[#FF9800] border border-[#FF9800]/40 flex items-center justify-center text-[10px] font-bold">◐</span>
@@ -2241,9 +2301,13 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
           </div>
 
           {submittedAlert && (
-            <div className="p-3 mb-3 bg-[#4CAF50]/15 border border-[#4CAF50] text-[#1B5E20] rounded-lg text-xs flex items-center gap-2 animate-bounce">
-              <CheckCircle2 className="w-4 h-4 text-[#4CAF50] shrink-0" />
-              <span>{isEn ? 'Payment recorded successfully! Live balance updated.' : 'የክፍያ ደረሰኝዎ በተሳካ ሁኔታ ተመዝግቧል! የቀጥታ መረጃው ታድሷል።'}</span>
+            <div className="p-3 mb-3 bg-amber-50 border border-amber-400 text-amber-950 rounded-lg text-xs flex items-center gap-2">
+              <Clock className="w-4 h-4 text-amber-700 shrink-0" />
+              <span>
+                {isEn
+                  ? 'Payment submitted with exact date & time! Status is Pending until approved by the Master Admin.'
+                  : 'የክፍያ ደረሰኝዎ በትክክለኛ ቀንና ሰዓት ተመዝግቦ ለዋናው አስተዳዳሪ ማረጋገጫ (Pending) ተልኳል! አስተዳዳሪው ሲያጸድቀው የክፍያ ሁኔታዎ ይታደሳል።'}
+              </span>
             </div>
           )}
 
@@ -2830,6 +2894,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                   <th className="py-2.5 px-3">ወር / ዓመት</th>
                   <th className="py-2.5 px-3">ዓይነት</th>
                   <th className="py-2.5 px-3">የተከፈለ መጠን</th>
+                  <th className="py-2.5 px-3">ቀንና ሰዓት</th>
                   <th className="py-2.5 px-3">የክፍያ ዘዴ</th>
                   <th className="py-2.5 px-3">ማረጋገጫ Ref</th>
                   <th className="py-2.5 px-3">ሁኔታ</th>
@@ -2845,14 +2910,32 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                     <td className="py-2.5 px-3 font-mono font-bold text-[#1B5E20]">
                       {c.paidAmount || c.amount} ብር
                     </td>
+                    <td className="py-2.5 px-3 font-mono text-[11px] text-[#616161]">
+                      {formatDisplayPaymentDateTime(c.datePaid, c.paidAt)}
+                    </td>
                     <td className="py-2.5 px-3 text-[#757575]">{c.paymentMethod || 'CBE'}</td>
                     <td className="py-2.5 px-3 font-mono text-[11px] text-[#757575]">
                       {c.transactionRef || c.receiptNumber || c.id}
                     </td>
                     <td className="py-2.5 px-3">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#4CAF50]/15 text-[#1B5E20] border border-[#4CAF50]/30">
-                        {c.status || 'ተከፍሏል'}
-                      </span>
+                      {isPendingStatus(c.status) ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                          <Clock className="w-3 h-3" />
+                          <span>በመጠባበቅ ላይ (Pending)</span>
+                        </span>
+                      ) : isPartialStatus(c.status) ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
+                          ከፊል (Partial)
+                        </span>
+                      ) : isPaidStatus(c.status) ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#4CAF50]/15 text-[#1B5E20] border border-[#4CAF50]/30">
+                          ✓ {c.status || 'ተከፍሏል'}
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-700 border border-red-200">
+                          {c.status || 'ያልተከፈለ'}
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}

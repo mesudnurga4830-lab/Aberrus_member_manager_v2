@@ -51,8 +51,8 @@ import {
   RoleAssignment,
 } from './types';
 import { initialSettings, initialMembers } from './data/initialData';
-import { getMembers, saveMembers, addMembersBatch, addContributionsBatch, updateMember } from './utils/storage';
-import { getEthiopianMonthName } from './utils/ethiopianCalendar';
+import { getMembers, saveMembers, addMembersBatch, addContributionsBatch, updateMember, isPendingStatus } from './utils/storage';
+import { getEthiopianMonthName, buildPaymentTimestamps } from './utils/ethiopianCalendar';
 import { generateLoginToken } from './utils/token';
 
 // Initialize Firebase App
@@ -1538,7 +1538,33 @@ export async function saveContributionToFirestore(contribution: Contribution): P
   const m = Number(contribution.month ?? contribution.ethiopianMonth ?? 11);
   const y = Number(contribution.year ?? contribution.ethiopianYear ?? 2018);
   const rawStatus = String(contribution.status || '').trim();
-  const normalizedStatus = (rawStatus === 'ተከፍሏል' || rawStatus === 'Paid') ? 'Paid' : (contribution.status || 'Paid');
+  const lowerStatus = rawStatus.toLowerCase();
+
+  let normalizedStatus: string = rawStatus || 'ያልተከፈለ';
+  let statusAm = rawStatus || 'ያልተከፈለ';
+  if (rawStatus === 'ተከፍሏል' || lowerStatus === 'paid' || lowerStatus === 'completed' || lowerStatus === 'approved') {
+    normalizedStatus = 'Paid';
+    statusAm = 'ተከፍሏል';
+  } else if (isPendingStatus(rawStatus)) {
+    normalizedStatus = 'Pending';
+    statusAm = 'በመጠባበቅ ላይ (Pending)';
+  } else if (rawStatus === 'ከፊል' || lowerStatus === 'partial') {
+    normalizedStatus = 'ከፊል';
+    statusAm = 'ከፊል';
+  } else if (rawStatus === 'ያልተከፈለ' || lowerStatus === 'unpaid') {
+    normalizedStatus = 'ያልተከፈለ';
+    statusAm = 'ያልተከፈለ';
+  }
+
+  const ts = buildPaymentTimestamps();
+  const hasPaidOrPending = normalizedStatus === 'Paid' || normalizedStatus === 'Pending' || normalizedStatus === 'ከፊል';
+  const resolvedPaidAt = contribution.paidAt || (hasPaidOrPending ? ts.paidAt : '');
+  const resolvedDatePaid =
+    contribution.datePaid && /\d{1,2}:\d{2}/.test(contribution.datePaid)
+      ? contribution.datePaid
+      : hasPaidOrPending
+      ? (contribution.datePaid ? `${contribution.datePaid} · ${ts.datePaid.split(',')[1]?.trim() || ts.datePaid}` : ts.datePaid)
+      : (contribution.datePaid || '');
 
   const payload: any = {
     ...contribution,
@@ -1547,9 +1573,11 @@ export async function saveContributionToFirestore(contribution: Contribution): P
     ethiopianMonth: m,
     ethiopianYear: y,
     status: normalizedStatus,
-    statusAm: normalizedStatus === 'Paid' ? 'ተከፍሏል' : normalizedStatus,
+    statusAm,
     amount: Number(contribution.amount || 0),
-    paidAmount: Number(contribution.paidAmount || contribution.amount || 0),
+    paidAmount: Number(contribution.paidAmount ?? (normalizedStatus === 'Paid' ? contribution.amount : 0) ?? 0),
+    datePaid: resolvedDatePaid,
+    paidAt: resolvedPaidAt,
     updatedAt: new Date().toISOString(),
   };
 
@@ -2147,6 +2175,12 @@ export function subscribeToAllContributions(
           receiptNumber: raw.receiptNumber || '',
           transactionRef: raw.transactionRef || '',
           datePaid: raw.datePaid || '',
+          paidAt: raw.paidAt || raw.updatedAt || '',
+          recordedBy: raw.recordedBy || '',
+          recordedByEmail: raw.recordedByEmail || '',
+          approvedBy: raw.approvedBy || '',
+          approvedAt: raw.approvedAt || '',
+          intendedStatus: raw.intendedStatus,
           notes: raw.notes || '',
         } as Contribution;
       });
@@ -2167,13 +2201,14 @@ export function subscribeToAllContributions(
 /**
  * Robust Month-matching helper (STEP B & D)
  * Matches month, year, type, and status case-insensitively and type-flexibly.
+ * CRITICAL: Checks Pending and explicit Unpaid BEFORE comparing paidAmount >= expectedRate.
  */
 export function matchMonthContribution(
   contributions: Contribution[],
   targetMonth: number,
   targetYear: number,
   expectedRate: number = 0
-): { status: 'paid' | 'partial' | 'unpaid'; contribution?: Contribution; paidAmount: number } {
+): { status: 'paid' | 'partial' | 'pending' | 'unpaid'; contribution?: Contribution; paidAmount: number } {
   const match = contributions.find((c: any) => {
     // 1. Match type (Monthly, monthly, ወርሃዊ, or undefined if only monthly exists)
     const rawType = String(c.type || '').trim().toLowerCase();
@@ -2203,7 +2238,15 @@ export function matchMonthContribution(
 
   // Determine status case-insensitively
   const rawStatus = String(match.status || '').trim().toLowerCase();
-  const paidAmount = Number(match.paidAmount || match.amount || 0);
+  const paidAmount = Number(match.paidAmount ?? match.amount ?? 0);
+
+  if (isPendingStatus(rawStatus)) {
+    return { status: 'pending', contribution: match, paidAmount };
+  }
+
+  if (rawStatus === 'ያልተከፈለ' || rawStatus === 'unpaid') {
+    return { status: 'unpaid', contribution: match, paidAmount: 0 };
+  }
 
   const isPaid =
     rawStatus === 'paid' ||
@@ -2502,7 +2545,8 @@ export async function updateMemberWalletBalanceInFirestore(
  */
 export async function creditMasterReceiptToWalletInFirestore(
   receipt: MasterReceipt,
-  currentPayerWalletBalance: number = 0
+  currentPayerWalletBalance: number = 0,
+  approvedBy: string = 'Master Admin'
 ): Promise<{ updatedReceipt: MasterReceipt; newWalletBalance: number }> {
   const alreadyCredited = Boolean(receipt.walletCredited);
   const depositAmount = Number(receipt.totalAmount || 0);
@@ -2510,11 +2554,14 @@ export async function creditMasterReceiptToWalletInFirestore(
     ? Number(currentPayerWalletBalance || 0)
     : Number(currentPayerWalletBalance || 0) + depositAmount;
 
+  const ts = buildPaymentTimestamps();
   const updatedReceipt: MasterReceipt = {
     ...receipt,
     walletCredited: true,
     status: receipt.remainingBalance <= 0 ? 'Fully Allocated' : 'Credited to Wallet',
-    updatedAt: new Date().toISOString(),
+    approvedBy,
+    approvedAt: ts.datePaid,
+    updatedAt: ts.paidAt,
   };
 
   await saveMasterReceiptToFirestore(updatedReceipt);
@@ -2530,12 +2577,16 @@ export async function creditMasterReceiptToWalletInFirestore(
  * Links every created child contribution with `masterReceiptId` & `masterReceiptNumber`,
  * updates `masterReceipt.allocatedAmount` and `masterReceipt.remainingBalance`,
  * and updates the payer member's `walletBalance` so any unallocated remainder stays on their account.
+ * CRITICAL: When isMasterAdmin is false, child contributions are strictly saved as 'Pending' until Master Admin approves.
  */
 export async function allocateBatchPaymentsInFirestore(params: {
   masterReceipt: MasterReceipt;
   payerCurrentWalletBalance: number;
   allocations: BatchAllocationItem[];
   finalizeRemainderToWallet?: boolean;
+  isMasterAdmin?: boolean;
+  recordedByName?: string;
+  recordedByEmail?: string;
 }): Promise<{
   updatedReceipt: MasterReceipt;
   createdContributions: Contribution[];
@@ -2546,6 +2597,9 @@ export async function allocateBatchPaymentsInFirestore(params: {
     payerCurrentWalletBalance,
     allocations,
     finalizeRemainderToWallet = false,
+    isMasterAdmin = false,
+    recordedByName = isMasterAdmin ? 'Master Admin' : 'Staff / Delegated User',
+    recordedByEmail = '',
   } = params;
 
   const batchTotal = allocations.reduce((sum, item) => sum + Number(item.amount || 0), 0);
@@ -2557,7 +2611,8 @@ export async function allocateBatchPaymentsInFirestore(params: {
     );
   }
 
-  const nowIso = new Date().toISOString();
+  const ts = buildPaymentTimestamps();
+  const nowIso = ts.paidAt;
   const baseTs = Date.now();
 
   const createdContributions: Contribution[] = allocations.map((item, index) => {
@@ -2583,11 +2638,15 @@ export async function allocateBatchPaymentsInFirestore(params: {
       year: yNum,
       amount: amt,
       paidAmount: amt,
-      status: 'ተከፍሏል',
+      status: isMasterAdmin ? 'ተከፍሏል' : 'Pending',
+      intendedStatus: 'ተከፍሏል',
       paymentMethod: masterReceipt.paymentMethod,
       transactionRef: masterReceipt.transactionRef,
-      datePaid: nowIso.slice(0, 10),
-      recordedBy: 'Admin (Batch Allocation)',
+      datePaid: ts.datePaid,
+      paidAt: ts.paidAt,
+      recordedBy: `${recordedByName} (Batch Allocation)`,
+      recordedByEmail: recordedByEmail || undefined,
+      ...(isMasterAdmin ? { approvedBy: recordedByName, approvedAt: ts.datePaid } : {}),
       receiptNumber: `${masterReceipt.receiptNumber}-${index + 1}`,
       notes:
         item.notes?.trim() ||
@@ -2606,11 +2665,16 @@ export async function allocateBatchPaymentsInFirestore(params: {
   const newAllocatedAmount = Number(masterReceipt.allocatedAmount || 0) + batchTotal;
   const newRemainingBalance = Math.max(0, Number(masterReceipt.totalAmount || 0) - newAllocatedAmount);
 
-  let nextStatus: MasterReceiptStatus = 'Partially Allocated';
-  if (newRemainingBalance <= 0) {
-    nextStatus = 'Fully Allocated';
-  } else if (finalizeRemainderToWallet) {
-    nextStatus = 'Credited to Wallet';
+  let nextStatus: MasterReceiptStatus = 'Pending';
+  if (isMasterAdmin) {
+    nextStatus = 'Partially Allocated';
+    if (newRemainingBalance <= 0) {
+      nextStatus = 'Fully Allocated';
+    } else if (finalizeRemainderToWallet) {
+      nextStatus = 'Credited to Wallet';
+    }
+  } else if (masterReceipt.walletCredited) {
+    nextStatus = newRemainingBalance <= 0 ? 'Fully Allocated' : 'Partially Allocated';
   }
 
   const updatedReceipt: MasterReceipt = {
@@ -2618,18 +2682,21 @@ export async function allocateBatchPaymentsInFirestore(params: {
     allocatedAmount: newAllocatedAmount,
     remainingBalance: newRemainingBalance,
     allocationsCount: Number(masterReceipt.allocationsCount || 0) + createdContributions.length,
-    walletCredited: true,
+    walletCredited: isMasterAdmin ? true : Boolean(masterReceipt.walletCredited),
     status: nextStatus,
+    ...(isMasterAdmin ? { approvedBy: recordedByName, approvedAt: ts.datePaid } : {}),
     updatedAt: nowIso,
   };
 
-  // Calculate payer's new walletBalance:
-  // If masterReceipt was not yet credited to wallet, net change = +totalAmount - batchTotal (which is +newRemainingBalance if no prior allocations)
-  // If masterReceipt was already credited to wallet, subtract batchTotal from payer's current walletBalance
+  // Only credit/update wallet if Master Admin or receipt was already walletCredited
   const baseWallet = Number(payerCurrentWalletBalance || 0);
-  const newWalletBalance = masterReceipt.walletCredited
+  const newWalletBalance = isMasterAdmin
+    ? masterReceipt.walletCredited
+      ? Math.max(0, baseWallet - batchTotal)
+      : Math.max(0, baseWallet + Number(masterReceipt.totalAmount || 0) - batchTotal)
+    : masterReceipt.walletCredited
     ? Math.max(0, baseWallet - batchTotal)
-    : Math.max(0, baseWallet + Number(masterReceipt.totalAmount || 0) - batchTotal);
+    : baseWallet;
 
   // Persist atomically with writeBatch (works offline too with persistentLocalCache!)
   try {
@@ -2638,8 +2705,8 @@ export async function allocateBatchPaymentsInFirestore(params: {
     for (const c of createdContributions) {
       const payload = sanitizeForFirestore({
         ...c,
-        status: 'Paid',
-        statusAm: 'ተከፍሏል',
+        status: isMasterAdmin ? 'Paid' : 'Pending',
+        statusAm: isMasterAdmin ? 'ተከፍሏል' : 'በመጠባበቅ ላይ (Pending)',
         updatedAt: nowIso,
       });
       batch.set(doc(db, CONTRIBUTIONS_COLLECTION, c.id), payload, { merge: true });
@@ -2651,14 +2718,16 @@ export async function allocateBatchPaymentsInFirestore(params: {
       { merge: true }
     );
 
-    batch.set(
-      doc(db, MEMBERS_COLLECTION, masterReceipt.payerId),
-      {
-        walletBalance: newWalletBalance,
-        updatedAt: nowIso,
-      },
-      { merge: true }
-    );
+    if (isMasterAdmin || masterReceipt.walletCredited) {
+      batch.set(
+        doc(db, MEMBERS_COLLECTION, masterReceipt.payerId),
+        {
+          walletBalance: newWalletBalance,
+          updatedAt: nowIso,
+        },
+        { merge: true }
+      );
+    }
 
     await safeClientFirestoreWrite(() => batch.commit(), `committing batch allocation ${masterReceipt.id}`);
   } catch (err) {
@@ -2671,7 +2740,9 @@ export async function allocateBatchPaymentsInFirestore(params: {
     if (createdContributions.length > 0) {
       addContributionsBatch(createdContributions);
     }
-    updateMember(masterReceipt.payerId, { walletBalance: newWalletBalance });
+    if (isMasterAdmin || masterReceipt.walletCredited) {
+      updateMember(masterReceipt.payerId, { walletBalance: newWalletBalance });
+    }
   } catch {}
 
   return {
@@ -2700,7 +2771,7 @@ export interface WalletBulkPaymentItem {
 /**
  * Pay Monthly or Generation contributions for multiple selected members directly from
  * a payer member's Credit Wallet (`walletBalance`) using an atomic Firestore writeBatch.
- * Optionally links to an open MasterReceipt of the payer if provided and sufficient.
+ * CRITICAL: When isMasterAdmin is false, child contributions are saved as 'Pending' until Master Admin approves.
  */
 export async function paySelectedFromWalletInFirestore(params: {
   payer: Member;
@@ -2709,6 +2780,9 @@ export async function paySelectedFromWalletInFirestore(params: {
   ethiopianMonth: number;
   ethiopianYear: number;
   linkedMasterReceipt?: MasterReceipt | null;
+  isMasterAdmin?: boolean;
+  recordedByName?: string;
+  recordedByEmail?: string;
 }): Promise<{
   createdContributions: Contribution[];
   newWalletBalance: number;
@@ -2721,6 +2795,9 @@ export async function paySelectedFromWalletInFirestore(params: {
     ethiopianMonth,
     ethiopianYear,
     linkedMasterReceipt,
+    isMasterAdmin = false,
+    recordedByName = isMasterAdmin ? 'Master Admin' : 'Staff / Delegated User',
+    recordedByEmail = '',
   } = params;
 
   const payableItems = items.filter((item) => Number(item.amount || 0) > 0);
@@ -2737,7 +2814,8 @@ export async function paySelectedFromWalletInFirestore(params: {
     );
   }
 
-  const nowIso = new Date().toISOString();
+  const ts = buildPaymentTimestamps();
+  const nowIso = ts.paidAt;
   const baseTs = Date.now();
   const isGen = type === 'ትውልድ';
   const mNum = isGen ? 0 : Number(ethiopianMonth || 1);
@@ -2774,11 +2852,15 @@ export async function paySelectedFromWalletInFirestore(params: {
       year: yNum,
       amount: amt,
       paidAmount: amt,
-      status: 'ተከፍሏል',
+      status: isMasterAdmin ? 'ተከፍሏል' : 'Pending',
+      intendedStatus: 'ተከፍሏል',
       paymentMethod: 'Credit Wallet (ቀሪ ሂሳብ)',
       transactionRef: batchTxRef,
-      datePaid: nowIso.slice(0, 10),
-      recordedBy: 'Admin (Wallet Bulk Pay)',
+      datePaid: ts.datePaid,
+      paidAt: ts.paidAt,
+      recordedBy: `${recordedByName} (Wallet Bulk Pay)`,
+      recordedByEmail: recordedByEmail || undefined,
+      ...(isMasterAdmin ? { approvedBy: recordedByName, approvedAt: ts.datePaid } : {}),
       receiptNumber: receiptNo,
       notes:
         item.notes?.trim() ||
@@ -2819,8 +2901,8 @@ export async function paySelectedFromWalletInFirestore(params: {
   for (const c of createdContributions) {
     const payload = sanitizeForFirestore({
       ...c,
-      status: 'Paid',
-      statusAm: 'ተከፍሏል',
+      status: isMasterAdmin ? 'Paid' : 'Pending',
+      statusAm: isMasterAdmin ? 'ተከፍሏል' : 'በመጠባበቅ ላይ (Pending)',
       updatedAt: nowIso,
     });
     batch.set(doc(db, CONTRIBUTIONS_COLLECTION, c.id), payload, { merge: true });

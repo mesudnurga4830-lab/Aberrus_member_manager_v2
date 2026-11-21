@@ -25,8 +25,14 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Member, Contribution, ContributionType, PaymentMethod, SettingsRates, Family } from '../types';
-import { ETHIOPIAN_MONTHS, getEthiopianMonthName, getCurrentEthiopianDate } from '../utils/ethiopianCalendar';
-import { getEffectiveMonthlyRate, getEffectiveGenRate } from '../utils/storage';
+import {
+  ETHIOPIAN_MONTHS,
+  getEthiopianMonthName,
+  getCurrentEthiopianDate,
+  buildPaymentTimestamps,
+  formatDisplayPaymentDateTime,
+} from '../utils/ethiopianCalendar';
+import { getEffectiveMonthlyRate, getEffectiveGenRate, isPaidStatus, isPendingStatus } from '../utils/storage';
 
 interface AdminMemberPaymentManagerModalProps {
   isOpen: boolean;
@@ -37,6 +43,10 @@ interface AdminMemberPaymentManagerModalProps {
   settings: SettingsRates;
   initialMemberId?: string;
   initialMode?: 'list' | 'add';
+  isMasterAdmin?: boolean;
+  recordedByName?: string;
+  recordedByEmail?: string;
+  onApprovePayment?: (contribution: Contribution) => Promise<void>;
   onDeletePayment: (contributionId: string) => Promise<void>;
   onAddManualPayment: (payment: Omit<Contribution, 'id'>) => Promise<void>;
 }
@@ -50,6 +60,10 @@ export const AdminMemberPaymentManagerModal: React.FC<AdminMemberPaymentManagerM
   settings,
   initialMemberId,
   initialMode = 'list',
+  isMasterAdmin = false,
+  recordedByName,
+  recordedByEmail,
+  onApprovePayment,
   onDeletePayment,
   onAddManualPayment,
 }) => {
@@ -188,6 +202,8 @@ export const AdminMemberPaymentManagerModal: React.FC<AdminMemberPaymentManagerM
     setNotification(null);
 
     try {
+      const ts = buildPaymentTimestamps();
+      const recorder = recordedByName || (isMasterAdmin ? 'Admin (መስኡድ ኑርጋ)' : 'ወኪል / ፋይናንስ');
       const newPayment: Omit<Contribution, 'id'> = {
         memberId: selectedMember.id,
         memberName: selectedMember.fullName,
@@ -202,14 +218,20 @@ export const AdminMemberPaymentManagerModal: React.FC<AdminMemberPaymentManagerM
         ethiopianYear: yearNum,
         amount: parsedAmount,
         paidAmount: parsedAmount,
-        status: 'Paid', // Strict requirement: saved with status "Paid"
+        status: isMasterAdmin ? 'Paid' : 'Pending',
+        intendedStatus: 'ተከፍሏል',
         paymentMethod: formMethod,
         transactionRef: formRef.trim() || `MANUAL-${Date.now().toString().slice(-6)}`,
         notes:
           formNotes.trim() ||
-          `በአስተዳዳሪው በቀጥታ የተመዘገበ ኦፍላይን ክፍያ (Offline Manual Payment - ${monthName} ${yearNum})`,
-        datePaid: new Date().toISOString(),
-        recordedBy: 'Admin (መስኡድ ኑርጋ)',
+          (isMasterAdmin
+            ? `በዋና አስተዳዳሪው በቀጥታ የተመዘገበ ክፍያ (${monthName} ${yearNum})`
+            : `በ${recorder} የተመዘገበ (የዋና አድሚን ማረጋገጫ የሚጠብቅ / Pending · ${monthName} ${yearNum})`),
+        datePaid: ts.datePaid,
+        paidAt: ts.paidAt,
+        recordedBy: recorder,
+        recordedByEmail: recordedByEmail || undefined,
+        ...(isMasterAdmin ? { approvedBy: recorder, approvedAt: ts.datePaid } : {}),
       };
 
       await onAddManualPayment(newPayment);
@@ -225,7 +247,9 @@ export const AdminMemberPaymentManagerModal: React.FC<AdminMemberPaymentManagerM
 
       setNotification({
         type: 'success',
-        message: `ክፍያው በተሳካ ሁኔታ ተመዝግቧል! (የ${monthName} ${yearNum} ዓ.ም - ${parsedAmount} ብር Status: Paid)`,
+        message: isMasterAdmin
+          ? `ክፍያው በተሳካ ሁኔታ ተመዝግቧል! (የ${monthName} ${yearNum} ዓ.ም - ${parsedAmount} ብር · ${ts.datePaid})`
+          : `ክፍያው Pending ሆኖ ተመዝግቧል (${monthName} ${yearNum} · ${parsedAmount} ብር · ${ts.datePaid}) — ዋናው አድሚን ሲያጸድቀው ይጸናል።`,
       });
 
       // Reset optional inputs and return to list
@@ -437,11 +461,12 @@ export const AdminMemberPaymentManagerModal: React.FC<AdminMemberPaymentManagerM
                         <tr>
                           <th className="py-3 px-3.5">የክፍያ አይነት</th>
                           <th className="py-3 px-3">የክፍያ ወርና ዓመት</th>
+                          <th className="py-3 px-3">ቀንና ሰዓት</th>
                           <th className="py-3 px-3 text-right">የተከፈለ መጠን</th>
                           <th className="py-3 px-3">የክፍያ ዘዴ</th>
                           <th className="py-3 px-3">ማጣቀሻ / ደረሰኝ</th>
                           <th className="py-3 px-3">ሁኔታ</th>
-                          <th className="py-3 px-3 text-center">ተግባር (ሰርዝ)</th>
+                          <th className="py-3 px-3 text-center">ተግባር</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-neutral-200/80 bg-white">
@@ -449,7 +474,8 @@ export const AdminMemberPaymentManagerModal: React.FC<AdminMemberPaymentManagerM
                           const mNum = Number(p.month ?? p.ethiopianMonth ?? 0);
                           const yNum = Number(p.year ?? p.ethiopianYear ?? 2018);
                           const mName = p.ethiopianMonthName || (mNum > 0 ? getEthiopianMonthName(mNum) : 'የትውልድ መዋጮ');
-                          const isPaidStatus = p.status === 'Paid' || p.status === 'ተከፍሏል';
+                          const paidFlag = isPaidStatus(p.status);
+                          const pendingFlag = isPendingStatus(p.status);
 
                           return (
                             <tr key={p.id} className="hover:bg-neutral-50/80 transition-colors">
@@ -481,6 +507,15 @@ export const AdminMemberPaymentManagerModal: React.FC<AdminMemberPaymentManagerM
                                 </div>
                               </td>
 
+                              <td className="py-3 px-3 text-[11px] font-mono text-neutral-700 whitespace-nowrap">
+                                {formatDisplayPaymentDateTime(p.datePaid, p.paidAt)}
+                                {p.recordedBy && (
+                                  <span className="block text-[10px] text-neutral-400 font-sans truncate max-w-[140px]">
+                                    በ {p.recordedBy}
+                                  </span>
+                                )}
+                              </td>
+
                               <td className="py-3 px-3 text-right font-mono font-bold text-emerald-900 tabular-nums">
                                 {Number(p.paidAmount || p.amount || 0).toLocaleString()} ብር
                               </td>
@@ -497,29 +532,46 @@ export const AdminMemberPaymentManagerModal: React.FC<AdminMemberPaymentManagerM
 
                               <td className="py-3 px-3">
                                 <span
-                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                    isPaidStatus
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap ${
+                                    paidFlag
                                       ? 'bg-emerald-100 text-emerald-800'
+                                      : pendingFlag
+                                      ? 'bg-amber-100 text-amber-900 border border-amber-300'
                                       : p.status === 'ከፊል'
                                       ? 'bg-amber-100 text-amber-800'
                                       : 'bg-neutral-100 text-neutral-700'
                                   }`}
                                 >
-                                  {isPaidStatus ? 'Paid (ተከፍሏል)' : p.status}
+                                  {paidFlag ? 'Paid (ተከፍሏል)' : pendingFlag ? 'Pending (ማረጋገጫ የሚጠብቅ)' : p.status}
                                 </span>
                               </td>
 
                               <td className="py-3 px-3 text-center">
-                                <button
-                                  type="button"
-                                  disabled={isDeletingId === p.id}
-                                  onClick={() => handleDeleteClick(p)}
-                                  className="px-2.5 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 hover:text-red-900 border border-red-200 text-xs font-bold transition-colors cursor-pointer inline-flex items-center gap-1 shadow-2xs disabled:opacity-50"
-                                  title="ይህን ክፍያ ሰርዝ"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5 text-red-600" />
-                                  <span>{isDeletingId === p.id ? 'በመሰረዝ ላይ...' : 'ሰርዝ'}</span>
-                                </button>
+                                <div className="inline-flex items-center gap-1">
+                                  {isMasterAdmin && pendingFlag && onApprovePayment && (
+                                    <button
+                                      type="button"
+                                      onClick={() => void onApprovePayment(p)}
+                                      className="px-2 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-bold transition-colors cursor-pointer inline-flex items-center gap-1"
+                                      title="አጽድቅ (Approve)"
+                                    >
+                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                      <span>አጽድቅ</span>
+                                    </button>
+                                  )}
+                                  {(isMasterAdmin || pendingFlag) && (
+                                    <button
+                                      type="button"
+                                      disabled={isDeletingId === p.id}
+                                      onClick={() => handleDeleteClick(p)}
+                                      className="px-2.5 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 hover:text-red-900 border border-red-200 text-xs font-bold transition-colors cursor-pointer inline-flex items-center gap-1 shadow-2xs disabled:opacity-50"
+                                      title="ይህን ክፍያ ሰርዝ"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                                      <span>{isDeletingId === p.id ? 'በመሰረዝ ላይ...' : 'ሰርዝ'}</span>
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           );
@@ -543,7 +595,10 @@ export const AdminMemberPaymentManagerModal: React.FC<AdminMemberPaymentManagerM
                   </h4>
                 </div>
                 <span className="text-xs text-neutral-500">
-                  ሁኔታ፦ <strong className="text-emerald-800 font-bold">Paid</strong>
+                  ሁኔታ፦{' '}
+                  <strong className={isMasterAdmin ? 'text-emerald-800 font-bold' : 'text-amber-700 font-bold'}>
+                    {isMasterAdmin ? 'Paid (በቀጥታ የሚጸድቅ)' : 'Pending (የዋና አድሚን ማረጋገጫ የሚጠብቅ)'}
+                  </strong>
                 </span>
               </div>
 
@@ -693,7 +748,11 @@ export const AdminMemberPaymentManagerModal: React.FC<AdminMemberPaymentManagerM
                     ) : (
                       <>
                         <Sparkles className="w-4 h-4 text-[#FFD700]" />
-                        <span>ክፍያውን በ"Paid" ሁኔታ መዝግብ (Save Payment)</span>
+                        <span>
+                          {isMasterAdmin
+                            ? 'ክፍያውን በ"Paid" ሁኔታ መዝግብ (Save Payment)'
+                            : 'ክፍያውን በ"Pending" ሁኔታ አስገባ (Wait Master Admin)'}
+                        </span>
                       </>
                     )}
                   </button>

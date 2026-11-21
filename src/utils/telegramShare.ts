@@ -16,7 +16,7 @@ import {
   getContributionYear,
   getContributionPaidAmount,
 } from './storage';
-import { getEthiopianMonthName } from './ethiopianCalendar';
+import { getEthiopianMonthName, formatDisplayPaymentDateTime, formatPaymentDateTime } from './ethiopianCalendar';
 
 export function buildChronologicalPeriodKey(year: number, month: number): number {
   // Association starts Hamle 2018 (month 11). If Month 1..10 appears in 2018, keep numeric order,
@@ -183,8 +183,7 @@ export function formatSinglePaymentTelegramReport(
   settings: SettingsRates = getSettings()
 ): string {
   const paidAmt = Number(contribution.paidAmount ?? contribution.amount ?? 0);
-  const datePaid =
-    contribution.datePaid || new Date().toLocaleDateString('am-ET');
+  const datePaid = formatDisplayPaymentDateTime(contribution.datePaid, contribution.paidAt);
   const memberName = member?.fullName || contribution.memberName || 'አባል';
   const memberId = member?.id || contribution.memberId;
 
@@ -219,7 +218,7 @@ export function formatSinglePaymentTelegramReport(
 👤 አባል፦ ${memberName} (${memberId})
 🏷️ የክፍያ ዓይነት፦ የትውልድ መዋጮ
 💵 የተከፈለ መጠን፦ ${paidAmt.toLocaleString()} ብር
-📅 የክፍያ ቀን፦ ${datePaid}
+📅 የክፍያ ቀንና ሰዓት፦ ${datePaid}
 
 📊 የትውልድ መዋጮ ማጠቃለያ፦
 • ጠቅላላ የተከፈለ (Total Paid)፦ ${genStats.paidSoFar.toLocaleString()} ብር
@@ -241,7 +240,7 @@ export function formatSinglePaymentTelegramReport(
 🏷️ የክፍያ ዓይነት፦ ወርሃዊ መዋጮ
 💵 የተከፈለው መጠን፦ ${paidAmt.toLocaleString()} ብር
 📅 የወሩ ስም፦ ${monthName} ${cYear} ዓ.ም
-🗓️ የክፍያ ቀን፦ ${datePaid}
+🗓️ የክፍያ ቀንና ሰዓት፦ ${datePaid}
 ━━━━━━━━━━━━━━━━━━━━
 — የአበሩስ አንድነት ማህበር`;
 }
@@ -254,6 +253,7 @@ export interface BulkTelegramPaymentItem {
   ethiopianMonthName?: string;
   ethiopianYear?: number;
   datePaid?: string;
+  paidAt?: string;
 }
 
 /**
@@ -280,24 +280,27 @@ export function formatBulkPaymentTelegramReport(params: {
   } = params;
 
   const totalAmount = items.reduce((s, i) => s + Number(i.amount || 0), 0);
-  const todayStr = new Date().toLocaleDateString('am-ET');
+  const todayStr = formatPaymentDateTime();
 
   const lines = items.map((item, idx) => {
-    const datePaid = item.datePaid || todayStr;
+    const datePaid =
+      item.datePaid || item.paidAt
+        ? formatDisplayPaymentDateTime(item.datePaid, item.paidAt)
+        : todayStr;
     if (item.type === 'ትውልድ') {
       const genStats = getMemberGenContributionStats(
         item.member,
         settings,
         allContributions
       );
-      return `${idx + 1}. ${item.member.fullName} — የትውልድ መዋጮ፡ ${Number(item.amount).toLocaleString()} ብር | ቀን፡ ${datePaid} | ጠቅላላ የተከፈለ፡ ${genStats.paidSoFar.toLocaleString()} ብር | ቀሪ፡ ${genStats.remainingBalance.toLocaleString()} ብር`;
+      return `${idx + 1}. ${item.member.fullName} — የትውልድ መዋጮ፡ ${Number(item.amount).toLocaleString()} ብር | ቀንና ሰዓት፡ ${datePaid} | ጠቅላላ የተከፈለ፡ ${genStats.paidSoFar.toLocaleString()} ብር | ቀሪ፡ ${genStats.remainingBalance.toLocaleString()} ብር`;
     }
 
     const monthName =
       item.ethiopianMonthName ||
       getEthiopianMonthName(item.ethiopianMonth || 11);
     const year = item.ethiopianYear || 2018;
-    return `${idx + 1}. ${item.member.fullName} — ወርሃዊ (${monthName} ${year} ዓ.ም)፡ ${Number(item.amount).toLocaleString()} ብር · የክፍያ ቀን፡ ${datePaid}`;
+    return `${idx + 1}. ${item.member.fullName} — ወርሃዊ (${monthName} ${year} ዓ.ም)፡ ${Number(item.amount).toLocaleString()} ብር · የክፍያ ቀንና ሰዓት፡ ${datePaid}`;
   });
 
   const payerLine = payer
@@ -312,7 +315,7 @@ export function formatBulkPaymentTelegramReport(params: {
 ━━━━━━━━━━━━━━━━━━━━
 ${payerLine}${receiptLine}👥 የተከፈለላቸው አባላት ብዛት፦ ${items.length}
 💰 ጠቅላላ የተከፈለ መጠን፦ ${totalAmount.toLocaleString()} ብር
-📅 ቀን፦ ${todayStr}
+📅 ቀንና ሰዓት፦ ${todayStr}
 
 📌 የአባላት ክፍያ ዝርዝር፦
 ${lines.join('\n') || '• ምንም ክፍያ አልተመዘገበም'}
@@ -341,6 +344,7 @@ export async function dispatchApprovedPaymentReportToGroup(params: {
     ethiopianMonthName?: string;
     ethiopianYear?: number;
     datePaid?: string;
+    paidAt?: string;
   }>;
   reportText?: string;
 }): Promise<{
@@ -423,7 +427,8 @@ export function shareAppLinkToMember(
             const m = getContributionMonth(c);
             const y = getContributionYear(c);
             const amt = getContributionPaidAmount(c);
-            return `${getEthiopianMonthName(m)} ${y} (${amt.toLocaleString()} ብር${c.datePaid ? ` · ${c.datePaid}` : ''})`;
+            const dt = formatDisplayPaymentDateTime(c.datePaid, c.paidAt);
+            return `${getEthiopianMonthName(m)} ${y} (${amt.toLocaleString()} ብር${dt && dt !== '—' ? ` · ${dt}` : ''})`;
           })
           .join('፣ ')
       : 'እስካሁን አልተመዘገበም';
@@ -451,7 +456,8 @@ export function shareAppLinkToMember(
             const m = getContributionMonth(c);
             const y = getContributionYear(c);
             const amt = getContributionPaidAmount(c);
-            return `${getEthiopianMonthName(m)} ${y} (${amt.toLocaleString()} ብር${c.datePaid ? ` · ${c.datePaid}` : ''})`;
+            const dt = formatDisplayPaymentDateTime(c.datePaid, c.paidAt);
+            return `${getEthiopianMonthName(m)} ${y} (${amt.toLocaleString()} ብር${dt && dt !== '—' ? ` · ${dt}` : ''})`;
           })
           .join('፣ ')
       : 'እስካሁን አልተመዘገበም';
@@ -554,9 +560,9 @@ export function shareAppLinkToFamilyHead(
     .map((m) => {
       const c = paidMonthlyCons.find((con) => con.memberId === m.id);
       const amt = getContributionPaidAmount(c);
-      const d = c?.datePaid || '—';
+      const d = formatDisplayPaymentDateTime(c?.datePaid, c?.paidAt);
       const partialNote = c && !isPaidStatus(c.status) ? ' [ከፊል]' : '';
-      return `• ${m.fullName} — ${amt.toLocaleString()} ብር · ${monthName} ${reportYear} · ቀን፡ ${d}${partialNote}`;
+      return `• ${m.fullName} — ${amt.toLocaleString()} ብር · ${monthName} ${reportYear} · ቀንና ሰዓት፡ ${d}${partialNote}`;
     })
     .join('\n');
 

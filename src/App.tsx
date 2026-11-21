@@ -22,6 +22,7 @@ import {
   syncWithBackendServer,
   refreshAllDataFromServer,
   isPaidOrPartialStatus,
+  isPendingStatus,
   getContributionMonth,
   getContributionYear,
   normalizeContributionRecord,
@@ -69,7 +70,7 @@ import { AdminMemberPaymentManagerModal } from './components/AdminMemberPaymentM
 import { BatchPaymentManagerModal } from './components/BatchPaymentManagerModal';
 import { NetworkStatusIndicator } from './components/NetworkStatusIndicator';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { getCurrentEthiopianDate, getEthiopianMonthName } from './utils/ethiopianCalendar';
+import { getCurrentEthiopianDate, getEthiopianMonthName, buildPaymentTimestamps } from './utils/ethiopianCalendar';
 import {
   formatSinglePaymentTelegramReport,
   formatBulkPaymentTelegramReport,
@@ -157,6 +158,16 @@ export default function App() {
     () => getAllowedTabsForAccess(effectiveAccess, hasMemberProfile || Boolean(selectedPortalMemberId)),
     [effectiveAccess, hasMemberProfile, selectedPortalMemberId]
   );
+
+  const currentUserEmail = (authFirebaseUser?.email || '').trim();
+  const currentUserName =
+    effectiveAccess.isMasterAdmin
+      ? MASTER_ADMIN.name
+      : effectiveAccess.assignment?.memberName ||
+        matchedAuthMemberRef.current?.fullName ||
+        authFirebaseUser?.displayName ||
+        currentUserEmail ||
+        'አባል / ወኪል';
 
   const defaultLandingTab = useMemo(
     () => getDefaultLandingTab(effectiveAccess),
@@ -745,13 +756,51 @@ export default function App() {
     setIsRecordPaymentOpen(true);
   };
 
+  const enforcePaymentGovernance = (conData: Omit<Contribution, 'id'>): Omit<Contribution, 'id'> => {
+    const ts = buildPaymentTimestamps();
+    const rawIntended = conData.intendedStatus || conData.status;
+    const requestedPaidOrPartial = isPaidOrPartialStatus(rawIntended);
+    const resolvedIntended: ContributionStatus =
+      rawIntended === 'ከፊል' || String(rawIntended || '').toLowerCase() === 'partial'
+        ? 'ከፊል'
+        : 'ተከፍሏል';
+
+    const finalStatus: ContributionStatus = effectiveAccess.isMasterAdmin
+      ? (isPendingStatus(conData.status) ? 'Pending' : conData.status)
+      : 'Pending';
+
+    const baseDatePaid =
+      conData.datePaid && /\d{1,2}:\d{2}/.test(conData.datePaid)
+        ? conData.datePaid
+        : ts.datePaid;
+
+    return {
+      ...conData,
+      status: finalStatus,
+      intendedStatus: requestedPaidOrPartial ? resolvedIntended : conData.intendedStatus || 'ተከፍሏል',
+      paidAt: conData.paidAt || ts.paidAt,
+      datePaid: baseDatePaid,
+      recordedBy: conData.recordedBy || currentUserName,
+      recordedByEmail: conData.recordedByEmail || currentUserEmail || undefined,
+      approvedBy:
+        effectiveAccess.isMasterAdmin && isPaidOrPartialStatus(finalStatus)
+          ? conData.approvedBy || currentUserName
+          : undefined,
+      approvedAt:
+        effectiveAccess.isMasterAdmin && isPaidOrPartialStatus(finalStatus)
+          ? conData.approvedAt || ts.datePaid
+          : undefined,
+    };
+  };
+
   const handleSavePayment = async (conData: Omit<Contribution, 'id'>) => {
-    const normalizedInput = normalizeContributionRecord({ ...(conData as Contribution), id: '' });
+    const governed = enforcePaymentGovernance(conData);
+    const normalizedInput = normalizeContributionRecord({ ...(governed as Contribution), id: '' });
     const newCon = addContribution(normalizedInput);
     const updatedList = [newCon, ...contributions.filter((c) => c.id !== newCon.id)];
     setContributions(updatedList);
     await saveContributionToFirestore(newCon);
-    if (isPaidOrPartialStatus(newCon.status)) {
+    if (effectiveAccess.isMasterAdmin && isPaidOrPartialStatus(newCon.status)) {
       const m = members.find((mem) => mem.id === newCon.memberId);
       const reportText = formatSinglePaymentTelegramReport(newCon, m, updatedList, settings);
       void dispatchApprovedPaymentReportToGroup({
@@ -763,7 +812,9 @@ export default function App() {
   };
 
   const handleSavePaymentsBatch = async (conList: Omit<Contribution, 'id'>[]) => {
-    const normalizedInputs = conList.map((c) => normalizeContributionRecord({ ...(c as Contribution), id: '' }));
+    const normalizedInputs = conList.map((c) =>
+      normalizeContributionRecord({ ...(enforcePaymentGovernance(c) as Contribution), id: '' })
+    );
     const newCons = addContributionsBatch(normalizedInputs);
     const newIds = new Set(newCons.map((c) => c.id));
     const updatedList = [...newCons, ...contributions.filter((c) => !newIds.has(c.id))];
@@ -771,7 +822,9 @@ export default function App() {
     for (const c of newCons) {
       await saveContributionToFirestore(c);
     }
-    const approvedCons = newCons.filter((c) => isPaidOrPartialStatus(c.status));
+    const approvedCons = effectiveAccess.isMasterAdmin
+      ? newCons.filter((c) => isPaidOrPartialStatus(c.status))
+      : [];
     if (approvedCons.length === 1) {
       const single = approvedCons[0];
       const m = members.find((mem) => mem.id === single.memberId);
@@ -826,6 +879,10 @@ export default function App() {
   };
 
   const handleDeleteContribution = async (id: string) => {
+    const existing = contributions.find((c) => c.id === id);
+    if (!effectiveAccess.isMasterAdmin && existing && isPaidOrPartialStatus(existing.status)) {
+      return;
+    }
     deleteContribution(id);
     setContributions((prev) => prev.filter((c) => c.id !== id));
     try {
@@ -867,12 +924,85 @@ export default function App() {
   };
 
   const handleUpdateContributionStatus = async (id: string, status: ContributionStatus) => {
+    // CRITICAL SECURITY GATE: Only Master Admin can approve/mark contributions Paid or Partial
+    if (!effectiveAccess.isMasterAdmin && isPaidOrPartialStatus(status)) {
+      return;
+    }
     const existing = contributions.find((c) => c.id === id);
-    const localUpdated = updateContribution(id, { status });
-    const updated = existing ? { ...existing, status } : localUpdated;
-    if (updated) {
-      setContributions((prev) => prev.map((c) => (c.id === id ? updated : c)));
-      await saveContributionToFirestore(updated);
+    if (!existing) return;
+    const wasPendingOrUnpaid = !isPaidOrPartialStatus(existing.status);
+    const ts = buildPaymentTimestamps();
+
+    const patch: Partial<Contribution> = {
+      status,
+      ...(isPaidOrPartialStatus(status)
+        ? {
+            approvedBy: currentUserName,
+            approvedAt: ts.datePaid,
+            paidAt: existing.paidAt || ts.paidAt,
+            datePaid: existing.datePaid && /\d{1,2}:\d{2}/.test(existing.datePaid) ? existing.datePaid : ts.datePaid,
+          }
+        : {}),
+    };
+
+    const localUpdated = updateContribution(id, patch);
+    const updated = { ...existing, ...patch, ...(localUpdated || {}) };
+    const nextList = contributions.map((c) => (c.id === id ? updated : c));
+    setContributions(nextList);
+    await saveContributionToFirestore(updated);
+
+    if (effectiveAccess.isMasterAdmin && wasPendingOrUnpaid && isPaidOrPartialStatus(status)) {
+      const m = members.find((mem) => mem.id === updated.memberId);
+      const reportText = formatSinglePaymentTelegramReport(updated, m, nextList, settings);
+      void dispatchApprovedPaymentReportToGroup({
+        target: 'payment',
+        payment: updated,
+        reportText,
+      });
+    }
+  };
+
+  const handleApproveContribution = async (c: Contribution) => {
+    if (!effectiveAccess.isMasterAdmin) return;
+    const ts = buildPaymentTimestamps();
+    const paidNum = Number(c.paidAmount ?? c.amount ?? 0);
+    const targetNum = Number(c.amount ?? 0);
+    const approvedStatus: ContributionStatus =
+      c.intendedStatus === 'ከፊል' || (c.type === 'ትውልድ' && paidNum > 0 && targetNum > 0 && paidNum < targetNum)
+        ? 'ከፊል'
+        : 'ተከፍሏል';
+
+    const updated: Contribution = normalizeContributionRecord({
+      ...c,
+      status: approvedStatus,
+      approvedBy: currentUserName,
+      approvedAt: ts.datePaid,
+      paidAt: c.paidAt || ts.paidAt,
+      datePaid: c.datePaid && /\d{1,2}:\d{2}/.test(c.datePaid) ? c.datePaid : ts.datePaid,
+    });
+
+    updateContribution(c.id, updated);
+    const nextList = contributions.map((item) => (item.id === c.id ? updated : item));
+    setContributions(nextList);
+    await saveContributionToFirestore(updated);
+
+    const m = members.find((mem) => mem.id === updated.memberId);
+    const reportText = formatSinglePaymentTelegramReport(updated, m, nextList, settings);
+    void dispatchApprovedPaymentReportToGroup({
+      target: 'payment',
+      payment: updated,
+      reportText,
+    });
+  };
+
+  const handleRejectContribution = async (c: Contribution) => {
+    if (!effectiveAccess.isMasterAdmin) return;
+    deleteContribution(c.id);
+    setContributions((prev) => prev.filter((item) => item.id !== c.id));
+    try {
+      await deleteContributionFromFirestore(c.id);
+    } catch (err) {
+      console.warn('[Firestore] Error rejecting pending contribution:', err);
     }
   };
 
@@ -905,9 +1035,15 @@ export default function App() {
     );
 
     if (markPaid) {
+      const ts = buildPaymentTimestamps();
+      const targetStatus: ContributionStatus = effectiveAccess.isMasterAdmin ? 'ተከፍሏል' : 'Pending';
       let targetCon: Contribution | undefined;
       let nextContribs = contributions;
+
       if (existingCon) {
+        if (!effectiveAccess.isMasterAdmin && isPaidOrPartialStatus(existingCon.status)) {
+          return;
+        }
         const updatedCon: Contribution = normalizeContributionRecord({
           ...existingCon,
           month,
@@ -915,11 +1051,20 @@ export default function App() {
           ethiopianMonth: month,
           ethiopianMonthName: getEthiopianMonthName(month),
           ethiopianYear: year,
-          status: 'ተከፍሏል',
+          status: targetStatus,
+          intendedStatus: 'ተከፍሏል',
           paidAmount: rate,
           amount: rate,
-          datePaid: `${currentDate.formatted}`,
-          notes: 'በአስተዳዳሪው (መስኡድ ኑርጋ) የተመዘገበ ክፍያ',
+          datePaid: ts.datePaid,
+          paidAt: ts.paidAt,
+          recordedBy: currentUserName,
+          recordedByEmail: currentUserEmail || undefined,
+          ...(effectiveAccess.isMasterAdmin
+            ? { approvedBy: currentUserName, approvedAt: ts.datePaid }
+            : {}),
+          notes: effectiveAccess.isMasterAdmin
+            ? `በዋና አስተዳዳሪው (${currentUserName}) የተመዘገበ ክፍያ`
+            : `በ${currentUserName} የተመዘገበ (የዋና አድሚን ማረጋገጫ የሚጠብቅ / Pending)`,
         });
         updateContribution(existingCon.id, updatedCon);
         nextContribs = contributions.map((c) => (c.id === existingCon.id ? updatedCon : c));
@@ -941,17 +1086,26 @@ export default function App() {
           ethiopianYear: year,
           amount: rate,
           paidAmount: rate,
-          status: 'ተከፍሏል',
+          status: targetStatus,
+          intendedStatus: 'ተከፍሏል',
           paymentMethod: 'ጥሬ ገንዘብ (Cash)',
-          datePaid: `${currentDate.formatted}`,
-          notes: 'በአስተዳዳሪው (መስኡድ ኑርጋ) የተመዘገበ ክፍያ',
+          datePaid: ts.datePaid,
+          paidAt: ts.paidAt,
+          recordedBy: currentUserName,
+          recordedByEmail: currentUserEmail || undefined,
+          ...(effectiveAccess.isMasterAdmin
+            ? { approvedBy: currentUserName, approvedAt: ts.datePaid }
+            : {}),
+          notes: effectiveAccess.isMasterAdmin
+            ? `በዋና አስተዳዳሪው (${currentUserName}) የተመዘገበ ክፍያ`
+            : `በ${currentUserName} የተመዘገበ (የዋና አድሚን ማረጋገጫ የሚጠብቅ / Pending)`,
         });
         nextContribs = [newCon, ...contributions.filter((c) => c.id !== newCon.id)];
         setContributions(nextContribs);
         await saveContributionToFirestore(newCon);
         targetCon = newCon;
       }
-      if (targetCon) {
+      if (effectiveAccess.isMasterAdmin && targetCon && isPaidOrPartialStatus(targetCon.status)) {
         const reportText = formatSinglePaymentTelegramReport(targetCon, member, nextContribs, settings);
         void dispatchApprovedPaymentReportToGroup({
           target: 'payment',
@@ -961,6 +1115,9 @@ export default function App() {
       }
     } else {
       if (existingCon) {
+        if (!effectiveAccess.isMasterAdmin && isPaidOrPartialStatus(existingCon.status)) {
+          return;
+        }
         deleteContribution(existingCon.id);
         setContributions((prev) => prev.filter((c) => c.id !== existingCon.id));
         await deleteContributionFromFirestore(existingCon.id);
@@ -971,23 +1128,38 @@ export default function App() {
   const handleToggleGenStatus = async (memberId: string, markPaid: boolean) => {
     const member = members.find((m) => m.id === memberId);
     if (!member) return;
-    const genRate = settings.generationPayment[member.generation] || 500;
+    const genRate = settings.generationPayment[member.generation] || 200;
 
     const existingCon = contributions.find(
       (c) => c.memberId === memberId && c.type === 'ትውልድ'
     );
 
     if (markPaid) {
+      const ts = buildPaymentTimestamps();
+      const targetStatus: ContributionStatus = effectiveAccess.isMasterAdmin ? 'ተከፍሏል' : 'Pending';
       let targetCon: Contribution | undefined;
       let nextContribs = contributions;
+
       if (existingCon) {
+        if (!effectiveAccess.isMasterAdmin && isPaidOrPartialStatus(existingCon.status)) {
+          return;
+        }
         const updatedCon: Contribution = normalizeContributionRecord({
           ...existingCon,
-          status: 'ተከፍሏል',
+          status: targetStatus,
+          intendedStatus: 'ተከፍሏል',
           paidAmount: genRate,
           amount: genRate,
-          datePaid: `${currentDate.formatted}`,
-          notes: 'በአስተዳዳሪው (መስኡድ ኑርጋ) የተመዘገበ የትውልድ ክፍያ',
+          datePaid: ts.datePaid,
+          paidAt: ts.paidAt,
+          recordedBy: currentUserName,
+          recordedByEmail: currentUserEmail || undefined,
+          ...(effectiveAccess.isMasterAdmin
+            ? { approvedBy: currentUserName, approvedAt: ts.datePaid }
+            : {}),
+          notes: effectiveAccess.isMasterAdmin
+            ? `በዋና አስተዳዳሪው (${currentUserName}) የተመዘገበ የትውልድ ክፍያ`
+            : `በ${currentUserName} የተመዘገበ የትውልድ ክፍያ (Pending Approval)`,
         });
         updateContribution(existingCon.id, updatedCon);
         nextContribs = contributions.map((c) => (c.id === existingCon.id ? updatedCon : c));
@@ -1009,17 +1181,26 @@ export default function App() {
           ethiopianYear: currentDate.year || 2018,
           amount: genRate,
           paidAmount: genRate,
-          status: 'ተከፍሏል',
+          status: targetStatus,
+          intendedStatus: 'ተከፍሏል',
           paymentMethod: 'ጥሬ ገንዘብ (Cash)',
-          datePaid: `${currentDate.formatted}`,
-          notes: 'በአስተዳዳሪው (መስኡድ ኑርጋ) የተመዘገበ የትውልድ መዋጮ',
+          datePaid: ts.datePaid,
+          paidAt: ts.paidAt,
+          recordedBy: currentUserName,
+          recordedByEmail: currentUserEmail || undefined,
+          ...(effectiveAccess.isMasterAdmin
+            ? { approvedBy: currentUserName, approvedAt: ts.datePaid }
+            : {}),
+          notes: effectiveAccess.isMasterAdmin
+            ? `በዋና አስተዳዳሪው (${currentUserName}) የተመዘገበ የትውልድ መዋጮ`
+            : `በ${currentUserName} የተመዘገበ የትውልድ መዋጮ (Pending Approval)`,
         });
         nextContribs = [newCon, ...contributions.filter((c) => c.id !== newCon.id)];
         setContributions(nextContribs);
         await saveContributionToFirestore(newCon);
         targetCon = newCon;
       }
-      if (targetCon) {
+      if (effectiveAccess.isMasterAdmin && targetCon && isPaidOrPartialStatus(targetCon.status)) {
         const reportText = formatSinglePaymentTelegramReport(targetCon, member, nextContribs, settings);
         void dispatchApprovedPaymentReportToGroup({
           target: 'payment',
@@ -1029,6 +1210,9 @@ export default function App() {
       }
     } else {
       if (existingCon) {
+        if (!effectiveAccess.isMasterAdmin && isPaidOrPartialStatus(existingCon.status)) {
+          return;
+        }
         deleteContribution(existingCon.id);
         setContributions((prev) => prev.filter((c) => c.id !== existingCon.id));
         await deleteContributionFromFirestore(existingCon.id);
@@ -1228,8 +1412,12 @@ export default function App() {
                 const targetMemberId = beneficiaryId || memberId;
                 const mem = members.find((m) => m.id === targetMemberId);
                 const isGen = type === 'ትውልድ';
-                const effectiveStatus: ContributionStatus = status || (isProxyPayment ? 'Pending' : 'ተከፍሏል');
+                // CRITICAL: Every Member Portal payment (self or proxy) stays Pending until Master Admin approves
+                const effectiveStatus: ContributionStatus = effectiveAccess.isMasterAdmin
+                  ? (status || 'ተከፍሏል')
+                  : 'Pending';
 
+                const ts = buildPaymentTimestamps();
                 const targetYear = currentDate.year || 2018;
                 const newCon: Contribution = {
                   id: `CON-${Date.now()}`,
@@ -1247,14 +1435,18 @@ export default function App() {
                   amount,
                   paidAmount: amount,
                   status: effectiveStatus,
+                  intendedStatus: 'ተከፍሏል',
                   paymentMethod: method as any,
                   transactionRef: ref,
-                  datePaid: `${currentDate.formatted}`,
+                  datePaid: ts.datePaid,
+                  paidAt: ts.paidAt,
+                  recordedBy: payerName || mem?.fullName || currentUserName,
+                  recordedByEmail: currentUserEmail || undefined,
                   notes: isProxyPayment
-                    ? `ተኪ ክፍያ፡ በ${payerName || payerId} ለ${beneficiaryName || mem?.fullName} የተከፈለ (Pending Admin Approval)`
+                    ? `ተኪ ክፍያ፡ በ${payerName || payerId} ለ${beneficiaryName || mem?.fullName} የተከፈለ (የዋና አድሚን ማረጋገጫ የሚጠብቅ / Pending)`
                     : slipPhoto
-                    ? 'ደረሰኝ ፎቶ ተያይዟል (በአባል በኩል የቀረበ)'
-                    : 'በአባል በኩል የቀረበ የክፍያ ማረጋገጫ',
+                    ? 'ደረሰኝ ፎቶ ተያይዟል (በአባል በኩል የቀረበ - የዋና አድሚን ማረጋገጫ የሚጠብቅ)'
+                    : 'በአባል በኩል የቀረበ የክፍያ ማረጋገጫ (Pending Master Admin Approval)',
                   payerId,
                   payerName,
                   beneficiaryId: targetMemberId,
@@ -1299,6 +1491,8 @@ export default function App() {
                 settings={settings}
                 permissions={effectiveAccess.permissions}
                 isMasterAdmin={effectiveAccess.isMasterAdmin}
+                onApproveContribution={handleApproveContribution}
+                onRejectContribution={handleRejectContribution}
                 onOpenRecordPayment={() => {
                   setRecordPaymentMemberId(undefined);
                   setIsRecordPaymentOpen(true);
@@ -1342,6 +1536,9 @@ export default function App() {
                 contributions={contributions}
                 settings={settings}
                 isLoading={isMembersLoading}
+                isMasterAdmin={effectiveAccess.isMasterAdmin}
+                currentUserName={currentUserName}
+                currentUserEmail={currentUserEmail}
                 onOpenAddMember={() => setIsAddMemberOpen(true)}
                 onOpenBulkImport={() => setIsBulkImportOpen(true)}
                 onOpenQR={(m) => setActiveQRMember(m)}
@@ -1400,6 +1597,9 @@ export default function App() {
                 members={members}
                 families={families}
                 settings={settings}
+                isMasterAdmin={effectiveAccess.isMasterAdmin}
+                onApproveContribution={handleApproveContribution}
+                onRejectContribution={handleRejectContribution}
                 onOpenRecordPayment={() => {
                   setRecordPaymentMemberId(undefined);
                   setIsRecordPaymentOpen(true);
@@ -1566,6 +1766,9 @@ export default function App() {
           members={members}
           settings={settings}
           initialMemberId={recordPaymentMemberId}
+          isMasterAdmin={effectiveAccess.isMasterAdmin}
+          recordedByName={currentUserName}
+          recordedByEmail={currentUserEmail}
           onSave={handleSavePayment}
           onSaveBatch={handleSavePaymentsBatch}
           onClose={() => {
@@ -1649,6 +1852,10 @@ export default function App() {
           settings={settings}
           initialMemberId={paymentManagerMemberId}
           initialMode={paymentManagerMode}
+          isMasterAdmin={effectiveAccess.isMasterAdmin}
+          recordedByName={currentUserName}
+          recordedByEmail={currentUserEmail}
+          onApprovePayment={handleApproveContribution}
           onDeletePayment={async (contributionId: string) => {
             await handleDeleteContribution(contributionId);
           }}
@@ -1671,6 +1878,9 @@ export default function App() {
           contributions={contributions}
           settings={settings}
           initialPayerId={batchPaymentPayerId}
+          isMasterAdmin={effectiveAccess.isMasterAdmin}
+          recordedByName={currentUserName}
+          recordedByEmail={currentUserEmail}
           onBatchComplete={({ payerId, newWalletBalance, createdContributions }) => {
             updateMember(payerId, { walletBalance: newWalletBalance });
             if (createdContributions.length > 0) {

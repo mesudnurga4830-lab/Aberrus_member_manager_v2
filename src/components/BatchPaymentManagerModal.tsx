@@ -35,7 +35,7 @@ import {
   ContributionType,
   PaymentMethod,
 } from '../types';
-import { ETHIOPIAN_MONTHS, getEthiopianMonthName, getCurrentEthiopianDate } from '../utils/ethiopianCalendar';
+import { ETHIOPIAN_MONTHS, getEthiopianMonthName, getCurrentEthiopianDate, buildPaymentTimestamps } from '../utils/ethiopianCalendar';
 import { getEffectiveMonthlyRate, getEffectiveGenRate } from '../utils/storage';
 import {
   formatBulkPaymentTelegramReport,
@@ -69,6 +69,9 @@ interface BatchPaymentManagerModalProps {
   contributions: Contribution[];
   settings: SettingsRates;
   initialPayerId?: string;
+  isMasterAdmin?: boolean;
+  recordedByName?: string;
+  recordedByEmail?: string;
   onBatchComplete?: (result: {
     payerId: string;
     newWalletBalance: number;
@@ -91,6 +94,9 @@ export const BatchPaymentManagerModal: React.FC<BatchPaymentManagerModalProps> =
   contributions,
   settings,
   initialPayerId,
+  isMasterAdmin = false,
+  recordedByName,
+  recordedByEmail,
   onBatchComplete,
   onDispatchTelegram,
 }) => {
@@ -319,7 +325,9 @@ export const BatchPaymentManagerModal: React.FC<BatchPaymentManagerModalProps> =
 
     setIsCreatingReceipt(true);
     try {
-      const nowIso = new Date().toISOString();
+      const ts = buildPaymentTimestamps();
+      const nowIso = ts.paidAt;
+      const recorder = recordedByName || (isMasterAdmin ? 'Master Admin' : 'ወኪል / ፋይናንስ');
       const id = `MREC-${Date.now()}`;
       const receiptNumber = `BATCH-${currentDate.year || 2018}-${String(Date.now()).slice(-4)}`;
       const newReceipt: MasterReceipt = {
@@ -335,18 +343,28 @@ export const BatchPaymentManagerModal: React.FC<BatchPaymentManagerModalProps> =
         paymentMethod: newMethod,
         transactionRef: newTxRef.trim() || receiptNumber,
         slipPhoto: newSlipPhoto,
-        status: 'Credited to Wallet',
-        walletCredited: true,
-        notes: newNotes.trim() || `በ${payer.fullName} የገባ የጅምላ ክፍያ ደረሰኝ`,
+        status: isMasterAdmin ? 'Credited to Wallet' : 'Pending',
+        walletCredited: isMasterAdmin,
+        notes:
+          newNotes.trim() ||
+          `በ${payer.fullName} የገባ የጅምላ ክፍያ ደረሰኝ${!isMasterAdmin ? ' (የዋና አድሚን ማረጋገጫ የሚጠብቅ / Pending)' : ''}`,
+        datePaid: ts.datePaid,
         createdAt: nowIso,
         updatedAt: nowIso,
-        createdBy: 'admin',
+        createdBy: isMasterAdmin ? 'admin' : 'member',
+        recordedByName: recorder,
+        recordedByEmail: recordedByEmail || undefined,
+        ...(isMasterAdmin ? { approvedBy: recorder, approvedAt: ts.datePaid } : {}),
         allocationsCount: 0,
       };
 
-      const newWalletBal = Number(payer.walletBalance || 0) + totalNum;
+      const newWalletBal = isMasterAdmin
+        ? Number(payer.walletBalance || 0) + totalNum
+        : Number(payer.walletBalance || 0);
       await saveMasterReceiptToFirestore(newReceipt);
-      await updateMemberWalletBalanceInFirestore(payer.id, newWalletBal);
+      if (isMasterAdmin) {
+        await updateMemberWalletBalanceInFirestore(payer.id, newWalletBal);
+      }
 
       if (onBatchComplete) {
         onBatchComplete({
@@ -363,7 +381,9 @@ export const BatchPaymentManagerModal: React.FC<BatchPaymentManagerModalProps> =
       setNewSlipPhoto(null);
       setNotice({
         type: 'success',
-        message: `የ ${totalNum.toLocaleString()} ብር ዋና ደረሰኝ (${receiptNumber}) ተመዝግቦ በ${payer.fullName} ቀሪ ሂሳብ (Wallet) ላይ ገብቷል!`,
+        message: isMasterAdmin
+          ? `የ ${totalNum.toLocaleString()} ብር ዋና ደረሰኝ (${receiptNumber}) ተመዝግቦ በ${payer.fullName} ቀሪ ሂሳብ (Wallet) ላይ ገብቷል! (${ts.datePaid})`
+          : `የ ${totalNum.toLocaleString()} ብር ዋና ደረሰኝ (${receiptNumber}) Pending ሆኖ ተመዝግቧል (${ts.datePaid}) — ዋናው አድሚን ሲያጸድቀው ወደ Wallet ይገባል።`,
       });
       setTimeout(() => setNotice(null), 5000);
     } catch (err: any) {
@@ -373,13 +393,18 @@ export const BatchPaymentManagerModal: React.FC<BatchPaymentManagerModalProps> =
     }
   };
 
-  // Approve Pending Master Receipt -> Credit payer's walletBalance
+  // Approve Pending Master Receipt -> Strictly Master Admin Only -> Credit payer's walletBalance
   const handleApproveAndCreditReceipt = async (receipt: MasterReceipt) => {
+    if (!isMasterAdmin) {
+      setNotice({ type: 'error', message: 'ደረሰኝ ማጽደቅ የሚችለው ዋናው አድሚን ብቻ ነው።' });
+      return;
+    }
     const payer = members.find((m) => m.id === receipt.payerId);
     try {
       const { newWalletBalance } = await creditMasterReceiptToWalletInFirestore(
         receipt,
-        Number(payer?.walletBalance || 0)
+        Number(payer?.walletBalance || 0),
+        recordedByName || 'Master Admin'
       );
       if (onBatchComplete && payer) {
         onBatchComplete({
@@ -438,6 +463,9 @@ export const BatchPaymentManagerModal: React.FC<BatchPaymentManagerModalProps> =
         payerCurrentWalletBalance: Number(selectedPayer.walletBalance || 0),
         allocations: validItems,
         finalizeRemainderToWallet: keepRemainderOnWallet,
+        isMasterAdmin,
+        recordedByName: recordedByName || (isMasterAdmin ? 'Master Admin' : 'ወኪል / ፋይናንስ'),
+        recordedByEmail,
       });
 
       if (onBatchComplete) {
@@ -448,7 +476,7 @@ export const BatchPaymentManagerModal: React.FC<BatchPaymentManagerModalProps> =
         });
       }
 
-      if (res.createdContributions.length > 0) {
+      if (isMasterAdmin && res.createdContributions.length > 0) {
         const updatedContribs = [
           ...res.createdContributions,
           ...contributions.filter(
@@ -1024,20 +1052,28 @@ export const BatchPaymentManagerModal: React.FC<BatchPaymentManagerModalProps> =
                     <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="text-xs text-amber-950">
                         <strong className="block font-bold">
-                          ይህ ደረሰኝ በአባሉ የቀረበ ሲሆን ገና ወደ ቀሪ ሂሳብ (Wallet) አልጸደቀም።
+                          ይህ ደረሰኝ ገና በዋናው አድሚን ወደ ቀሪ ሂሳብ (Wallet) አልጸደቀም።
                         </strong>
                         <span className="text-[11px] text-amber-800">
-                          ቀጥታ ክፍፍል ማድረግ ይችላሉ (ሲያጸድቁት ቀሪው ወደ አባሉ ሂሳብ ይገባል) ወይም አሁኑኑ ወደ ሂሳቡ ማስገባት ይችላሉ።
+                          {isMasterAdmin
+                            ? 'ቀጥታ ክፍፍል ማድረግ ይችላሉ (ሲያጸድቁት ቀሪው ወደ አባሉ ሂሳብ ይገባል) ወይም አሁኑኑ ወደ ሂሳቡ ማስገባት ይችላሉ።'
+                            : 'ይህ ደረሰኝ በዋናው አድሚን እስኪጸድቅ ድረስ በPending ሁኔታ ይቆያል።'}
                         </span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleApproveAndCreditReceipt(selectedReceipt)}
-                        className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs flex items-center gap-1.5 shrink-0 cursor-pointer"
-                      >
-                        <Check className="w-4 h-4" />
-                        <span>ደረሰኙን አጽድቅ (Credit Wallet)</span>
-                      </button>
+                      {isMasterAdmin ? (
+                        <button
+                          type="button"
+                          onClick={() => handleApproveAndCreditReceipt(selectedReceipt)}
+                          className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs flex items-center gap-1.5 shrink-0 cursor-pointer"
+                        >
+                          <Check className="w-4 h-4" />
+                          <span>ደረሰኙን አጽድቅ (Credit Wallet)</span>
+                        </button>
+                      ) : (
+                        <span className="px-3 py-1.5 rounded-lg bg-amber-100 border border-amber-300 text-amber-900 text-[11px] font-bold shrink-0">
+                          Pending Master Admin
+                        </span>
+                      )}
                     </div>
                   )}
 

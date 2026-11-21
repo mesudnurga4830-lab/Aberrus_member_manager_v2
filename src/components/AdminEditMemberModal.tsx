@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { Member, Family, Contribution, SettingsRates, GenerationNumber } from '../types';
 import { normalizePhoneNumber } from '../firebase';
+import { isPaidStatus, isPendingStatus, getContributionMonth, getContributionYear } from '../utils/storage';
 import {
   X,
   User,
@@ -19,6 +20,7 @@ import {
   RotateCcw,
   Sparkles,
   Trash2,
+  Clock,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -29,6 +31,7 @@ interface AdminEditMemberModalProps {
   families: Family[];
   contributions: Contribution[];
   settings: SettingsRates;
+  isMasterAdmin?: boolean;
   onUpdateMember: (id: string, updates: Partial<Member>) => void;
   onDeleteMember?: (id: string) => void;
   onToggleMonthlyStatus: (memberId: string, month: number, year: number, markPaid: boolean) => void;
@@ -42,6 +45,7 @@ export const AdminEditMemberModal: React.FC<AdminEditMemberModalProps> = ({
   families,
   contributions,
   settings,
+  isMasterAdmin = false,
   onUpdateMember,
   onDeleteMember,
   onToggleMonthlyStatus,
@@ -54,14 +58,27 @@ export const AdminEditMemberModal: React.FC<AdminEditMemberModalProps> = ({
   const isCurrentlyMonthlyPaid = !!member && contributions.some(
     (c) =>
       c.memberId === member.id &&
-      c.type === 'ወርሃዊ' &&
-      c.ethiopianMonth === currentMonth &&
-      c.ethiopianYear === currentYear &&
-      c.status === 'ተከፍሏል'
+      (!c.type || c.type === 'ወርሃዊ') &&
+      getContributionMonth(c) === currentMonth &&
+      getContributionYear(c) === currentYear &&
+      isPaidStatus(c.status)
+  );
+
+  const isCurrentlyMonthlyPending = !!member && !isCurrentlyMonthlyPaid && contributions.some(
+    (c) =>
+      c.memberId === member.id &&
+      (!c.type || c.type === 'ወርሃዊ') &&
+      getContributionMonth(c) === currentMonth &&
+      getContributionYear(c) === currentYear &&
+      isPendingStatus(c.status)
   );
 
   const isCurrentlyGenPaid = !!member && contributions.some(
-    (c) => c.memberId === member.id && c.type === 'ትውልድ' && c.status === 'ተከፍሏል'
+    (c) => c.memberId === member.id && c.type === 'ትውልድ' && isPaidStatus(c.status)
+  );
+
+  const isCurrentlyGenPending = !!member && !isCurrentlyGenPaid && contributions.some(
+    (c) => c.memberId === member.id && c.type === 'ትውልድ' && isPendingStatus(c.status)
   );
 
   // Form states - called unconditionally
@@ -113,13 +130,13 @@ export const AdminEditMemberModal: React.FC<AdminEditMemberModalProps> = ({
       notes: notes.trim(),
     });
 
-    // 2. Update Monthly Status if toggled
-    if (monthlyPaid !== isCurrentlyMonthlyPaid) {
+    // 2. Update Monthly Status if toggled (non-Master-Admin cannot unmark Paid)
+    if (monthlyPaid !== isCurrentlyMonthlyPaid && (isMasterAdmin || !isCurrentlyMonthlyPaid)) {
       onToggleMonthlyStatus(member.id, currentMonth, currentYear, monthlyPaid);
     }
 
-    // 3. Update Generation Status if toggled
-    if (genPaid !== isCurrentlyGenPaid) {
+    // 3. Update Generation Status if toggled (non-Master-Admin cannot unmark Paid)
+    if (genPaid !== isCurrentlyGenPaid && (isMasterAdmin || !isCurrentlyGenPaid)) {
       onToggleGenStatus(member.id, genPaid);
     }
 
@@ -151,7 +168,7 @@ export const AdminEditMemberModal: React.FC<AdminEditMemberModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
-                  አስተዳዳሪ (Mesud Nurga)
+                  {isMasterAdmin ? 'ዋና አስተዳዳሪ (Master Admin)' : 'አመራር / አስተካካይ'}
                 </span>
                 <span className="text-xs font-mono text-neutral-400">{member.id}</span>
               </div>
@@ -281,14 +298,30 @@ export const AdminEditMemberModal: React.FC<AdminEditMemberModalProps> = ({
                   <CreditCard className="w-4 h-4 text-emerald-800" />
                   <span>የክፍያ ሁኔታ ማስተካከያ (Payment Status Control)</span>
                 </span>
-                <span className="text-[10px] text-neutral-500 font-mono">የአስተዳዳሪ መቆጣጠሪያ</span>
+                <span className="text-[10px] text-neutral-500 font-mono">
+                  {isMasterAdmin ? 'የዋና አስተዳዳሪ መቆጣጠሪያ' : 'Pending የሚፈጥር'}
+                </span>
               </div>
+
+              {!isMasterAdmin && (
+                <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-[11px] flex items-start gap-2">
+                  <Clock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <span>
+                    ከዋናው አስተዳዳሪ ውጭ የሚመዘገብ ማንኛውም ክፍያ በ<b>Pending</b> ሁኔታ ይቆያል፤ ዋናው አስተዳዳሪ ሲያጸድቀው ብቻ «ተከፍሏል» ይሆናል።
+                  </span>
+                </div>
+              )}
 
               {/* 4a. Monthly Payment (Hamle 2018) Toggle */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-neutral-800">
-                    ወርሃዊ መዋጮ (ሀምሌ 2018 ዓ.ም)፡
+                  <span className="text-xs font-bold text-neutral-800 flex items-center gap-1.5">
+                    <span>ወርሃዊ መዋጮ (ሀምሌ 2018 ዓ.ም)፡</span>
+                    {isCurrentlyMonthlyPending && (
+                      <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold">
+                        Pending
+                      </span>
+                    )}
                   </span>
                   <span className="text-xs font-mono font-bold text-neutral-600">
                     {monthlyRate} ብር/ወር
@@ -305,14 +338,15 @@ export const AdminEditMemberModal: React.FC<AdminEditMemberModalProps> = ({
                         : 'bg-white text-neutral-600 border-neutral-300 hover:bg-emerald-50 hover:text-emerald-800'
                     }`}
                   >
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>✓ ተከፍሏል (Paid)</span>
+                    {isMasterAdmin ? <CheckCircle2 className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+                    <span>{isMasterAdmin ? '✓ ተከፍሏል (Paid)' : 'ክፍያ መዝግብ (Pending)'}</span>
                   </button>
 
                   <button
                     type="button"
+                    disabled={!isMasterAdmin && isCurrentlyMonthlyPaid}
                     onClick={() => setMonthlyPaid(false)}
-                    className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 border ${
+                    className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 border disabled:opacity-50 disabled:cursor-not-allowed ${
                       !monthlyPaid
                         ? 'bg-red-600 text-white border-red-700 shadow-xs ring-2 ring-red-600/30'
                         : 'bg-white text-neutral-600 border-neutral-300 hover:bg-red-50 hover:text-red-800'
@@ -328,8 +362,13 @@ export const AdminEditMemberModal: React.FC<AdminEditMemberModalProps> = ({
               <div className="space-y-2 pt-2 border-t border-neutral-200">
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="text-xs font-bold text-neutral-800 block">
-                      የትውልድ መዋጮ (Generation Contribution)፡
+                    <span className="text-xs font-bold text-neutral-800 flex items-center gap-1.5">
+                      <span>የትውልድ መዋጮ (Generation Contribution)፡</span>
+                      {isCurrentlyGenPending && (
+                        <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold">
+                          Pending
+                        </span>
+                      )}
                     </span>
                     <span className="text-[10px] text-neutral-500">
                       የክፍያ መጀመሪያ፦ ሀምሌ 01፣ 2018 ዓ.ም (በአንድ ጊዜ ወይም በየወሩ)
@@ -350,14 +389,15 @@ export const AdminEditMemberModal: React.FC<AdminEditMemberModalProps> = ({
                         : 'bg-white text-neutral-600 border-neutral-300 hover:bg-emerald-50 hover:text-emerald-800'
                     }`}
                   >
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>✓ ተከፍሏል (Paid)</span>
+                    {isMasterAdmin ? <CheckCircle2 className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+                    <span>{isMasterAdmin ? '✓ ተከፍሏል (Paid)' : 'ክፍያ መዝግብ (Pending)'}</span>
                   </button>
 
                   <button
                     type="button"
+                    disabled={!isMasterAdmin && isCurrentlyGenPaid}
                     onClick={() => setGenPaid(false)}
-                    className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 border ${
+                    className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 border disabled:opacity-50 disabled:cursor-not-allowed ${
                       !genPaid
                         ? 'bg-amber-600 text-white border-amber-700 shadow-xs ring-2 ring-amber-600/30'
                         : 'bg-white text-neutral-600 border-neutral-300 hover:bg-amber-50 hover:text-amber-800'

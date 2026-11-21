@@ -6,11 +6,17 @@
 import React from 'react';
 import { Member, Family, Contribution, SettingsRates, PermissionKey } from '../types';
 import { hasAppPermission } from '../utils/roles';
-import { getCurrentEthiopianDate, getEthiopianMonthName, ETHIOPIAN_MONTHS } from '../utils/ethiopianCalendar';
+import {
+  getCurrentEthiopianDate,
+  getEthiopianMonthName,
+  ETHIOPIAN_MONTHS,
+  formatDisplayPaymentDateTime,
+} from '../utils/ethiopianCalendar';
 import {
   computeGenerationPortfolioSummary,
   isPaidStatus,
   isPartialStatus,
+  isPendingStatus,
   getContributionMonth,
   getContributionYear,
   getContributionPaidAmount,
@@ -41,6 +47,9 @@ import {
   Layers,
   ListChecks,
   ShieldCheck,
+  Clock,
+  Check,
+  Eye,
 } from 'lucide-react';
 
 interface DashboardOverviewProps {
@@ -50,6 +59,8 @@ interface DashboardOverviewProps {
   settings: SettingsRates;
   permissions?: PermissionKey[];
   isMasterAdmin?: boolean;
+  onApproveContribution?: (c: Contribution) => void | Promise<void>;
+  onRejectContribution?: (c: Contribution) => void | Promise<void>;
   onOpenRecordPayment: () => void;
   onOpenPaymentManager?: (memberId?: string, mode?: 'list' | 'add') => void;
   onOpenBatchPayment?: (payerId?: string) => void;
@@ -71,6 +82,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   settings,
   permissions,
   isMasterAdmin = false,
+  onApproveContribution,
+  onRejectContribution,
   onOpenRecordPayment,
   onOpenPaymentManager,
   onOpenBatchPayment,
@@ -95,6 +108,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const canManageFamilyHeads = can('manage_family_heads');
   const canManageRoles = can('manage_roles');
   const [searchQuery, setSearchQuery] = React.useState('');
+  const [previewSlipUrl, setPreviewSlipUrl] = React.useState<string | null>(null);
+  const [processingPendingId, setProcessingPendingId] = React.useState<string | null>(null);
   const currentDate = getCurrentEthiopianDate();
   const [selectedMonth, setSelectedMonth] = React.useState<number>(currentDate.month || 11);
   const [selectedYear, setSelectedYear] = React.useState<number>(currentDate.year || 2018);
@@ -191,6 +206,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     5: members.filter((m) => m.generation === 5).length,
     6: members.filter((m) => m.generation === 6).length,
   };
+
+  // Pending payments awaiting Master Admin approval
+  const pendingContributions = contributions.filter((c) => isPendingStatus(c.status));
 
   // Recent 5 contributions
   const recentContributions = contributions.slice(0, 5);
@@ -649,6 +667,175 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       </div>
 
       {/* ========================================================================= */}
+      {/* PENDING PAYMENTS APPROVAL QUEUE (MASTER ADMIN GOVERNANCE)                 */}
+      {/* ========================================================================= */}
+      {pendingContributions.length > 0 && (
+        <div className="bg-amber-50/90 rounded-3xl p-5 sm:p-6 border-2 border-amber-400 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-amber-200">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2.5 py-0.5 rounded-full bg-amber-200 text-amber-950 text-[11px] font-extrabold">
+                    ማረጋገጫ የሚጠብቁ ክፍያዎች ({pendingContributions.length})
+                  </span>
+                  <span className="text-[11px] font-semibold text-amber-900">
+                    {isMasterAdmin
+                      ? 'ዋናው አስተዳዳሪ (Master Admin) ማረጋገጫ'
+                      : 'የዋና አስተዳዳሪ (Master Admin) ፍቃድ ብቻ'}
+                  </span>
+                </div>
+                <h3 className="text-base font-extrabold text-amber-950 mt-1">
+                  ከዋናው አስተዳዳሪ ውጭ የተመዘገቡ ክፍያዎች (Pending Approvals)
+                </h3>
+                <p className="text-xs text-amber-800">
+                  ዋናው አስተዳዳሪ እስኪያጸድቃቸው ድረስ በጠቅላላ ገቢ እና በከፈሉ አባላት ዝርዝር ውስጥ አይቆጠሩም።
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => onNavigateTab('contributions')}
+              className="px-3.5 py-2 rounded-xl bg-white hover:bg-amber-100 text-amber-950 border border-amber-300 text-xs font-bold transition-colors cursor-pointer shrink-0 self-start sm:self-center"
+            >
+              በዝርዝር መዝገብ እይ →
+            </button>
+          </div>
+
+          <div className="overflow-x-auto bg-white rounded-2xl border border-amber-200">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-amber-100/70 text-amber-950 font-bold border-b border-amber-200">
+                <tr>
+                  <th className="py-2.5 px-3">አባል (Member)</th>
+                  <th className="py-2.5 px-3">ዓይነት / ወር</th>
+                  <th className="py-2.5 px-3 text-right">መጠን</th>
+                  <th className="py-2.5 px-3">ቀንና ሰዓት</th>
+                  <th className="py-2.5 px-3">የመዘገበው / ዘዴ</th>
+                  <th className="py-2.5 px-3 text-right">እርምጃ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-amber-100">
+                {pendingContributions.slice(0, 12).map((c, idx) => (
+                  <tr key={`${c.id}-${idx}`} className="hover:bg-amber-50/40">
+                    <td className="py-2.5 px-3">
+                      <div className="font-bold text-neutral-900 flex items-center gap-1.5 flex-wrap">
+                        <span>{c.memberName}</span>
+                        {c.isProxyPayment && (
+                          <span className="px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-800 text-[9px] font-bold">
+                            ተኪ (Proxy)
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-neutral-500 font-mono">
+                        {c.memberId} · {c.familyName}
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-3">
+                      <span className="font-bold text-neutral-800 block">{c.type}</span>
+                      <span className="text-[10px] text-neutral-500">
+                        {c.type === 'ትውልድ' ? 'የትውልድ መዋጮ' : `${c.ethiopianMonthName || c.ethiopianMonth} ${c.ethiopianYear}`}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono font-extrabold text-amber-900 tabular-nums">
+                      {Number(c.paidAmount ?? c.amount ?? 0).toLocaleString()} ብር
+                    </td>
+                    <td className="py-2.5 px-3 font-mono text-[11px] text-neutral-700">
+                      {formatDisplayPaymentDateTime(c.datePaid, c.paidAt)}
+                    </td>
+                    <td className="py-2.5 px-3">
+                      <div className="text-neutral-800 font-semibold">
+                        {c.recordedBy || c.payerName || 'አባል / ወኪል'}
+                      </div>
+                      <div className="text-[10px] text-neutral-500">
+                        {c.paymentMethod || 'CBE'}{c.transactionRef ? ` · ${c.transactionRef}` : ''}
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-3 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {c.slipPhoto && (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewSlipUrl(c.slipPhoto || null)}
+                            className="p-1.5 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-700 cursor-pointer"
+                            title="ደረሰኝ ፎቶ እይ"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {isMasterAdmin ? (
+                          <>
+                            {onApproveContribution && (
+                              <button
+                                type="button"
+                                disabled={processingPendingId === c.id}
+                                onClick={async () => {
+                                  setProcessingPendingId(c.id);
+                                  try {
+                                    await onApproveContribution(c);
+                                  } finally {
+                                    setProcessingPendingId(null);
+                                  }
+                                }}
+                                className="px-2.5 py-1.5 rounded-lg bg-[#1B5E20] hover:bg-[#144818] text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                title="ክፍያውን አጽድቅና ወደ Telegram Group ላክ"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>አጽድቅ</span>
+                              </button>
+                            )}
+                            {onRejectContribution && (
+                              <button
+                                type="button"
+                                disabled={processingPendingId === c.id}
+                                onClick={async () => {
+                                  setProcessingPendingId(c.id);
+                                  try {
+                                    await onRejectContribution(c);
+                                  } finally {
+                                    setProcessingPendingId(null);
+                                  }
+                                }}
+                                className="px-2.5 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-[11px] font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                title="ውድቅ አድርግ (Reject)"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                                <span>ውድቅ</span>
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <span className="px-2 py-1 rounded-lg bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold">
+                            ዋና አድሚን ይጠብቃል
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {previewSlipUrl && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setPreviewSlipUrl(null)}>
+          <div className="bg-white rounded-2xl max-w-lg w-full p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b pb-2">
+              <span className="text-xs font-bold text-neutral-900">የክፍያ ደረሰኝ ፎቶ (Slip Photo)</span>
+              <button type="button" onClick={() => setPreviewSlipUrl(null)} className="p-1 rounded-lg hover:bg-neutral-100 cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <img src={previewSlipUrl} alt="Payment Slip" className="w-full max-h-[70vh] object-contain rounded-xl bg-neutral-900" />
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* CURRENT ETHIOPIAN MONTH CONTRIBUTIONS SUMMARY SECTION                     */}
       {/* ========================================================================= */}
       <div className="bg-white rounded-3xl p-6 sm:p-7 border border-emerald-900/15 shadow-sm space-y-6">
@@ -1059,6 +1246,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                   <th className="py-2 px-2">ደረሰኝ / ID</th>
                   <th className="py-2 px-2">አባል</th>
                   <th className="py-2 px-2">ዓይነት</th>
+                  <th className="py-2 px-2">ቀንና ሰዓት</th>
                   <th className="py-2 px-2 text-right">መጠን</th>
                   <th className="py-2 px-2">ሁኔታ</th>
                 </tr>
@@ -1072,6 +1260,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                       <p className="text-[10px] text-neutral-400">{c.familyName} · {c.generation}ኛ</p>
                     </td>
                     <td className="py-2.5 px-2 text-neutral-600">{c.type}</td>
+                    <td className="py-2.5 px-2 font-mono text-[11px] text-neutral-600">
+                      {formatDisplayPaymentDateTime(c.datePaid, c.paidAt)}
+                    </td>
                     <td className="py-2.5 px-2 text-right font-mono font-bold tabular-nums text-emerald-900">
                       {getContributionPaidAmount(c).toLocaleString()} ብር
                     </td>
@@ -1080,12 +1271,14 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                         className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
                           isPaidStatus(c.status)
                             ? 'bg-emerald-100 text-emerald-800'
+                            : isPendingStatus(c.status)
+                            ? 'bg-amber-100 text-amber-900 border border-amber-300'
                             : isPartialStatus(c.status)
-                            ? 'bg-amber-100 text-amber-800'
+                            ? 'bg-amber-50 text-amber-800'
                             : 'bg-red-100 text-red-800'
                         }`}
                       >
-                        {c.status}
+                        {isPendingStatus(c.status) ? 'Pending' : c.status}
                       </span>
                     </td>
                   </tr>

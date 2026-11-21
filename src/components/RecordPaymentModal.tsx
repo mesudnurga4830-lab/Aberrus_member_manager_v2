@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Member, Contribution, ContributionStatus, PaymentMethod, SettingsRates } from '../types';
-import { ETHIOPIAN_MONTHS, getEthiopianMonthName, getCurrentEthiopianDate } from '../utils/ethiopianCalendar';
+import { ETHIOPIAN_MONTHS, getEthiopianMonthName, getCurrentEthiopianDate, buildPaymentTimestamps } from '../utils/ethiopianCalendar';
 import {
   getEffectiveMonthlyRate,
   getEffectiveGenRate,
@@ -65,6 +65,9 @@ interface RecordPaymentModalProps {
   members: Member[];
   settings: SettingsRates;
   initialMemberId?: string;
+  isMasterAdmin?: boolean;
+  recordedByName?: string;
+  recordedByEmail?: string;
   onSave: (contribution: Omit<Contribution, 'id'>) => void;
   onSaveBatch?: (contributions: Omit<Contribution, 'id'>[]) => void;
   onClose: () => void;
@@ -74,6 +77,9 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
   members,
   settings,
   initialMemberId,
+  isMasterAdmin = false,
+  recordedByName,
+  recordedByEmail,
   onSave,
   onSaveBatch,
   onClose,
@@ -180,18 +186,22 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
     }
 
     const contributionsToSave: Omit<Contribution, 'id'>[] = [];
-    const datePaidStr = `${getEthiopianMonthName(selectedMonths[0]?.month || 11)} ${selectedMonths[0]?.year || 2018} ዓ.ም`;
+    const ts = buildPaymentTimestamps();
+    const recorderDisplay = recordedByName || (isMasterAdmin ? 'Master Admin' : 'ወኪል / አባል');
 
     // 1. Process Monthly Payments
     if (includeMonthly && selectedMonths.length > 0) {
       const ratePerMonth = selectedMember.isMinor ? 0 : singleMonthlyRate;
       selectedMonths.forEach((mItem) => {
-        const status: ContributionStatus =
+        const intendedMonthlyStatus: ContributionStatus =
           monthlyPaidAmount >= expectedMonthlyTotal
             ? 'ተከፍሏል'
             : monthlyPaidAmount > 0
             ? 'ከፊል'
             : 'ያልተከፈለ';
+        const finalMonthlyStatus: ContributionStatus = isMasterAdmin
+          ? intendedMonthlyStatus
+          : 'Pending';
 
         contributionsToSave.push({
           memberId: selectedMember.id,
@@ -205,20 +215,32 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
           ethiopianYear: mItem.year,
           amount: ratePerMonth,
           paidAmount: ratePerMonth,
-          status,
+          status: finalMonthlyStatus,
+          intendedStatus: intendedMonthlyStatus,
           paymentMethod,
           transactionRef: transactionRef.trim() || '',
-          notes: notes.trim() || (selectedMonths.length > 1 ? `የ${mItem.name} ${mItem.year} መዋጮ (${selectedMonths.length} ወራት በCBE የተከፈለ)` : ''),
-          datePaid: status === 'ተከፍሏል' || status === 'ከፊል' ? `${mItem.name} ${mItem.year} ዓ.ም` : '',
+          notes:
+            notes.trim() ||
+            (selectedMonths.length > 1
+              ? `የ${mItem.name} ${mItem.year} መዋጮ (${selectedMonths.length} ወራት${!isMasterAdmin ? ' · Pending Approval' : ''})`
+              : !isMasterAdmin
+              ? `በ${recorderDisplay} የተመዘገበ (የዋና አድሚን ማረጋገጫ የሚጠብቅ / Pending)`
+              : ''),
+          datePaid: ts.datePaid,
+          paidAt: ts.paidAt,
+          recordedBy: recorderDisplay,
+          recordedByEmail: recordedByEmail || undefined,
+          ...(isMasterAdmin ? { approvedBy: recorderDisplay, approvedAt: ts.datePaid } : {}),
         });
       });
     }
 
     // 2. Process Generation Payment
     if (includeGeneration && !selectedMember.isMinor && !selectedMember.isSpouse) {
-      const genExpected = getEffectiveGenRate(selectedMember, settings);
       const isFull = genPaymentOption === 'full' || genPaidAmount >= genTargetAmount;
       const remainingAfterPayment = Math.max(genTargetAmount - genPaidAmount, 0);
+      const intendedGenStatus: ContributionStatus = isFull ? 'ተከፍሏል' : 'ከፊል';
+      const finalGenStatus: ContributionStatus = isMasterAdmin ? intendedGenStatus : 'Pending';
 
       contributionsToSave.push({
         memberId: selectedMember.id,
@@ -232,13 +254,22 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
         ethiopianYear: genPaidYear,
         amount: genTargetAmount,
         paidAmount: genPaidAmount,
-        status: isFull ? 'ተከፍሏል' : 'ከፊል',
+        status: finalGenStatus,
+        intendedStatus: intendedGenStatus,
         isInstallment: !isFull,
         remainingBalance: !isFull ? remainingAfterPayment : 0,
         paymentMethod,
         transactionRef: transactionRef.trim() || '',
-        notes: notes.trim() || (isFull ? `የትውልድ መዋጮ ሙሉ በሙሉ ተከፍሏል (${getEthiopianMonthName(genPaidMonth)} ${genPaidYear})` : `የትውልድ መዋጮ በከፊል የተከፈለ (${getEthiopianMonthName(genPaidMonth)} ${genPaidYear}) - የቀረ ቀሪ ${remainingAfterPayment} ብር`),
-        datePaid: datePaidStr || '',
+        notes:
+          notes.trim() ||
+          (isFull
+            ? `የትውልድ መዋጮ ሙሉ በሙሉ (${getEthiopianMonthName(genPaidMonth)} ${genPaidYear})${!isMasterAdmin ? ' · Pending Approval' : ''}`
+            : `የትውልድ መዋጮ በከፊል (${getEthiopianMonthName(genPaidMonth)} ${genPaidYear}) - ቀሪ ${remainingAfterPayment} ብር${!isMasterAdmin ? ' · Pending Approval' : ''}`),
+        datePaid: ts.datePaid,
+        paidAt: ts.paidAt,
+        recordedBy: recorderDisplay,
+        recordedByEmail: recordedByEmail || undefined,
+        ...(isMasterAdmin ? { approvedBy: recorderDisplay, approvedAt: ts.datePaid } : {}),
       });
     }
 
@@ -301,6 +332,18 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-5 space-y-4 max-h-[76vh] overflow-y-auto">
+          {!isMasterAdmin && (
+            <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-950 text-xs flex items-start gap-2">
+              <Clock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold block">ማሳሰቢያ፡ በዋናው አድሚን ማረጋገጫ የሚጠብቅ (Pending Approval)</span>
+                <span className="text-[11px] text-amber-800">
+                  ከዋናው አድሚን ውጭ የሚመዘገቡ ክፍያዎች ዋናው አድሚን እስኪያጸድቃቸው ድረስ &quot;Pending&quot; ሆነው ይቆያሉ፤ ትክክለኛው ቀን እና ሰዓትም አብሮ ይመዘገባል።
+                </span>
+              </div>
+            </div>
+          )}
+
           {errorNotice && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-900 text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />

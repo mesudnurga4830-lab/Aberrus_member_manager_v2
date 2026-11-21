@@ -5,7 +5,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { Contribution, Member, Family, SettingsRates, ContributionStatus, NotificationLog } from '../types';
-import { ETHIOPIAN_MONTHS, getEthiopianMonthName, getCurrentEthiopianDate } from '../utils/ethiopianCalendar';
+import {
+  ETHIOPIAN_MONTHS,
+  getEthiopianMonthName,
+  getCurrentEthiopianDate,
+  buildPaymentTimestamps,
+  formatDisplayPaymentDateTime,
+} from '../utils/ethiopianCalendar';
 import {
   subscribeToAllContributions,
   matchMonthContribution,
@@ -51,6 +57,7 @@ import {
 import {
   isPaidStatus,
   isPartialStatus,
+  isPendingStatus,
   isPaidOrPartialStatus,
   getContributionMonth,
   getContributionYear,
@@ -62,6 +69,9 @@ interface ContributionsManagerProps {
   members: Member[];
   families: Family[];
   settings: SettingsRates;
+  isMasterAdmin?: boolean;
+  onApproveContribution?: (c: Contribution) => void | Promise<void>;
+  onRejectContribution?: (c: Contribution) => void | Promise<void>;
   onOpenRecordPayment: () => void;
   onOpenPaymentManager?: (memberId?: string, mode?: 'list' | 'add') => void;
   onOpenBatchPayment?: (payerId?: string) => void;
@@ -83,6 +93,9 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
   members,
   families,
   settings,
+  isMasterAdmin = false,
+  onApproveContribution,
+  onRejectContribution,
   onOpenRecordPayment,
   onOpenPaymentManager,
   onOpenBatchPayment,
@@ -141,33 +154,67 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
   const handleConfirmDeleteContribution = async () => {
     if (!paymentToDelete) return;
     const c = paymentToDelete;
+    if (!isMasterAdmin && isPaidOrPartialStatus(c.status)) {
+      setDeleteNotice('የጸደቁ ክፍያዎችን መሰረዝ የሚችለው ዋናው አስተዳዳሪ (Master Admin) ብቻ ነው።');
+      setPaymentToDelete(null);
+      setTimeout(() => setDeleteNotice(null), 4000);
+      return;
+    }
     setIsDeletingPayment(true);
     try {
-      // 1. Optimistically update local view
       setLiveContributions((prev) => prev.filter((item) => item.id !== c.id));
-      // 2. Call parent callback
       onDeleteContribution(c.id);
-      // 3. Delete from Firestore & server API
       await deleteContributionFromFirestore(c.id);
       setDeleteNotice(`የክፍያ መዝገብ "${c.id}" (${c.type}) በተሳካ ሁኔታ ተሰርዟል!`);
       setPaymentToDelete(null);
       setTimeout(() => setDeleteNotice(null), 4000);
     } catch (err: any) {
       console.error('Error deleting contribution:', err);
-      // Rollback on error
       setLiveContributions((prev) => [c, ...prev]);
-      alert('ክፍያውን መሰረዝ አልተቻለም፡ ' + (err?.message || 'Error'));
+      setDeleteNotice('ክፍያውን መሰረዝ አልተቻለም፡ ' + (err?.message || 'Error'));
+      setTimeout(() => setDeleteNotice(null), 4000);
     } finally {
       setIsDeletingPayment(false);
     }
   };
 
-  // Approve payment & dispatch report ONLY to VITE_TELEGRAM_GROUP_CHAT_ID
+  // Approve payment & dispatch report ONLY to VITE_TELEGRAM_GROUP_CHAT_ID (Master Admin ONLY)
   const handleApproveContribution = async (c: Contribution): Promise<Contribution> => {
-    const updated: Contribution = { ...c, status: 'ተከፍሏል' };
-    onUpdateStatus(c.id, 'ተከፍሏል');
+    if (!isMasterAdmin) {
+      setDeleteNotice('ክፍያዎችን ማጽደቅ የሚችለው ዋናው አስተዳዳሪ (Master Admin) ብቻ ነው።');
+      setTimeout(() => setDeleteNotice(null), 4000);
+      return c;
+    }
+
+    const ts = buildPaymentTimestamps();
+    const paidNum = Number(c.paidAmount ?? c.amount ?? 0);
+    const targetNum = Number(c.amount ?? 0);
+    const approvedStatus: ContributionStatus =
+      c.intendedStatus === 'ከፊል' || (c.type === 'ትውልድ' && paidNum > 0 && targetNum > 0 && paidNum < targetNum)
+        ? 'ከፊል'
+        : 'ተከፍሏል';
+
+    const updated: Contribution = {
+      ...c,
+      status: approvedStatus,
+      approvedBy: 'ዋና አስተዳዳሪ',
+      approvedAt: ts.datePaid,
+      paidAt: c.paidAt || ts.paidAt,
+      datePaid: c.datePaid && /\d{1,2}:\d{2}/.test(c.datePaid) ? c.datePaid : ts.datePaid,
+    };
+
+    if (onApproveContribution) {
+      await onApproveContribution(c);
+      setLiveContributions((prev) => prev.map((item) => (item.id === c.id ? updated : item)));
+      setDeleteNotice(`የ${c.memberName} ክፍያ በዋና አስተዳዳሪ ጸድቋል፤ የክፍያ ሪፖርቱ ወደ Telegram Group ተልኳል!`);
+      setTimeout(() => setDeleteNotice(null), 5000);
+      return updated;
+    }
+
+    onUpdateStatus(c.id, approvedStatus);
     await saveContributionToFirestore(updated);
     const nextContribs = liveContributions.map((item) => (item.id === c.id ? updated : item));
+    setLiveContributions(nextContribs);
     const memberObj = members.find((mem) => mem.id === c.memberId);
     const reportText = formatSinglePaymentTelegramReport(updated, memberObj, nextContribs, settings);
     const dispatchRes = await dispatchApprovedPaymentReportToGroup({
@@ -279,7 +326,9 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
     if (selectedMonth !== 'all' && getContributionMonth(c) !== Number(selectedMonth)) return false;
     if (selectedType !== 'all' && c.type !== selectedType) return false;
     if (selectedStatus !== 'all') {
-      if (selectedStatus === 'ተከፍሏል') {
+      if (selectedStatus === 'Pending') {
+        if (!isPendingStatus(c.status)) return false;
+      } else if (selectedStatus === 'ተከፍሏል') {
         if (!isPaidStatus(c.status)) return false;
       } else if (selectedStatus === 'ከፊል') {
         if (!isPartialStatus(c.status)) return false;
@@ -305,14 +354,22 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
     .filter((c) => isPaidOrPartialStatus(c.status))
     .reduce((sum, c) => sum + getContributionPaidAmount(c), 0);
 
-  // Quick Cell Click Toggle Handler: Toggles status between Paid and Unpaid live in Firestore
+  const pendingContributionsCount = liveContributions.filter((c) => isPendingStatus(c.status)).length;
+
+  // Quick Cell Click Toggle Handler: Toggles status live in Firestore with Master Admin governance
   const handleToggleCellStatus = async (
     member: Member,
     monthNum: number,
     yearNum: number,
-    currentStatus: 'paid' | 'partial' | 'unpaid',
+    currentStatus: 'paid' | 'partial' | 'pending' | 'unpaid',
     existingDoc?: Contribution
   ) => {
+    if (!isMasterAdmin && (currentStatus === 'paid' || currentStatus === 'partial')) {
+      setDeleteNotice('የጸደቁ ክፍያዎችን መቀየር የሚችለው ዋናው አስተዳዳሪ (Master Admin) ብቻ ነው።');
+      setTimeout(() => setDeleteNotice(null), 4000);
+      return;
+    }
+
     const cellKey = `${member.id}-${yearNum}-${monthNum}`;
     setTogglingCellKey(cellKey);
 
@@ -322,8 +379,16 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
       ? settings.spouseMonthlyRate || 100
       : settings.monthlyRate[member.generation] || 50;
 
-    const newStatus: ContributionStatus = currentStatus === 'paid' ? 'ያልተከፈለ' : 'ተከፍሏል';
-    const newPaidAmount = newStatus === 'ተከፍሏል' ? standardRate : 0;
+    let newStatus: ContributionStatus;
+    if (isMasterAdmin) {
+      newStatus = currentStatus === 'paid' ? 'ያልተከፈለ' : 'ተከፍሏል';
+    } else {
+      newStatus = currentStatus === 'pending' ? 'ያልተከፈለ' : 'Pending';
+    }
+
+    const ts = buildPaymentTimestamps();
+    const isPaymentRecord = newStatus === 'ተከፍሏል' || newStatus === 'Pending';
+    const newPaidAmount = isPaymentRecord ? standardRate : 0;
     const docId = existingDoc?.id || `CON-${member.id}-${yearNum}-${monthNum}`;
 
     const updatedDoc: Contribution = {
@@ -343,18 +408,23 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
       amount: standardRate,
       paidAmount: newPaidAmount,
       status: newStatus,
+      intendedStatus: isPaymentRecord ? 'ተከፍሏል' : undefined,
       paymentMethod: existingDoc?.paymentMethod || 'ጥሬ ገንዘብ (Cash)',
       transactionRef: existingDoc?.transactionRef || '',
-      datePaid: newStatus === 'ተከፍሏል' ? new Date().toISOString().slice(0, 10) : '',
-      notes: `ማትሪክስ የቀጥታ ማስተካከያ (${newStatus})`,
+      datePaid: isPaymentRecord ? ts.datePaid : '',
+      paidAt: isPaymentRecord ? ts.paidAt : undefined,
+      ...(isMasterAdmin && newStatus === 'ተከፍሏል'
+        ? { approvedBy: 'ዋና አስተዳዳሪ', approvedAt: ts.datePaid }
+        : {}),
+      notes: isMasterAdmin
+        ? `ማትሪክስ የቀጥታ ማስተካከያ (${newStatus})`
+        : `ማትሪክስ ክፍያ (${newStatus} — የዋና አድሚን ማረጋገጫ የሚጠብቅ)`,
     };
 
     try {
-      console.log(`[Matrix Quick Toggle] Saving contribution ${docId} with status "${newStatus}" for ${member.fullName}`);
       await saveContributionToFirestore(updatedDoc);
-      // Also update local parent if callback exists
       onUpdateStatus(docId, newStatus);
-      if (newStatus === 'ተከፍሏል') {
+      if (newStatus === 'ተከፍሏል' && isMasterAdmin) {
         const nextContribs = [updatedDoc, ...liveContributions.filter((c) => c.id !== docId)];
         const reportText = formatSinglePaymentTelegramReport(updatedDoc, member, nextContribs, settings);
         void dispatchApprovedPaymentReportToGroup({
@@ -362,6 +432,9 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
           payment: updatedDoc,
           reportText,
         });
+      } else if (newStatus === 'Pending') {
+        setDeleteNotice(`የ${member.fullName} ክፍያ በPending ሁኔታ ተመዝግቧል፤ ዋናው አስተዳዳሪ ሲያጸድቀው ይካተታል።`);
+        setTimeout(() => setDeleteNotice(null), 4000);
       }
     } catch (err) {
       console.error('[Matrix Quick Toggle Error]:', err);
@@ -402,7 +475,7 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
       };
 
       const headers = [
-        'ቀን (Date)',
+        'ቀንና ሰዓት (Date & Time)',
         'የአባል ስም (Name)',
         'የአባል መለያ (Member ID)',
         'ስልክ (Phone)',
@@ -442,7 +515,7 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
           (cMonth ? getEthiopianMonthName(cMonth) : '');
 
         return [
-          escapeVal(c.datePaid || ''),
+          escapeVal(formatDisplayPaymentDateTime(c.datePaid, c.paidAt)),
           escapeVal(c.memberName),
           escapeVal(c.memberId),
           escapeVal(member?.phone || ''),
@@ -655,6 +728,29 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
         </div>
       </div>
 
+      {/* Pending Payments Approval Notice Banner */}
+      {pendingContributionsCount > 0 && (
+        <div className="bg-amber-50 border border-amber-300 text-amber-900 p-3.5 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              <strong>ማረጋገጫ የሚጠብቁ (Pending)፦</strong>{' '}
+              {pendingContributionsCount} ክፍያ(ዎች) ከዋናው አስተዳዳሪ (Master Admin) ማረጋገጫ በመጠባበቅ ላይ ናቸው።
+              {!isMasterAdmin && ' ክፍያዎች ዋናው አድሚን እስኪያጸድቃቸው ድረስ በሂሳብ ውስጥ አይካተቱም።'}
+            </span>
+          </div>
+          <button
+            onClick={() => {
+              setViewMode('table');
+              setSelectedStatus('Pending');
+            }}
+            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-[11px] shrink-0 cursor-pointer transition-colors"
+          >
+            Pending ክፍያዎችን እይ ({pendingContributionsCount})
+          </button>
+        </div>
+      )}
+
       {/* Firestore Error Alert */}
       {firestoreError && (
         <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-xl text-xs flex items-center justify-between">
@@ -750,10 +846,14 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
             </div>
 
             {/* Grid Legend */}
-            <div className="flex items-center gap-3 text-[11px] font-medium text-neutral-600">
+            <div className="flex flex-wrap items-center gap-3 text-[11px] font-medium text-neutral-600">
               <div className="flex items-center gap-1">
                 <span className="w-3 h-3 rounded bg-[#1B5E20] border border-emerald-700"></span>
                 <span>ተከፍሏል (Paid)</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded bg-amber-200 border border-amber-500"></span>
+                <span>በመጠባበቅ (Pending)</span>
               </div>
               <div className="flex items-center gap-1">
                 <span className="w-3 h-3 rounded bg-amber-500 border border-amber-600"></span>
@@ -864,6 +964,7 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
 
                       let memberPaidCount = 0;
                       let memberPartialCount = 0;
+                      let memberPendingCount = 0;
                       let memberUnpaidCount = 0;
 
                       return (
@@ -895,6 +996,7 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
 
                             if (cellStatus === 'paid') memberPaidCount++;
                             else if (cellStatus === 'partial') memberPartialCount++;
+                            else if (cellStatus === 'pending') memberPendingCount++;
                             else if (!isStartingHamle) memberUnpaidCount++;
 
                             const cellKey = `${member.id}-${gridYear}-${m.number}`;
@@ -918,20 +1020,28 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
                                         contribDoc
                                       )
                                     }
-                                    disabled={isToggling}
-                                    className={`w-full py-1.5 px-1 rounded-md text-[10px] font-bold transition-all flex flex-col items-center justify-center cursor-pointer border ${
+                                    disabled={isToggling || (!isMasterAdmin && (cellStatus === 'paid' || cellStatus === 'partial'))}
+                                    className={`w-full py-1.5 px-1 rounded-md text-[10px] font-bold transition-all flex flex-col items-center justify-center border ${
                                       cellStatus === 'paid'
                                         ? 'bg-[#1B5E20] text-white border-emerald-800 hover:bg-emerald-700 shadow-2xs'
+                                        : cellStatus === 'pending'
+                                        ? 'bg-amber-100 text-amber-950 border-amber-400 hover:bg-amber-200 shadow-2xs'
                                         : cellStatus === 'partial'
                                         ? 'bg-amber-500 text-white border-amber-600 hover:bg-amber-600 shadow-2xs'
                                         : 'bg-neutral-100 text-neutral-500 border-neutral-200 hover:border-emerald-600 hover:bg-emerald-50 hover:text-emerald-900'
-                                    }`}
+                                    } ${!isMasterAdmin && (cellStatus === 'paid' || cellStatus === 'partial') ? 'cursor-default opacity-95' : 'cursor-pointer'}`}
                                     title={`${member.fullName} - ${m.amharic} ${gridYear}: ${
                                       cellStatus === 'paid'
                                         ? `ተከፍሏል (${matchResult.paidAmount} ብር)`
+                                        : cellStatus === 'pending'
+                                        ? isMasterAdmin
+                                          ? `በመጠባበቅ ላይ (Pending) — ለማጽደቅ ይጫኑ`
+                                          : `በመጠባበቅ ላይ (Pending) — የዋና አድሚን ማረጋገጫ ይጠብቃል`
                                         : cellStatus === 'partial'
                                         ? `ከፊል (${matchResult.paidAmount} ብር)`
-                                        : 'ያልተከፈለ (ጠቅ ያድርጉ ለመመዝገብ)'
+                                        : isMasterAdmin
+                                        ? 'ያልተከፈለ (ጠቅ ያድርጉ ለመመዝገብ)'
+                                        : 'ያልተከፈለ (ጠቅ ያድርጉ በPending ለመመዝገብ)'
                                     }`}
                                   >
                                     {isToggling ? (
@@ -940,6 +1050,11 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
                                       <div className="flex items-center gap-0.5">
                                         <Check className="w-3 h-3" />
                                         <span>ተከፍሏል</span>
+                                      </div>
+                                    ) : cellStatus === 'pending' ? (
+                                      <div className="flex items-center gap-0.5">
+                                        <Clock className="w-3 h-3 text-amber-700" />
+                                        <span>በመጠባበቅ</span>
                                       </div>
                                     ) : cellStatus === 'partial' ? (
                                       <div className="flex items-center gap-0.5">
@@ -956,10 +1071,15 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
 
                           {/* Summary Column */}
                           <td className="py-2 px-3 text-center">
-                            <div className="inline-flex items-center gap-1.5 text-[11px]">
+                            <div className="inline-flex items-center gap-1.5 text-[11px] flex-wrap justify-center">
                               <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-[#1B5E20] font-bold">
                                 {memberPaidCount} ወር
                               </span>
+                              {memberPendingCount > 0 && (
+                                <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-bold">
+                                  {memberPendingCount} Pending
+                                </span>
+                              )}
                               {memberUnpaidCount > 0 && (
                                 <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-800 font-bold">
                                   {memberUnpaidCount} ያልተከፈለ
@@ -1158,6 +1278,7 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
                     <th className="py-3 px-4">MemberID & Name (አባል)</th>
                     <th className="py-3 px-4">Type (ዓይነት)</th>
                     <th className="py-3 px-4">ወር / ዓ.ም</th>
+                    <th className="py-3 px-4">ቀንና ሰዓት (Date & Time)</th>
                     <th className="py-3 px-4 text-right">የተከፈለ መጠን</th>
                     <th className="py-3 px-4">የክፍያ ዘዴ / Ref</th>
                     <th className="py-3 px-4">Status (ሁኔታ)</th>
@@ -1167,7 +1288,7 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
                 <tbody className="divide-y divide-neutral-100">
                   {filteredContributions.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-8 text-center text-neutral-400 italic">
+                      <td colSpan={9} className="py-8 text-center text-neutral-400 italic">
                         ምንም ክፍያ አልተመዘገበም
                       </td>
                     </tr>
@@ -1229,6 +1350,17 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
                           </span>
                         </td>
 
+                        <td className="py-3 px-4">
+                          <div className="font-mono text-[11px] text-neutral-700">
+                            {formatDisplayPaymentDateTime(c.datePaid, c.paidAt)}
+                          </div>
+                          {c.recordedBy && (
+                            <div className="text-[10px] text-neutral-500 truncate max-w-[140px]" title={`የመዘገበው፡ ${c.recordedBy}`}>
+                              መዝጋቢ፡ {c.recordedBy}
+                            </div>
+                          )}
+                        </td>
+
                         <td className="py-3 px-4 text-right font-mono font-bold tabular-nums text-neutral-900">
                           <span className="text-[#1B5E20] text-sm">{c.paidAmount} ብር</span>
                           {c.amount > c.paidAmount && (
@@ -1246,50 +1378,91 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
                         </td>
 
                         <td className="py-3 px-4">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <select
-                              value={c.status}
-                              onChange={async (e) => {
-                                const newSt = e.target.value as ContributionStatus;
-                                if ((newSt === 'ተከፍሏል' || newSt === 'Paid') && c.status !== 'ተከፍሏል' && c.status !== 'Paid') {
-                                  await handleApproveContribution(c);
-                                } else {
-                                  onUpdateStatus(c.id, newSt);
-                                  await saveContributionToFirestore({
-                                    ...c,
-                                    status: newSt,
-                                  });
-                                }
-                              }}
-                              className={`text-[11px] font-bold rounded-lg px-2 py-1 border transition-colors ${
-                                c.status === 'ተከፍሏል'
-                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                                  : c.status === 'Pending'
-                                  ? 'bg-amber-100 text-amber-900 border-amber-300 animate-pulse'
-                                  : c.status === 'ከፊል'
-                                  ? 'bg-amber-50 text-amber-800 border-amber-300'
-                                  : 'bg-red-50 text-red-800 border-red-300'
-                              }`}
-                            >
-                              <option value="ተከፍሏል">ተከፍሏል (Paid)</option>
-                              <option value="Pending">በመጠባበቅ ላይ (Pending)</option>
-                              <option value="ከፊል">ከፊል (Partial)</option>
-                              <option value="ያልተከፈለ">ያልተከፈለ (Unpaid)</option>
-                            </select>
-                            {c.status === 'Pending' && (
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  await handleApproveContribution(c);
+                          {isMasterAdmin ? (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <select
+                                value={c.status}
+                                onChange={async (e) => {
+                                  const newSt = e.target.value as ContributionStatus;
+                                  if (isPaidOrPartialStatus(newSt) && !isPaidOrPartialStatus(c.status)) {
+                                    await handleApproveContribution(c);
+                                  } else {
+                                    onUpdateStatus(c.id, newSt);
+                                    await saveContributionToFirestore({
+                                      ...c,
+                                      status: newSt,
+                                    });
+                                  }
                                 }}
-                                className="px-2 py-1 bg-[#1B5E20] hover:bg-[#154a19] text-white text-[10px] font-bold rounded-md shadow-2xs flex items-center gap-1 cursor-pointer"
-                                title="ደረሰኙን አጽድቅና ወደ Telegram Group ላክ (Approve)"
+                                className={`text-[11px] font-bold rounded-lg px-2 py-1 border transition-colors ${
+                                  isPaidStatus(c.status)
+                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                    : isPendingStatus(c.status)
+                                    ? 'bg-amber-100 text-amber-900 border-amber-300'
+                                    : isPartialStatus(c.status)
+                                    ? 'bg-amber-50 text-amber-800 border-amber-300'
+                                    : 'bg-red-50 text-red-800 border-red-300'
+                                }`}
                               >
-                                <Check className="w-3 h-3" />
-                                <span>አጽድቅ</span>
-                              </button>
-                            )}
-                          </div>
+                                <option value="ተከፍሏል">ተከፍሏል (Paid)</option>
+                                <option value="Pending">በመጠባበቅ ላይ (Pending)</option>
+                                <option value="ከፊል">ከፊል (Partial)</option>
+                                <option value="ያልተከፈለ">ያልተከፈለ (Unpaid)</option>
+                              </select>
+                              {isPendingStatus(c.status) && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      await handleApproveContribution(c);
+                                    }}
+                                    className="px-2 py-1 bg-[#1B5E20] hover:bg-[#154a19] text-white text-[10px] font-bold rounded-md shadow-2xs flex items-center gap-1 cursor-pointer"
+                                    title="ደረሰኙን አጽድቅና ወደ Telegram Group ላክ (Approve)"
+                                  >
+                                    <Check className="w-3 h-3" />
+                                    <span>አጽድቅ</span>
+                                  </button>
+                                  {onRejectContribution && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onRejectContribution(c)}
+                                      className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-[10px] font-bold rounded-md flex items-center gap-1 cursor-pointer"
+                                      title="ውድቅ አድርግ (Reject Pending Payment)"
+                                    >
+                                      <X className="w-3 h-3" />
+                                      <span>ውድቅ</span>
+                                    </button>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-start gap-0.5">
+                              <span
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border ${
+                                  isPaidStatus(c.status)
+                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                    : isPendingStatus(c.status)
+                                    ? 'bg-amber-100 text-amber-900 border-amber-300'
+                                    : isPartialStatus(c.status)
+                                    ? 'bg-amber-50 text-amber-800 border-amber-300'
+                                    : 'bg-red-50 text-red-800 border-red-300'
+                                }`}
+                              >
+                                {isPendingStatus(c.status) && <Clock className="w-3 h-3 text-amber-700" />}
+                                <span>
+                                  {isPendingStatus(c.status)
+                                    ? 'በመጠባበቅ ላይ (Pending)'
+                                    : c.status}
+                                </span>
+                              </span>
+                              {isPendingStatus(c.status) && (
+                                <span className="text-[9px] text-amber-700 font-semibold">
+                                  የዋና አድሚን ማረጋገጫ ይጠብቃል
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </td>
 
                         <td className="py-3 px-4 text-right">
@@ -1301,13 +1474,15 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
                             >
                               <FileText className="w-4 h-4" />
                             </button>
-                            <button
-                              onClick={() => setPaymentToDelete(c)}
-                              className="p-1.5 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                              title="ክፍያ ሰርዝ (Delete Payment)"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {(isMasterAdmin || !isPaidOrPartialStatus(c.status)) && (
+                              <button
+                                onClick={() => setPaymentToDelete(c)}
+                                className="p-1.5 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                                title="ክፍያ ሰርዝ (Delete Payment)"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -1537,9 +1712,29 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
                 </span>
               </div>
               <div className="flex justify-between text-[11px] text-neutral-500">
+                <span>የክፍያ ቀንና ሰዓት፡</span>
+                <span className="font-mono font-bold text-neutral-800">
+                  {formatDisplayPaymentDateTime(selectedReceipt.datePaid, selectedReceipt.paidAt)}
+                </span>
+              </div>
+              <div className="flex justify-between text-[11px] text-neutral-500">
                 <span>የክፍያ ዘዴ፡</span>
                 <span>{selectedReceipt.paymentMethod || 'ቀጥታ'}</span>
               </div>
+              {selectedReceipt.recordedBy && (
+                <div className="flex justify-between text-[11px] text-neutral-500">
+                  <span>የመዘገበው (Recorded By)፡</span>
+                  <span className="font-semibold text-neutral-800">{selectedReceipt.recordedBy}</span>
+                </div>
+              )}
+              {selectedReceipt.approvedBy && (
+                <div className="flex justify-between text-[11px] text-emerald-700">
+                  <span>ያጸደቀው (Approved By)፡</span>
+                  <span className="font-semibold">
+                    {selectedReceipt.approvedBy} {selectedReceipt.approvedAt ? `(${selectedReceipt.approvedAt})` : ''}
+                  </span>
+                </div>
+              )}
               {selectedReceipt.transactionRef && (
                 <div className="flex justify-between text-[11px] text-neutral-500">
                   <span>የትራንዛክሽን ቁጥር፡</span>
@@ -1599,23 +1794,29 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
               )}
             </div>
 
-            {selectedReceipt.status === 'Pending' && (
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between">
+            {isPendingStatus(selectedReceipt.status) && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <span className="text-xs font-bold text-amber-900 block">የማረጋገጫ ሁኔታ፡</span>
-                  <span className="text-[11px] text-amber-700">ይህ ደረሰኝ በአድሚን ማረጋገጫ በመጠባበቅ ላይ ነው</span>
+                  <span className="text-[11px] text-amber-700">
+                    {isMasterAdmin
+                      ? 'ይህ ደረሰኝ በዋና አስተዳዳሪ ማረጋገጫ በመጠባበቅ ላይ ነው'
+                      : 'ይህ ክፍያ በዋናው አስተዳዳሪ (Master Admin) እስኪጸድቅ በPending ሁኔታ ላይ ይገኛል'}
+                  </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const updated = await handleApproveContribution(selectedReceipt);
-                    setSelectedReceipt(updated);
-                  }}
-                  className="px-3 py-1.5 rounded-lg bg-[#1B5E20] hover:bg-[#154a19] text-white text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  <span>ደረሰኙን አጽድቅና ወደ ግሩፕ ላክ (Approve)</span>
-                </button>
+                {isMasterAdmin && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const updated = await handleApproveContribution(selectedReceipt);
+                      setSelectedReceipt(updated);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-[#1B5E20] hover:bg-[#154a19] text-white text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>ደረሰኙን አጽድቅና ወደ ግሩፕ ላክ (Approve)</span>
+                  </button>
+                )}
               </div>
             )}
 

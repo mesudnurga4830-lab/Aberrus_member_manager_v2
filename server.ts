@@ -1739,6 +1739,20 @@ app.post('/api/notifications/email', async (req: Request, res: Response) => {
   }
 });
 
+function formatAddisPaymentDateTime(d: Date | string = new Date()): string {
+  const dateObj = typeof d === 'string' ? new Date(d) : d;
+  const safeDate = Number.isNaN(dateObj.getTime()) ? new Date() : dateObj;
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Africa/Addis_Ababa',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  }).format(safeDate);
+}
+
 // POST /api/notifications/proxy-payment - Send Telegram notification to beneficiary and notify Admin Dashboard
 app.post('/api/notifications/proxy-payment', async (req: Request, res: Response) => {
   try {
@@ -1795,7 +1809,7 @@ app.post('/api/notifications/proxy-payment', async (req: Request, res: Response)
     // 2. Send Telegram notification to beneficiary if telegramId is found
     let tgDeliveryResult: any = null;
     if (beneficiaryTelegramId && isTelegramBotActive) {
-      const datePaid = req.body?.datePaid || new Date().toLocaleDateString('am-ET');
+      const datePaid = req.body?.datePaid || (req.body?.paidAt ? formatAddisPaymentDateTime(req.body.paidAt) : formatAddisPaymentDateTime());
       let tgText = '';
       if (type === 'ትውልድ') {
         let genRates: Record<number, number> = { 3: 5000, 4: 1000, 5: 500, 6: 200 };
@@ -1856,17 +1870,17 @@ app.post('/api/notifications/proxy-payment', async (req: Request, res: Response)
 
         tgText = `ውድ <b>${beneficiaryName}</b>፣ አባል <b>${payerName}</b> የትውልድ መዋጮዎን ከፍለዋል። እናመሰግናለን!\n\n` +
           `💰 የተከፈለ መጠን፦ <b>${Number(amount || 0).toLocaleString()} ብር</b>\n` +
-          `🗓️ የክፍያ ቀን፦ <b>${datePaid}</b>\n` +
+          `🗓️ የክፍያ ቀንና ሰዓት፦ <b>${datePaid}</b>\n` +
           `📊 ጠቅላላ የተከፈለ (Total Paid)፦ <b>${genPaidSoFar.toLocaleString()} ብር</b>\n` +
           `📉 ቀሪ መዋጮ (Remaining Balance)፦ <b>${genRemaining.toLocaleString()} ብር</b>\n` +
           `🧾 ማረጋገጫ Ref፦ <code>${transactionRef || 'ቀጥታ'}</code>\n` +
           `⏳ ሁኔታ፦ <b>${status || 'በአስተዳዳሪው ማረጋገጫ በመጠባበቅ ላይ (Pending)'}</b>`;
       } else {
-        // Monthly payment: show ONLY paid amount, month name, and payment date (NO remaining balance)
+        // Monthly payment: show ONLY paid amount, month name, and payment date & time (NO remaining balance)
         tgText = `ውድ <b>${beneficiaryName}</b>፣ አባል <b>${payerName}</b> የወርሃዊ መዋጮዎን ከፍለዋል። እናመሰግናለን!\n\n` +
           `💰 የተከፈለው መጠን፦ <b>${Number(amount || 0).toLocaleString()} ብር</b>\n` +
           `📅 የወሩ ስም፦ <b>${monthName || ''} ${year || 2018} ዓ.ም</b>\n` +
-          `🗓️ የክፍያ ቀን፦ <b>${datePaid}</b>\n` +
+          `🗓️ የክፍያ ቀንና ሰዓት፦ <b>${datePaid}</b>\n` +
           `🧾 ማረጋገጫ Ref፦ <code>${transactionRef || 'ቀጥታ'}</code>\n` +
           `⏳ ሁኔታ፦ <b>${status || 'በአስተዳዳሪው ማረጋገጫ በመጠባበቅ ላይ (Pending)'}</b>`;
       }
@@ -2510,7 +2524,7 @@ app.post('/api/reports/send', async (req: Request, res: Response) => {
           const m = membersList.find((mem) => mem.id === payment.memberId);
           const mName = m?.fullName || payment.memberName || 'አባል';
           const paidAmt = Number(payment.paidAmount ?? payment.amount ?? 0);
-          const datePaid = payment.datePaid || new Date().toLocaleDateString('am-ET');
+          const datePaid = payment.datePaid || (payment.paidAt ? formatAddisPaymentDateTime(payment.paidAt) : formatAddisPaymentDateTime());
 
           if (payment.type === 'ትውልድ') {
             const genStats = computeMemberGenStats(
@@ -2522,7 +2536,7 @@ app.post('/api/reports/send', async (req: Request, res: Response) => {
 👤 <b>አባል፦</b> ${mName} (<code>${payment.memberId || 'N/A'}</code>)
 🏷️ <b>የክፍያ ዓይነት፦</b> የትውልድ መዋጮ
 💵 <b>የተከፈለ መጠን፦</b> ${paidAmt.toLocaleString()} ብር
-🗓️ <b>የክፍያ ቀን፦</b> ${datePaid}
+🗓️ <b>የክፍያ ቀንና ሰዓት፦</b> ${datePaid}
 
 📊 <b>የትውልድ መዋጮ ማጠቃለያ፦</b>
 • Total Paid (ጠቅላላ የተከፈለ)፦ <b>${genStats.paidSoFar.toLocaleString()} ብር</b>
@@ -2539,12 +2553,12 @@ app.post('/api/reports/send', async (req: Request, res: Response) => {
 🏷️ <b>የክፍያ ዓይነት፦</b> ወርሃዊ መዋጮ
 💵 <b>የተከፈለው መጠን፦</b> ${paidAmt.toLocaleString()} ብር
 📅 <b>የወሩ ስም፦</b> ${pMonthName} ${pYear} ዓ.ም
-🗓️ <b>የክፍያ ቀን፦</b> ${datePaid}`;
+🗓️ <b>የክፍያ ቀንና ሰዓት፦</b> ${datePaid}`;
           }
         } else {
           const list = Array.isArray(bulkItems) ? bulkItems : [];
           const totalPaidBulk = list.reduce((s: number, it: any) => s + Number(it.amount || it.paidAmount || 0), 0);
-          const todayStr = new Date().toLocaleDateString('am-ET');
+          const todayStr = formatAddisPaymentDateTime();
           const rowLines = list.map((it: any, idx: number) => {
             const m = membersList.find((mem) => mem.id === it.memberId) || {
               id: it.memberId,
@@ -2554,24 +2568,24 @@ app.post('/api/reports/send', async (req: Request, res: Response) => {
               isSpouse: it.isSpouse,
             };
             const amt = Number(it.amount || it.paidAmount || 0);
-            const dPaid = it.datePaid || todayStr;
+            const dPaid = it.datePaid || (it.paidAt ? formatAddisPaymentDateTime(it.paidAt) : todayStr);
             if (it.type === 'ትውልድ') {
               const genStats = computeMemberGenStats(m, contribsList);
-              return `${idx + 1}. <b>${m.fullName}</b> — የትውልድ መዋጮ፡ ${amt.toLocaleString()} ብር | ቀን፡ ${dPaid} | ጠቅላላ የተከፈለ፡ ${genStats.paidSoFar.toLocaleString()} ብር | ቀሪ፡ ${genStats.remainingBalance.toLocaleString()} ብር`;
+              return `${idx + 1}. <b>${m.fullName}</b> — የትውልድ መዋጮ፡ ${amt.toLocaleString()} ብር | ቀንና ሰዓት፡ ${dPaid} | ጠቅላላ የተከፈለ፡ ${genStats.paidSoFar.toLocaleString()} ብር | ቀሪ፡ ${genStats.remainingBalance.toLocaleString()} ብር`;
             }
             const mNameStr =
               it.ethiopianMonthName ||
               monthNames[Number(it.ethiopianMonth || effectiveMonth)] ||
               monthName;
             const yr = Number(it.ethiopianYear || effectiveYear);
-            return `${idx + 1}. <b>${m.fullName}</b> — ወርሃዊ (${mNameStr} ${yr} ዓ.ም)፡ ${amt.toLocaleString()} ብር · ቀን፡ ${dPaid}`;
+            return `${idx + 1}. <b>${m.fullName}</b> — ወርሃዊ (${mNameStr} ${yr} ዓ.ም)፡ ${amt.toLocaleString()} ብር · ቀንና ሰዓት፡ ${dPaid}`;
           });
 
           preparedReportText = `🏛️ <b>የአበሩስ አንድነት ማህበር — የጅምላ ክፍያ ሪፖርት</b>
 ━━━━━━━━━━━━━━━━━━━━
 ${reqPayerName ? `💳 <b>ከፋይ፦</b> ${reqPayerName}\n` : ''}${masterReceiptNumber ? `🧾 <b>ዋና ደረሰኝ፦</b> ${masterReceiptNumber}\n` : ''}👥 <b>አባላት፦</b> ${list.length}
 💰 <b>ጠቅላላ የተከፈለ፦</b> ${totalPaidBulk.toLocaleString()} ብር
-📅 <b>ቀን፦</b> ${todayStr}
+📅 <b>ቀንና ሰዓት፦</b> ${todayStr}
 
 📌 <b>የአባላት ክፍያ ዝርዝር፦</b>
 ${rowLines.join('\n') || '• ምንም ክፍያ የለም'}`;
@@ -2909,7 +2923,8 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
                 const cMonth = getContribMonth(c);
                 const cYear = getContribYear(c);
                 const mName = c.ethiopianMonthName || monthNames[cMonth] || `ወር ${cMonth}`;
-                return `${mName} ${cYear} (${getContribPaidAmount(c).toLocaleString()} ብር${c.datePaid ? ` · ${c.datePaid}` : ''})`;
+                const dtText = c.datePaid || (c.paidAt ? formatAddisPaymentDateTime(c.paidAt) : '');
+                return `${mName} ${cYear} (${getContribPaidAmount(c).toLocaleString()} ብር${dtText ? ` · ${dtText}` : ''})`;
               })
               .join('፣ ')
           : 'እስካሁን አልተመዘገበም';
@@ -2936,7 +2951,7 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
 🔑 <b>የእርስዎ የግል መግቢያ ሊንክ፦</b>
 <a href="${personalUrl}">${personalUrl}</a>
 
-📅 <i>ሪፖርት የተዘጋጀበት ቀን፡ ${new Date().toLocaleDateString('am-ET')}</i>`;
+📅 <i>ሪፖርት የተዘጋጀበት ቀንና ሰዓት፡ ${formatAddisPaymentDateTime()}</i>`;
 
       const telegramId = member.telegramId || incomingChatId;
       let tgDispatched = false;
