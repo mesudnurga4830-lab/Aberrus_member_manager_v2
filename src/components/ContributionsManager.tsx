@@ -1830,7 +1830,8 @@ export const ContributionsManager: React.FC<ContributionsManagerProps> = ({
                       selectedReceipt,
                       m,
                       liveContributions,
-                      settings
+                      settings,
+                      { includeDateTime: false }
                     );
                     const directUrl = `${getAppUrl()}/?role=member&memberId=${encodeURIComponent(
                       selectedReceipt.memberId

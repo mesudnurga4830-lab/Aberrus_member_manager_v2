@@ -1876,11 +1876,10 @@ app.post('/api/notifications/proxy-payment', async (req: Request, res: Response)
           `🧾 ማረጋገጫ Ref፦ <code>${transactionRef || 'ቀጥታ'}</code>\n` +
           `⏳ ሁኔታ፦ <b>${status || 'በአስተዳዳሪው ማረጋገጫ በመጠባበቅ ላይ (Pending)'}</b>`;
       } else {
-        // Monthly payment: show ONLY paid amount, month name, and payment date & time (NO remaining balance)
+        // Monthly payment: show ONLY paid amount & month name (NO payment date/time, NO remaining balance)
         tgText = `ውድ <b>${beneficiaryName}</b>፣ አባል <b>${payerName}</b> የወርሃዊ መዋጮዎን ከፍለዋል። እናመሰግናለን!\n\n` +
           `💰 የተከፈለው መጠን፦ <b>${Number(amount || 0).toLocaleString()} ብር</b>\n` +
           `📅 የወሩ ስም፦ <b>${monthName || ''} ${year || 2018} ዓ.ም</b>\n` +
-          `🗓️ የክፍያ ቀንና ሰዓት፦ <b>${datePaid}</b>\n` +
           `🧾 ማረጋገጫ Ref፦ <code>${transactionRef || 'ቀጥታ'}</code>\n` +
           `⏳ ሁኔታ፦ <b>${status || 'በአስተዳዳሪው ማረጋገጫ በመጠባበቅ ላይ (Pending)'}</b>`;
       }
@@ -2916,24 +2915,85 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
           return getContribMonth(a) - getContribMonth(b);
         });
       const monthlyPaid = monthlyCons.reduce((sum, c) => sum + getContribPaidAmount(c), 0);
-      const monthlyListText =
-        monthlyCons.length > 0
-          ? monthlyCons
-              .map((c) => {
-                const cMonth = getContribMonth(c);
-                const cYear = getContribYear(c);
-                const mName = c.ethiopianMonthName || monthNames[cMonth] || `ወር ${cMonth}`;
-                const dtText = c.datePaid || (c.paidAt ? formatAddisPaymentDateTime(c.paidAt) : '');
-                return `${mName} ${cYear} (${getContribPaidAmount(c).toLocaleString()} ብር${dtText ? ` · ${dtText}` : ''})`;
-              })
-              .join('፣ ')
-          : 'እስካሁን አልተመዘገበም';
+
+      // Group paid months by consecutive Ethiopian calendar period without payment date/time
+      const monthBuckets = new Map<string, { year: number; month: number; amount: number }>();
+      for (const c of monthlyCons) {
+        const cMonth = getContribMonth(c);
+        const cYear = getContribYear(c);
+        const amt = getContribPaidAmount(c);
+        if (cMonth < 1 || cMonth > 12 || cYear < 2000) continue;
+        const key = `${cYear}-${cMonth}`;
+        const existing = monthBuckets.get(key);
+        if (existing) {
+          existing.amount += amt;
+        } else {
+          monthBuckets.set(key, { year: cYear, month: cMonth, amount: amt });
+        }
+      }
+      const sortedUniqueMonths = Array.from(monthBuckets.values()).sort(
+        (a, b) => a.year * 12 + (a.month - 1) - (b.year * 12 + (b.month - 1))
+      );
+      const streaks: Array<{
+        startYear: number;
+        startMonth: number;
+        endYear: number;
+        endMonth: number;
+        monthCount: number;
+        amount: number;
+      }> = [];
+      for (const item of sortedUniqueMonths) {
+        const idx = item.year * 12 + (item.month - 1);
+        const last = streaks[streaks.length - 1];
+        if (last && last.endYear * 12 + (last.endMonth - 1) + 1 === idx) {
+          last.endYear = item.year;
+          last.endMonth = item.month;
+          last.monthCount += 1;
+          last.amount += item.amount;
+        } else {
+          streaks.push({
+            startYear: item.year,
+            startMonth: item.month,
+            endYear: item.year,
+            endMonth: item.month,
+            monthCount: 1,
+            amount: item.amount,
+          });
+        }
+      }
+      const rangeLines: string[] = [];
+      let currentYearHeader: number | null = null;
+      for (const s of streaks) {
+        const startName = monthNames[s.startMonth] || `ወር ${s.startMonth}`;
+        const endName = monthNames[s.endMonth] || `ወር ${s.endMonth}`;
+        if (s.startYear !== s.endYear) {
+          currentYearHeader = null;
+          rangeLines.push(
+            `• ከ${startName} ${s.startYear} - ${endName} ${s.endYear} (የ${s.monthCount} ወር) — <b>${s.amount.toLocaleString()} ብር</b>`
+          );
+        } else {
+          if (currentYearHeader !== s.startYear) {
+            currentYearHeader = s.startYear;
+            rangeLines.push(`<b>የ${s.startYear} ዓ.ም፦</b>`);
+          }
+          if (s.monthCount === 1) {
+            rangeLines.push(`• ${startName} (የ1 ወር) — <b>${s.amount.toLocaleString()} ብር</b>`);
+          } else {
+            rangeLines.push(
+              `• ከ${startName} - ${endName} (የ${s.monthCount} ወር) — <b>${s.amount.toLocaleString()} ብር</b>`
+            );
+          }
+        }
+      }
+      const totalMonthsPaid = sortedUniqueMonths.length;
+      const monthlyRangesHtml =
+        rangeLines.length > 0 ? rangeLines.join('\n') : '• እስካሁን አልተመዘገበም';
 
       const memberToken = member.loginToken || generateLoginToken();
       const personalUrl = `${APP_URL}/login?token=${memberToken}`;
 
       // Conditional rendering: Generation section includes Total Paid & Remaining Balance;
-      // Monthly section shows ONLY paid amount, month names & dates (ZERO remaining balance).
+      // Monthly section shows grouped consecutive month ranges & paid amount (ZERO payment date/time, ZERO remaining balance).
       const generationSectionText =
         member.isMinor || member.isSpouse
           ? ''
@@ -2944,14 +3004,11 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
 👤 <b>አባል፡</b> ${member.fullName} (መታወቂያ፡ <code>${member.id}</code>)
 👨‍👩‍👧‍👦 <b>ቤተሰብ፡</b> ${member.familyName || 'የአበሩስ ቤተሰብ'} (${member.generation || 4}ኛ ትውልድ)
 
-💰 <b>ወርሃዊ መዋጮ፦</b>
-• የተከፈለው መጠን፡ <b>${monthlyPaid.toLocaleString()} ብር</b>
-• የተከፈሉ ወራትና ቀን፡ ${monthlyListText}${generationSectionText}
+💰 <b>ወርሃዊ መዋጮ${totalMonthsPaid > 0 ? ` (ጠቅላላ የ${totalMonthsPaid} ወር — ${monthlyPaid.toLocaleString()} ብር)` : ''}፦</b>
+${monthlyRangesHtml}${generationSectionText}
 
 🔑 <b>የእርስዎ የግል መግቢያ ሊንክ፦</b>
-<a href="${personalUrl}">${personalUrl}</a>
-
-📅 <i>ሪፖርት የተዘጋጀበት ቀንና ሰዓት፡ ${formatAddisPaymentDateTime()}</i>`;
+<a href="${personalUrl}">${personalUrl}</a>`;
 
       const telegramId = member.telegramId || incomingChatId;
       let tgDispatched = false;

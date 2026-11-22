@@ -53,6 +53,111 @@ export function buildAllPaidMonthsSummaryLines(contributions: Contribution[]): s
     });
 }
 
+export interface MonthlyPaymentStreak {
+  startYear: number;
+  startMonth: number;
+  endYear: number;
+  endMonth: number;
+  monthCount: number;
+  amount: number;
+}
+
+export function buildMemberMonthlyRangesSummary(monthlyCons: Contribution[]): {
+  totalMonths: number;
+  totalAmount: number;
+  streaks: MonthlyPaymentStreak[];
+  lines: string[];
+  text: string;
+} {
+  const byMonth = new Map<string, { year: number; month: number; amount: number }>();
+  for (const c of monthlyCons) {
+    const m = getContributionMonth(c);
+    const y = getContributionYear(c);
+    const amt = getContributionPaidAmount(c);
+    if (m < 1 || m > 12 || y < 2000) continue;
+    const key = `${y}-${m}`;
+    const existing = byMonth.get(key);
+    if (existing) {
+      existing.amount += amt;
+    } else {
+      byMonth.set(key, { year: y, month: m, amount: amt });
+    }
+  }
+
+  const sorted = Array.from(byMonth.values()).sort(
+    (a, b) => a.year * 12 + (a.month - 1) - (b.year * 12 + (b.month - 1))
+  );
+
+  if (sorted.length === 0) {
+    const fallbackTotal = monthlyCons.reduce((s, c) => s + getContributionPaidAmount(c), 0);
+    return {
+      totalMonths: 0,
+      totalAmount: fallbackTotal,
+      streaks: [],
+      lines: ['• እስካሁን አልተመዘገበም'],
+      text: '• እስካሁን አልተመዘገበም',
+    };
+  }
+
+  const streaks: MonthlyPaymentStreak[] = [];
+  for (const item of sorted) {
+    const itemIdx = item.year * 12 + (item.month - 1);
+    const last = streaks[streaks.length - 1];
+    if (last && last.endYear * 12 + (last.endMonth - 1) + 1 === itemIdx) {
+      last.endYear = item.year;
+      last.endMonth = item.month;
+      last.monthCount += 1;
+      last.amount += item.amount;
+    } else {
+      streaks.push({
+        startYear: item.year,
+        startMonth: item.month,
+        endYear: item.year,
+        endMonth: item.month,
+        monthCount: 1,
+        amount: item.amount,
+      });
+    }
+  }
+
+  const lines: string[] = [];
+  let activeYearHeader: number | null = null;
+
+  for (const s of streaks) {
+    const startName = getEthiopianMonthName(s.startMonth);
+    const endName = getEthiopianMonthName(s.endMonth);
+    if (s.startYear !== s.endYear) {
+      activeYearHeader = null;
+      lines.push(
+        `• ከ${startName} ${s.startYear} - ${endName} ${s.endYear} (የ${s.monthCount} ወር) — ${s.amount.toLocaleString()} ብር`
+      );
+    } else {
+      if (activeYearHeader !== s.startYear) {
+        activeYearHeader = s.startYear;
+        lines.push(`የ${s.startYear} ዓ.ም፦`);
+      }
+      if (s.monthCount === 1) {
+        lines.push(`• ${startName} (የ1 ወር) — ${s.amount.toLocaleString()} ብር`);
+      } else {
+        lines.push(
+          `• ከ${startName} - ${endName} (የ${s.monthCount} ወር) — ${s.amount.toLocaleString()} ብር`
+        );
+      }
+    }
+  }
+
+  const totalMonths = sorted.length;
+  const totalAmount = sorted.reduce((sum, item) => sum + item.amount, 0);
+
+  return {
+    totalMonths,
+    totalAmount,
+    streaks,
+    lines,
+    text: lines.join('\n'),
+  };
+}
+
 // Canonical Public Shared URL accessible to any recipient on mobile without login barrier
 export const PUBLIC_SHARED_APP_URL =
   'https://ais-pre-m2yi2k7mkfljr6u6wey5u2-772686905687.europe-west2.run.app';
@@ -180,8 +285,10 @@ export function formatSinglePaymentTelegramReport(
   contribution: Contribution,
   member: Member | undefined,
   allContributions: Contribution[] = getContributions(),
-  settings: SettingsRates = getSettings()
+  settings: SettingsRates = getSettings(),
+  options?: { includeDateTime?: boolean }
 ): string {
+  const includeDateTime = options?.includeDateTime !== false;
   const paidAmt = Number(contribution.paidAmount ?? contribution.amount ?? 0);
   const datePaid = formatDisplayPaymentDateTime(contribution.datePaid, contribution.paidAt);
   const memberName = member?.fullName || contribution.memberName || 'አባል';
@@ -233,6 +340,29 @@ export function formatSinglePaymentTelegramReport(
   const monthName =
     contribution.ethiopianMonthName ||
     getEthiopianMonthName(cMonth);
+
+  if (!includeDateTime) {
+    const memberMonthlyCons = allContributions.filter(
+      (c) =>
+        c.memberId === memberId &&
+        (!c.type || c.type === 'ወርሃዊ') &&
+        isPaidOrPartialStatus(c.status)
+    );
+    const monthlySummary = buildMemberMonthlyRangesSummary(memberMonthlyCons);
+    const rangeSection =
+      monthlySummary.totalMonths > 0
+        ? `\n\n📊 የተከፈሉ ወራት ማጠቃለያ (ጠቅላላ የ${monthlySummary.totalMonths} ወር — ${monthlySummary.totalAmount.toLocaleString()} ብር)፦\n${monthlySummary.text}`
+        : '';
+
+    return `🏛️ የአበሩስ አንድነት ማህበር — የወርሃዊ መዋጮ የክፍያ ሪፖርት
+━━━━━━━━━━━━━━━━━━━━
+👤 አባል፦ ${memberName} (${memberId})
+🏷️ የክፍያ ዓይነት፦ ወርሃዊ መዋጮ
+💵 የተከፈለው መጠን፦ ${paidAmt.toLocaleString()} ብር
+📅 የወሩ ስም፦ ${monthName} ${cYear} ዓ.ም${rangeSection}
+━━━━━━━━━━━━━━━━━━━━
+— የአበሩስ አንድነት ማህበር`;
+  }
 
   return `🏛️ የአበሩስ አንድነት ማህበር — የወርሃዊ መዋጮ የክፍያ ሪፖርት
 ━━━━━━━━━━━━━━━━━━━━
@@ -421,25 +551,19 @@ export function shareAppLinkToMember(
     const monthlyPaid = monthlyCons.reduce((sum, c) => sum + getContributionPaidAmount(c), 0);
     totalPaidSoFar = monthlyPaid;
 
-    const paidMonthsText = monthlyCons.length > 0
-      ? monthlyCons
-          .map((c) => {
-            const m = getContributionMonth(c);
-            const y = getContributionYear(c);
-            const amt = getContributionPaidAmount(c);
-            const dt = formatDisplayPaymentDateTime(c.datePaid, c.paidAt);
-            return `${getEthiopianMonthName(m)} ${y} (${amt.toLocaleString()} ብር${dt && dt !== '—' ? ` · ${dt}` : ''})`;
-          })
-          .join('፣ ')
-      : 'እስካሁን አልተመዘገበም';
+    const monthlySummary = buildMemberMonthlyRangesSummary(monthlyCons);
+    const monthCountLabel =
+      monthlySummary.totalMonths > 0
+        ? ` (ጠቅላላ የ${monthlySummary.totalMonths} ወር — ${monthlyPaid.toLocaleString()} ብር)`
+        : '';
 
     statusSection = `💍 ሁኔታ፡ የአባል የትዳር አጋር
 • ወርሃዊ መዋጮ፡ ${monthlyRate} ብር በወር
 • ከትውልድ መዋጮ ሙሉ በሙሉ ነፃ
-• የተከፈሉ ወራት፡ ${paidMonthsText}
-• የተከፈለ ወርሃዊ መጠን፡ ${monthlyPaid.toLocaleString()} ብር`;
+💰 የተከፈሉ ወራት (ወርሃዊ)${monthCountLabel}፦
+${monthlySummary.text}`;
   } else {
-    // Standard Member: Monthly shows ONLY paid amount, months & dates (ZERO remaining balance).
+    // Standard Member: Monthly shows grouped month ranges & totals (ZERO payment date/time, ZERO remaining balance).
     // Generation shows Total Paid and Remaining Balance (Total Expected Gen - Total Paid Gen).
     const monthlyCons = memberCons
       .filter((c) => (!c.type || c.type === 'ወርሃዊ') && isPaidOrPartialStatus(c.status))
@@ -450,24 +574,17 @@ export function shareAppLinkToMember(
       );
     const monthlyPaid = monthlyCons.reduce((sum, c) => sum + getContributionPaidAmount(c), 0);
 
-    const paidMonthsText = monthlyCons.length > 0
-      ? monthlyCons
-          .map((c) => {
-            const m = getContributionMonth(c);
-            const y = getContributionYear(c);
-            const amt = getContributionPaidAmount(c);
-            const dt = formatDisplayPaymentDateTime(c.datePaid, c.paidAt);
-            return `${getEthiopianMonthName(m)} ${y} (${amt.toLocaleString()} ብር${dt && dt !== '—' ? ` · ${dt}` : ''})`;
-          })
-          .join('፣ ')
-      : 'እስካሁን አልተመዘገበም';
+    const monthlySummary = buildMemberMonthlyRangesSummary(monthlyCons);
+    const monthCountLabel =
+      monthlySummary.totalMonths > 0
+        ? ` (ጠቅላላ የ${monthlySummary.totalMonths} ወር — ${monthlyPaid.toLocaleString()} ብር)`
+        : '';
 
     const genStats = getMemberGenContributionStats(member, settings, allContributions);
     totalPaidSoFar = monthlyPaid + genStats.paidSoFar;
 
-    statusSection = `📊 የወቅቱ ክፍያ ታሪክ፡
-• የተከፈሉ ወራት (ወርሃዊ)፡ ${paidMonthsText}
-• የተከፈለ ወርሃዊ መጠን፡ ${monthlyPaid.toLocaleString()} ብር
+    statusSection = `📊 የወርሃዊ መዋጮ ክፍያ ታሪክ${monthCountLabel}፦
+${monthlySummary.text}
 
 🏛️ የትውልድ መዋጮ፡
 • Total Expected: ${genStats.expectedAmount.toLocaleString()} ብር
