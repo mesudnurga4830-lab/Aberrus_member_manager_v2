@@ -395,17 +395,17 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
   ) => (
     <section
       key={cat}
-      className={`bg-white rounded-2xl border ${theme.border} overflow-hidden flex flex-col`}
+      className={`bg-white rounded-2xl border-2 ${theme.border} overflow-hidden flex flex-col shadow-sm`}
     >
       {/* Panel Header */}
-      <div className={`px-4 py-3.5 border-b ${theme.border} ${theme.headerBg} flex items-center justify-between gap-2`}>
+      <div className={`px-4 py-3.5 border-b-2 ${theme.border} ${theme.headerBg} flex items-center justify-between gap-2`}>
         <div className="flex items-center gap-2 min-w-0">
           {theme.icon}
           <div className="min-w-0">
             <h3 className={`text-sm font-extrabold ${theme.titleColor} truncate`}>
               {getCategoryTitle(cat)}
             </h3>
-            <p className="text-[11px] text-neutral-600 tabular-nums">
+            <p className="text-[11px] font-bold text-neutral-900 tabular-nums">
               <strong className="font-mono">{rows.length}</strong> አባላት
             </p>
           </div>
@@ -416,13 +416,13 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
             type="button"
             disabled={rows.length === 0}
             onClick={() => handleCopyList(cat, rows)}
-            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-neutral-200 hover:bg-neutral-50 disabled:opacity-40 text-[11px] font-bold text-neutral-700 transition-colors cursor-pointer whitespace-nowrap"
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-[#517DA2]/50 hover:bg-[#5A8FBB]/15 disabled:opacity-40 text-[11px] font-extrabold text-neutral-950 transition-colors cursor-pointer whitespace-nowrap"
             title="ስም ዝርዝሩን ቅዳ"
           >
             {copiedCategory === cat ? (
               <>
                 <Check className="w-3 h-3 text-emerald-700" />
-                <span className="text-emerald-700">ተቀድቷል</span>
+                <span className="text-[#155544]">ተቀድቷል</span>
               </>
             ) : (
               <>
@@ -435,7 +435,7 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
             type="button"
             disabled={rows.length === 0}
             onClick={() => handleExportCsv(cat, rows)}
-            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-neutral-200 hover:bg-neutral-50 disabled:opacity-40 text-[11px] font-bold text-neutral-700 transition-colors cursor-pointer whitespace-nowrap"
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-[#517DA2]/50 hover:bg-[#5A8FBB]/15 disabled:opacity-40 text-[11px] font-extrabold text-neutral-950 transition-colors cursor-pointer whitespace-nowrap"
             title="በCSV አውርድ"
           >
             <Download className="w-3 h-3" />
@@ -445,27 +445,27 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
       </div>
 
       {/* Member Name Rows */}
-      <div className="divide-y divide-neutral-100 max-h-[540px] overflow-y-auto flex-1">
+      <div className="divide-y divide-[#5A8FBB]/20 max-h-[540px] overflow-y-auto flex-1">
         {rows.length === 0 ? (
-          <div className="py-12 px-4 text-center text-xs text-neutral-400">
+          <div className="py-12 px-4 text-center text-xs font-bold text-neutral-700">
             {theme.emptyText}
           </div>
         ) : (
           rows.map((row, idx) => (
             <div
               key={row.member.id}
-              className="px-3.5 py-2.5 hover:bg-neutral-50/80 transition-colors flex items-center justify-between gap-2"
+              className="px-3.5 py-2.5 hover:bg-[#5A8FBB]/10 transition-colors flex items-center justify-between gap-2"
             >
               <div className="flex items-start gap-2.5 min-w-0">
-                <span className="text-[11px] font-mono font-bold text-neutral-400 tabular-nums pt-0.5 w-6 shrink-0">
+                <span className="text-[11px] font-mono font-extrabold text-[#517DA2] tabular-nums pt-0.5 w-6 shrink-0">
                   {idx + 1}.
                 </span>
                 <div className="min-w-0">
-                  <p className="text-xs font-bold text-neutral-900 truncate">
+                  <p className="text-xs font-extrabold text-neutral-950 truncate">
                     {row.member.fullName}
                   </p>
-                  <p className="text-[11px] text-neutral-500 truncate">
-                    <span className="font-mono text-neutral-600">{row.member.id}</span>
+                  <p className="text-[11px] font-semibold text-neutral-800 truncate">
+                    <span className="font-mono font-bold text-[#155544]">{row.member.id}</span>
                     {' · '}
                     <span>{row.member.familyName}</span>
                     {' · '}
@@ -484,7 +484,7 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
                         {row.paidAmount.toLocaleString()} ብር
                       </p>
                       {row.datePaid && (
-                        <p className="text-[10px] text-neutral-400 font-mono tabular-nums">
+                        <p className="text-[10px] font-bold text-neutral-800 font-mono tabular-nums">
                           {row.datePaid}
                         </p>
                       )}
@@ -496,11 +496,11 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
                         {row.paidAmount.toLocaleString()} ብር
                       </p>
                       {contributionMode === 'ትውልድ' ? (
-                        <p className="text-[10px] text-rose-700 font-mono tabular-nums">
+                        <p className="text-[10px] text-[#83257B] font-extrabold font-mono tabular-nums">
                           ቀሪ {row.remainingAmount.toLocaleString()} ብር
                         </p>
                       ) : (
-                        <p className="text-[10px] text-neutral-500">በከፊል</p>
+                        <p className="text-[10px] font-bold text-[#517DA2]">በከፊል</p>
                       )}
                     </>
                   )}
@@ -509,7 +509,7 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
                       <p className={`text-xs font-mono font-extrabold tabular-nums ${theme.accentText}`}>
                         {row.expectedAmount.toLocaleString()} ብር
                       </p>
-                      <p className="text-[10px] text-neutral-400">
+                      <p className="text-[10px] font-bold text-neutral-800">
                         {contributionMode === 'ትውልድ' ? 'ያልተከፈለ' : 'ተመን'}
                       </p>
                     </>
@@ -520,7 +520,7 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
                   <button
                     type="button"
                     onClick={() => onRecordPayment(row.member.id)}
-                    className="px-2 py-1 rounded-lg bg-[#1B5E20] hover:bg-[#144818] text-white text-[10px] font-bold transition-colors cursor-pointer whitespace-nowrap"
+                    className="px-2.5 py-1 rounded-lg bg-[#155544] hover:bg-[#417E38] text-white text-[10px] font-extrabold transition-colors cursor-pointer whitespace-nowrap"
                     title="ክፍያ መዝግብ"
                   >
                     መዝግብ
@@ -530,7 +530,7 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
                     <button
                       type="button"
                       onClick={() => onOpenPaymentManager(row.member.id, 'list')}
-                      className="p-1.5 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-700 transition-colors cursor-pointer"
+                      className="p-1.5 rounded-lg bg-[#5A8FBB]/20 hover:bg-[#517DA2] text-[#0F2438] hover:text-white transition-colors cursor-pointer"
                       title="የአባሉን ክፍያዎች እይ"
                     >
                       <CreditCard className="w-3.5 h-3.5" />
@@ -544,14 +544,14 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
       </div>
 
       {/* Footer Action */}
-      <div className="px-4 py-2.5 bg-neutral-50 border-t border-neutral-100 flex items-center justify-between text-[11px]">
-        <span className="text-neutral-500 tabular-nums">
-          ድምር፡ <strong className="text-neutral-900">{rows.length}</strong> አባላት
+      <div className="px-4 py-2.5 bg-[#5A8FBB]/10 border-t border-[#5A8FBB]/30 flex items-center justify-between text-[11px]">
+        <span className="font-bold text-neutral-900 tabular-nums">
+          ድምር፡ <strong className="text-[#155544] font-extrabold">{rows.length}</strong> አባላት
         </span>
         <button
           type="button"
           onClick={() => setCategoryView(cat)}
-          className="font-bold text-[#1B5E20] hover:underline cursor-pointer whitespace-nowrap"
+          className="font-extrabold text-[#155544] hover:text-[#417E38] hover:underline cursor-pointer whitespace-nowrap"
         >
           ሙሉ ሰንጠረዥ እይ →
         </button>
@@ -563,10 +563,10 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
     const title = getCategoryTitle(cat);
     const badgeStyle =
       cat === 'paid'
-        ? 'bg-emerald-100 text-emerald-800'
+        ? 'bg-[#1DAB61]/20 text-[#155544] border border-[#417E38]/40'
         : cat === 'partial'
-        ? 'bg-amber-100 text-amber-800'
-        : 'bg-rose-100 text-rose-800';
+        ? 'bg-[#5A8FBB]/25 text-[#0F2438] border border-[#517DA2]/50'
+        : 'bg-[#83257B] text-white';
     const statusLabel =
       cat === 'paid'
         ? contributionMode === 'ትውልድ'
@@ -577,11 +577,11 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
         : 'ያልተከፈለ';
 
     return (
-      <div className="bg-white rounded-2xl border border-neutral-200 overflow-hidden">
-        <div className="px-5 py-3.5 bg-neutral-50 border-b border-neutral-200 flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-white rounded-2xl border-2 border-[#517DA2]/45 overflow-hidden shadow-sm">
+        <div className="px-5 py-3.5 bg-[#5A8FBB]/15 border-b-2 border-[#517DA2]/35 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <h3 className="text-sm font-extrabold text-neutral-900">{title}</h3>
-            <span className={`px-2 py-0.5 rounded-md text-xs font-bold font-mono tabular-nums ${badgeStyle}`}>
+            <h3 className="text-sm font-extrabold text-[#155544]">{title}</h3>
+            <span className={`px-2.5 py-0.5 rounded-md text-xs font-extrabold font-mono tabular-nums ${badgeStyle}`}>
               {rows.length} አባላት
             </span>
           </div>
@@ -590,12 +590,12 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
               type="button"
               disabled={rows.length === 0}
               onClick={() => handleCopyList(cat, rows)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-neutral-200 hover:bg-neutral-100 disabled:opacity-40 text-xs font-bold text-neutral-700 cursor-pointer whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-[#517DA2]/50 hover:bg-[#5A8FBB]/15 disabled:opacity-40 text-xs font-extrabold text-neutral-950 cursor-pointer whitespace-nowrap"
             >
               {copiedCategory === cat ? (
                 <>
                   <Check className="w-3.5 h-3.5 text-emerald-700" />
-                  <span className="text-emerald-700">ተቀድቷል</span>
+                  <span className="text-[#155544]">ተቀድቷል</span>
                 </>
               ) : (
                 <>
@@ -608,7 +608,7 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
               type="button"
               disabled={rows.length === 0}
               onClick={() => handleExportCsv(cat, rows)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-neutral-200 hover:bg-neutral-100 disabled:opacity-40 text-xs font-bold text-neutral-700 cursor-pointer whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#517DA2] hover:bg-[#155544] disabled:opacity-40 text-xs font-extrabold text-white cursor-pointer whitespace-nowrap"
             >
               <Download className="w-3.5 h-3.5" />
               <span>CSV አውርድ</span>
@@ -618,7 +618,7 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-neutral-50/70 text-neutral-600 font-bold border-b border-neutral-200">
+            <thead className="bg-[#155544] text-white font-extrabold border-b-2 border-[#417E38]">
               <tr>
                 <th className="py-3 px-4 w-12">#</th>
                 <th className="py-3 px-4">የአባል ID</th>
@@ -652,67 +652,67 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
                 <th className="py-3 px-4 text-right">ፈጣን ተግባር</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-neutral-100">
+            <tbody className="divide-y divide-[#5A8FBB]/25">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-10 text-center text-neutral-400">
+                  <td colSpan={9} className="py-10 text-center font-bold text-neutral-700">
                     በዚህ ምድብ ውስጥ የተገኘ አባል የለም።
                   </td>
                 </tr>
               ) : (
                 rows.map((row, idx) => (
-                  <tr key={row.member.id} className="hover:bg-neutral-50/80 transition-colors">
-                    <td className="py-2.5 px-4 font-mono text-neutral-400 tabular-nums">{idx + 1}</td>
-                    <td className="py-2.5 px-4 font-mono font-bold text-neutral-700">{row.member.id}</td>
-                    <td className="py-2.5 px-4 font-bold text-neutral-900">{row.member.fullName}</td>
-                    <td className="py-2.5 px-4 text-neutral-700">
+                  <tr key={row.member.id} className="hover:bg-[#5A8FBB]/10 transition-colors">
+                    <td className="py-2.5 px-4 font-mono font-bold text-[#517DA2] tabular-nums">{idx + 1}</td>
+                    <td className="py-2.5 px-4 font-mono font-extrabold text-[#155544]">{row.member.id}</td>
+                    <td className="py-2.5 px-4 font-extrabold text-neutral-950">{row.member.fullName}</td>
+                    <td className="py-2.5 px-4 font-bold text-neutral-900">
                       {row.member.isSpouse ? 'የትዳር አጋር' : `${row.member.generation}ኛ ትውልድ`}
                     </td>
                     <td className="py-2.5 px-4">
-                      <p className="font-semibold text-neutral-900">
+                      <p className="font-bold text-neutral-950">
                         {row.member.familyId} · {row.member.familyName}
                       </p>
                       {row.family?.headName && (
-                        <p className="text-[11px] text-neutral-500">ወኪል፡ {row.family.headName}</p>
+                        <p className="text-[11px] font-semibold text-neutral-800">ወኪል፡ {row.family.headName}</p>
                       )}
                     </td>
                     {cat === 'paid' && (
                       <>
-                        <td className="py-2.5 px-4 text-right font-mono font-bold text-emerald-800 tabular-nums">
+                        <td className="py-2.5 px-4 text-right font-mono font-extrabold text-[#155544] tabular-nums">
                           {row.paidAmount.toLocaleString()} ብር
                         </td>
-                        <td className="py-2.5 px-4 font-mono text-neutral-500 tabular-nums">
+                        <td className="py-2.5 px-4 font-mono font-semibold text-neutral-800 tabular-nums">
                           {row.datePaid || '—'}
                         </td>
                       </>
                     )}
                     {cat === 'partial' && (
                       <>
-                        <td className="py-2.5 px-4 text-right font-mono font-bold text-amber-800 tabular-nums">
+                        <td className="py-2.5 px-4 text-right font-mono font-extrabold text-[#517DA2] tabular-nums">
                           {row.paidAmount.toLocaleString()} ብር
                         </td>
                         {contributionMode === 'ትውልድ' && (
                           <>
-                            <td className="py-2.5 px-4 text-right font-mono font-bold text-rose-700 tabular-nums">
+                            <td className="py-2.5 px-4 text-right font-mono font-extrabold text-[#83257B] tabular-nums">
                               {row.remainingAmount.toLocaleString()} ብር
                             </td>
-                            <td className="py-2.5 px-4 text-right font-mono text-neutral-600 tabular-nums">
+                            <td className="py-2.5 px-4 text-right font-mono font-bold text-neutral-900 tabular-nums">
                               {row.expectedAmount.toLocaleString()} ብር
                             </td>
                           </>
                         )}
-                        <td className="py-2.5 px-4 font-mono text-neutral-500 tabular-nums">
+                        <td className="py-2.5 px-4 font-mono font-semibold text-neutral-800 tabular-nums">
                           {row.datePaid || '—'}
                         </td>
                       </>
                     )}
                     {cat === 'unpaid' && (
-                      <td className="py-2.5 px-4 text-right font-mono font-bold text-rose-700 tabular-nums">
+                      <td className="py-2.5 px-4 text-right font-mono font-extrabold text-[#83257B] tabular-nums">
                         {row.expectedAmount.toLocaleString()} ብር
                       </td>
                     )}
                     <td className="py-2.5 px-4">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${badgeStyle}`}>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${badgeStyle}`}>
                         {statusLabel}
                       </span>
                     </td>
@@ -722,7 +722,7 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
                           <button
                             type="button"
                             onClick={() => onOpenPaymentManager(row.member.id, 'list')}
-                            className="px-2 py-1 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-bold text-[11px] transition-colors inline-flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                            className="px-2 py-1 rounded-lg bg-[#5A8FBB]/20 hover:bg-[#517DA2] text-[#0F2438] hover:text-white font-extrabold text-[11px] transition-colors inline-flex items-center gap-1 cursor-pointer whitespace-nowrap"
                           >
                             <CreditCard className="w-3 h-3" />
                             <span>ክፍያዎች</span>
@@ -732,7 +732,7 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
                           <button
                             type="button"
                             onClick={() => onRecordPayment(row.member.id)}
-                            className="px-2.5 py-1 rounded-lg bg-[#1B5E20] hover:bg-[#144818] text-white font-bold text-[11px] transition-colors cursor-pointer whitespace-nowrap"
+                            className="px-2.5 py-1 rounded-lg bg-[#155544] hover:bg-[#417E38] text-white font-extrabold text-[11px] transition-colors cursor-pointer whitespace-nowrap"
                           >
                             ክፍያ መዝግብ
                           </button>
@@ -752,22 +752,22 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
   return (
     <div className="space-y-5">
       {/* Top Header & Mode Switcher */}
-      <div className="bg-white p-5 rounded-2xl border border-neutral-200 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div className="bg-gradient-to-r from-[#155544] via-[#517DA2] to-[#83257B] text-white p-5 rounded-2xl border-2 border-[#5A8FBB] shadow-md flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs text-neutral-500 font-semibold">
+          <div className="flex items-center gap-2 text-xs text-white font-extrabold">
             <ListChecks className="w-4 h-4 text-[#1B5E20]" />
-            <span>የአባላት የክፍያ ሁኔታ ስም ዝርዝር</span>
+            <span className="bg-white text-[#155544] px-2.5 py-0.5 rounded-full">የአባላት የክፍያ ሁኔታ ስም ዝርዝር</span>
             <span>·</span>
-            <span className="tabular-nums">
+            <span className="tabular-nums font-bold">
               {totals.eligibleCount} ከፋይ አባላት ({exemptCount} ነፃ)
             </span>
           </div>
-          <h2 className="text-lg sm:text-xl font-extrabold text-neutral-900">
+          <h2 className="text-lg sm:text-xl font-extrabold text-white">
             {contributionMode === 'ወርሃዊ'
               ? `የ${monthName} ${selectedYear} ዓ.ም ወርሃዊ መዋጮ — የከፈሉ፣ በከፊል እና ያልከፈሉ`
               : 'የትውልድ መዋጮ — ሙሉ የከፈሉ፣ በከፊል እና ያልከፈሉ'}
           </h2>
-          <p className="text-xs text-neutral-500">
+          <p className="text-xs font-semibold text-white">
             {contributionMode === 'ወርሃዊ'
               ? 'ለተመረጠው ወር ወርሃዊ መዋጮ የከፈሉ፣ በከፊል የከፈሉ እና ያልከፈሉ አባላት ስም ዝርዝር ለየብቻ'
               : 'የትውልድ መዋጮ በጠቅላላው ሙሉ የከፈሉ፣ በከፊል የከፈሉ እና ያልከፈሉ አባላት ስም ዝርዝር ለየብቻ'}
@@ -776,14 +776,14 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
 
         {/* Contribution Type Toggle + Monthly Period Controls */}
         <div className="flex flex-wrap items-center gap-2.5">
-          <div className="inline-flex p-1 rounded-xl bg-neutral-100 border border-neutral-200">
+          <div className="inline-flex p-1 rounded-xl bg-white/95 border border-[#5A8FBB]">
             <button
               type="button"
               onClick={() => setContributionMode('ወርሃዊ')}
               className={`px-3.5 py-2 rounded-lg text-xs font-extrabold transition-colors inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 ${
                 contributionMode === 'ወርሃዊ'
-                  ? 'bg-[#1B5E20] text-white'
-                  : 'text-neutral-700 hover:text-neutral-900'
+                  ? 'bg-[#155544] text-white shadow-xs'
+                  : 'text-neutral-950 hover:text-[#155544]'
               }`}
             >
               <Calendar className="w-3.5 h-3.5" />
@@ -794,8 +794,8 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
               onClick={() => setContributionMode('ትውልድ')}
               className={`px-3.5 py-2 rounded-lg text-xs font-extrabold transition-colors inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 ${
                 contributionMode === 'ትውልድ'
-                  ? 'bg-[#1B5E20] text-white'
-                  : 'text-neutral-700 hover:text-neutral-900'
+                  ? 'bg-[#83257B] text-white shadow-xs'
+                  : 'text-neutral-950 hover:text-[#83257B]'
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
@@ -808,7 +808,7 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                className="text-xs font-bold bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2 text-neutral-800 focus:ring-2 focus:ring-emerald-700/30 cursor-pointer"
+                className="text-xs font-extrabold bg-white border-2 border-[#5A8FBB] rounded-xl px-3 py-2 text-neutral-950 focus:ring-2 focus:ring-[#1DAB61] cursor-pointer"
                 aria-label="የኢትዮጵያ ወር"
               >
                 {ETHIOPIAN_MONTHS.map((m) => (
@@ -820,7 +820,7 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
               <select
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(Number(e.target.value))}
-                className="text-xs font-bold bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2 text-neutral-800 focus:ring-2 focus:ring-emerald-700/30 font-mono cursor-pointer"
+                className="text-xs font-extrabold bg-white border-2 border-[#5A8FBB] rounded-xl px-3 py-2 text-neutral-950 focus:ring-2 focus:ring-[#1DAB61] font-mono cursor-pointer"
                 aria-label="ዓመተ ምህረት"
               >
                 {yearOptions.map((y) => (
@@ -839,20 +839,20 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
         <button
           type="button"
           onClick={() => setCategoryView(categoryView === 'paid' ? 'all' : 'paid')}
-          className={`text-left p-4 rounded-2xl border transition-colors cursor-pointer ${
+          className={`text-left p-4 rounded-2xl border-2 transition-colors cursor-pointer ${
             categoryView === 'paid'
-              ? 'bg-emerald-50 border-emerald-500'
-              : 'bg-white border-neutral-200 hover:border-emerald-300'
+              ? 'bg-[#1DAB61]/15 border-[#155544]'
+              : 'bg-white border-[#417E38]/45 hover:border-[#1DAB61]'
           }`}
         >
-          <div className="flex items-center justify-between text-xs font-bold text-emerald-800">
+          <div className="flex items-center justify-between text-xs font-extrabold text-[#155544]">
             <span>{contributionMode === 'ትውልድ' ? 'ሙሉ የከፈሉ' : 'የከፈሉ'}</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           </div>
-          <p className="text-2xl font-extrabold text-emerald-950 font-mono tabular-nums mt-2">
-            {paidRows.length} <span className="text-xs font-sans font-semibold text-neutral-500">አባላት</span>
+          <p className="text-2xl font-extrabold text-[#155544] font-mono tabular-nums mt-2">
+            {paidRows.length} <span className="text-xs font-sans font-bold text-neutral-900">አባላት</span>
           </p>
-          <p className="text-[11px] text-emerald-700 font-mono tabular-nums mt-1">
+          <p className="text-[11px] font-bold text-[#417E38] font-mono tabular-nums mt-1">
             {totals.collectedPaidSum.toLocaleString()} ብር ተሰብስቧል
           </p>
         </button>
@@ -860,20 +860,20 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
         <button
           type="button"
           onClick={() => setCategoryView(categoryView === 'partial' ? 'all' : 'partial')}
-          className={`text-left p-4 rounded-2xl border transition-colors cursor-pointer ${
+          className={`text-left p-4 rounded-2xl border-2 transition-colors cursor-pointer ${
             categoryView === 'partial'
-              ? 'bg-amber-50 border-amber-500'
-              : 'bg-white border-neutral-200 hover:border-amber-300'
+              ? 'bg-[#5A8FBB]/20 border-[#517DA2]'
+              : 'bg-white border-[#5A8FBB]/55 hover:border-[#517DA2]'
           }`}
         >
-          <div className="flex items-center justify-between text-xs font-bold text-amber-900">
+          <div className="flex items-center justify-between text-xs font-extrabold text-[#517DA2]">
             <span>በከፊል የከፈሉ</span>
             <Clock className="w-4 h-4 text-amber-600" />
           </div>
-          <p className="text-2xl font-extrabold text-amber-950 font-mono tabular-nums mt-2">
-            {partialRows.length} <span className="text-xs font-sans font-semibold text-neutral-500">አባላት</span>
+          <p className="text-2xl font-extrabold text-[#0F2438] font-mono tabular-nums mt-2">
+            {partialRows.length} <span className="text-xs font-sans font-bold text-neutral-900">አባላት</span>
           </p>
-          <p className="text-[11px] text-amber-800 font-mono tabular-nums mt-1">
+          <p className="text-[11px] font-bold text-[#517DA2] font-mono tabular-nums mt-1">
             {totals.collectedPartialSum.toLocaleString()} ብር በከፊል
           </p>
         </button>
@@ -881,27 +881,27 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
         <button
           type="button"
           onClick={() => setCategoryView(categoryView === 'unpaid' ? 'all' : 'unpaid')}
-          className={`text-left p-4 rounded-2xl border transition-colors cursor-pointer ${
+          className={`text-left p-4 rounded-2xl border-2 transition-colors cursor-pointer ${
             categoryView === 'unpaid'
-              ? 'bg-rose-50 border-rose-500'
-              : 'bg-white border-neutral-200 hover:border-rose-300'
+              ? 'bg-[#83257B]/15 border-[#83257B]'
+              : 'bg-white border-[#83257B]/45 hover:border-[#83257B]'
           }`}
         >
-          <div className="flex items-center justify-between text-xs font-bold text-rose-800">
+          <div className="flex items-center justify-between text-xs font-extrabold text-[#83257B]">
             <span>ያልከፈሉ</span>
             <AlertCircle className="w-4 h-4 text-rose-600" />
           </div>
-          <p className="text-2xl font-extrabold text-rose-950 font-mono tabular-nums mt-2">
-            {unpaidRows.length} <span className="text-xs font-sans font-semibold text-neutral-500">አባላት</span>
+          <p className="text-2xl font-extrabold text-[#83257B] font-mono tabular-nums mt-2">
+            {unpaidRows.length} <span className="text-xs font-sans font-bold text-neutral-900">አባላት</span>
           </p>
-          <p className="text-[11px] text-rose-700 mt-1 tabular-nums">
+          <p className="text-[11px] font-bold text-neutral-900 mt-1 tabular-nums">
             ከ{totals.eligibleCount} ከፋይ አባላት ውስጥ
           </p>
         </button>
 
         {/* 4th Card: Collection Totals (respecting Monthly vs Generation domain rules) */}
-        <div className="p-4 rounded-2xl bg-neutral-50 border border-neutral-200 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-xs font-bold text-neutral-700">
+        <div className="p-4 rounded-2xl bg-[#155544] text-white border-2 border-[#1DAB61]/70 flex flex-col justify-between shadow-sm">
+          <div className="flex items-center justify-between text-xs font-extrabold text-white">
             <span>
               {contributionMode === 'ወርሃዊ' ? 'በወሩ የተሰበሰበ' : 'የትውልድ ገንዘብ ማጠቃለያ'}
             </span>
@@ -909,30 +909,30 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
           </div>
           {contributionMode === 'ወርሃዊ' ? (
             <>
-              <p className="text-2xl font-extrabold text-[#1B5E20] font-mono tabular-nums mt-2">
-                {totals.collectedSum.toLocaleString()} <span className="text-xs font-sans font-semibold">ብር</span>
+              <p className="text-2xl font-extrabold text-white font-mono tabular-nums mt-2">
+                {totals.collectedSum.toLocaleString()} <span className="text-xs font-sans font-bold">ብር</span>
               </p>
-              <p className="text-[11px] text-neutral-500 mt-1 tabular-nums">
+              <p className="text-[11px] font-bold text-white/95 mt-1 tabular-nums">
                 {monthName} {selectedYear} · {exemptCount} ነፃ (18-)
               </p>
             </>
           ) : (
             <div className="mt-2 space-y-1 text-[11px] tabular-nums">
               <div className="flex items-center justify-between">
-                <span className="text-neutral-500">እስካሁን የተሰበሰበ፦</span>
-                <span className="font-mono font-extrabold text-[#1B5E20]">
+                <span className="font-bold text-white">እስካሁን የተሰበሰበ፦</span>
+                <span className="font-mono font-extrabold text-[#1DAB61] bg-white px-1.5 rounded">
                   {totals.collectedSum.toLocaleString()} ብር
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-neutral-500">ቀሪ ያልተሰበሰበ፦</span>
-                <span className="font-mono font-extrabold text-rose-700">
+                <span className="font-bold text-white">ቀሪ ያልተሰበሰበ፦</span>
+                <span className="font-mono font-extrabold text-white bg-[#83257B] px-1.5 rounded">
                   {totals.genRemainingSum.toLocaleString()} ብር
                 </span>
               </div>
-              <div className="flex items-center justify-between pt-1 border-t border-neutral-200">
-                <span className="text-neutral-500">መሰብሰብ የነበረበት፦</span>
-                <span className="font-mono font-bold text-neutral-900">
+              <div className="flex items-center justify-between pt-1 border-t border-white/25">
+                <span className="font-bold text-white">መሰብሰብ የነበረበት፦</span>
+                <span className="font-mono font-extrabold text-white">
                   {totals.genExpectedSum.toLocaleString()} ብር
                 </span>
               </div>
@@ -942,7 +942,7 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
       </div>
 
       {/* Filters & Category View Switcher */}
-      <div className="bg-white p-4 rounded-2xl border border-neutral-200 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+      <div className="bg-white p-4 rounded-2xl border-2 border-[#5A8FBB]/45 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2.5 flex-1">
           <div className="relative flex-1 min-w-[210px] max-w-sm">
             <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-2.5" />
@@ -951,14 +951,14 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
               placeholder="ስም፣ የአባል ID ወይም ቤተሰብ ፈልግ..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full text-xs pl-9 pr-3 py-2 bg-neutral-50 border border-neutral-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-700"
+              className="w-full text-xs font-bold pl-9 pr-3 py-2 bg-[#5A8FBB]/10 border border-[#517DA2]/45 rounded-xl text-neutral-950 placeholder:text-neutral-600 focus:outline-none focus:ring-2 focus:ring-[#1DAB61]"
             />
           </div>
 
           <select
             value={selectedFamilyFilter}
             onChange={(e) => setSelectedFamilyFilter(e.target.value)}
-            className="text-xs font-semibold bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2 text-neutral-800 cursor-pointer"
+            className="text-xs font-bold bg-[#5A8FBB]/10 border border-[#517DA2]/45 rounded-xl px-3 py-2 text-neutral-950 cursor-pointer"
             aria-label="ቤተሰብ ማጣሪያ"
           >
             <option value="all">ሁሉም ቤተሰቦች ({families.length})</option>
@@ -972,7 +972,7 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
           <select
             value={selectedGenFilter}
             onChange={(e) => setSelectedGenFilter(e.target.value)}
-            className="text-xs font-semibold bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2 text-neutral-800 cursor-pointer"
+            className="text-xs font-bold bg-[#5A8FBB]/10 border border-[#517DA2]/45 rounded-xl px-3 py-2 text-neutral-950 cursor-pointer"
             aria-label="ትውልድ ማጣሪያ"
           >
             <option value="all">ሁሉም ትውልዶች</option>
@@ -984,14 +984,14 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
         </div>
 
         {/* Category Focus Segmented Buttons */}
-        <div className="inline-flex flex-wrap items-center gap-1 p-1 rounded-xl bg-neutral-100 border border-neutral-200">
+        <div className="inline-flex flex-wrap items-center gap-1 p-1 rounded-xl bg-[#5A8FBB]/15 border border-[#5A8FBB]/40">
           <button
             type="button"
             onClick={() => setCategoryView('all')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
               categoryView === 'all'
-                ? 'bg-neutral-900 text-white'
-                : 'text-neutral-700 hover:bg-white'
+                ? 'bg-[#155544] text-white'
+                : 'text-neutral-950 hover:bg-white'
             }`}
           >
             ሁሉም 3 ክፍሎች
@@ -999,10 +999,10 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
           <button
             type="button"
             onClick={() => setCategoryView('paid')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer whitespace-nowrap shrink-0 tabular-nums ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-colors cursor-pointer whitespace-nowrap shrink-0 tabular-nums ${
               categoryView === 'paid'
-                ? 'bg-emerald-700 text-white'
-                : 'text-emerald-800 hover:bg-white'
+                ? 'bg-[#417E38] text-white'
+                : 'text-[#155544] hover:bg-white'
             }`}
           >
             የከፈሉ ({paidRows.length})
@@ -1010,10 +1010,10 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
           <button
             type="button"
             onClick={() => setCategoryView('partial')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer whitespace-nowrap shrink-0 tabular-nums ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-colors cursor-pointer whitespace-nowrap shrink-0 tabular-nums ${
               categoryView === 'partial'
-                ? 'bg-amber-600 text-white'
-                : 'text-amber-800 hover:bg-white'
+                ? 'bg-[#517DA2] text-white'
+                : 'text-[#0F2438] hover:bg-white'
             }`}
           >
             በከፊል ({partialRows.length})
@@ -1021,10 +1021,10 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
           <button
             type="button"
             onClick={() => setCategoryView('unpaid')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer whitespace-nowrap shrink-0 tabular-nums ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-colors cursor-pointer whitespace-nowrap shrink-0 tabular-nums ${
               categoryView === 'unpaid'
-                ? 'bg-rose-700 text-white'
-                : 'text-rose-800 hover:bg-white'
+                ? 'bg-[#83257B] text-white'
+                : 'text-[#83257B] hover:bg-white'
             }`}
           >
             ያልከፈሉ ({unpaidRows.length})
@@ -1036,31 +1036,31 @@ export const UnpaidReport: React.FC<UnpaidReportProps> = ({
       {categoryView === 'all' ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
           {renderSeparatedPanel('paid', paidRows, {
-            border: 'border-emerald-200',
-            headerBg: 'bg-emerald-50/80',
-            titleColor: 'text-emerald-950',
-            badgeBg: 'bg-emerald-100 text-emerald-800',
-            accentText: 'text-emerald-800',
+            border: 'border-[#417E38]/55',
+            headerBg: 'bg-[#1DAB61]/15',
+            titleColor: 'text-[#155544]',
+            badgeBg: 'bg-[#1DAB61]/25 text-[#155544]',
+            accentText: 'text-[#155544]',
             icon: <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />,
             emptyText: 'በዚህ ማጣሪያ ውስጥ የከፈለ አባል የለም።',
           })}
 
           {renderSeparatedPanel('partial', partialRows, {
-            border: 'border-amber-200',
-            headerBg: 'bg-amber-50/80',
-            titleColor: 'text-amber-950',
-            badgeBg: 'bg-amber-100 text-amber-800',
-            accentText: 'text-amber-800',
+            border: 'border-[#517DA2]/55',
+            headerBg: 'bg-[#5A8FBB]/20',
+            titleColor: 'text-[#0F2438]',
+            badgeBg: 'bg-[#5A8FBB]/30 text-[#0F2438]',
+            accentText: 'text-[#517DA2]',
             icon: <Clock className="w-4 h-4 text-amber-700 shrink-0" />,
             emptyText: 'በከፊል የከፈለ አባል የለም።',
           })}
 
           {renderSeparatedPanel('unpaid', unpaidRows, {
-            border: 'border-rose-200',
-            headerBg: 'bg-rose-50/80',
-            titleColor: 'text-rose-950',
-            badgeBg: 'bg-rose-100 text-rose-800',
-            accentText: 'text-rose-700',
+            border: 'border-[#83257B]/55',
+            headerBg: 'bg-[#83257B]/12',
+            titleColor: 'text-[#83257B]',
+            badgeBg: 'bg-[#83257B]/20 text-[#83257B]',
+            accentText: 'text-[#83257B]',
             icon: <AlertCircle className="w-4 h-4 text-rose-700 shrink-0" />,
             emptyText: 'ያልከፈለ አባል የለም — ሁሉም ከፍለዋል።',
           })}

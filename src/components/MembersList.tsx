@@ -347,29 +347,29 @@ export const MembersList: React.FC<MembersListProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Bar */}
-      <div className="bg-white p-5 rounded-2xl border border-neutral-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-gradient-to-r from-[#155544] via-[#517DA2] to-[#83257B] p-5 sm:p-6 rounded-2xl border-2 border-[#5A8FBB]/50 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4 text-white">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold">
+            <span className="px-2.5 py-0.5 rounded-full bg-[#1DAB61] text-[#042116] text-[11px] font-extrabold">
               የአባላት መዝገብ (Members Directory)
             </span>
-            <span className="text-neutral-400">·</span>
-            <span className="text-xs text-neutral-500 font-medium">
+            <span className="text-white font-bold">·</span>
+            <span className="text-xs text-white font-bold">
               {isLoading && members.length === 0
                 ? 'አባላትን ከFirestore በመጫን ላይ...'
                 : `ጠቅላላ ${members.length} የተመዘገቡ አባላት`}
             </span>
             {isLoading && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#5A8FBB] text-[#071E33] border border-white/40 text-[10px] font-extrabold">
                 <Loader2 className="w-3 h-3 animate-spin text-amber-700" />
                 <span>በመጫን ላይ...</span>
               </span>
             )}
           </div>
-          <h2 className="text-lg font-bold text-neutral-900 mt-1">
+          <h2 className="text-xl font-extrabold text-white mt-1.5 tracking-tight">
             የአበሩስ ቤተሰብ አባላት ሙሉ ዝርዝር
           </h2>
-          <p className="text-xs text-neutral-500 mt-0.5">
+          <p className="text-xs text-white/95 font-semibold mt-0.5">
             የአባላት ID፣ ሙሉ ስም፣ ትውልድ፣ ቤተሰብ እና ስልክ ቁጥር ማስተዳደሪያ
           </p>
         </div>
@@ -379,7 +379,7 @@ export const MembersList: React.FC<MembersListProps> = ({
             <button
               type="button"
               onClick={onOpenBulkImport}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#FFD700] hover:bg-[#e6c200] text-[#1B5E20] font-bold text-xs transition-colors shadow-xs cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#5A8FBB] hover:bg-[#517DA2] hover:text-white text-[#071E33] font-extrabold text-xs transition-colors shadow-xs cursor-pointer whitespace-nowrap shrink-0"
               title="በCSV ፋይል አባላትን በጅምላ አስመጣ"
             >
               <FileSpreadsheet className="w-4 h-4" />
@@ -390,7 +390,7 @@ export const MembersList: React.FC<MembersListProps> = ({
             <button
               type="button"
               onClick={() => onOpenPaymentManager(undefined, 'list')}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-white font-bold text-xs transition-colors shadow-xs cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#417E38] hover:bg-[#155544] text-white font-extrabold text-xs transition-colors shadow-xs cursor-pointer border border-white/25 whitespace-nowrap shrink-0"
               title="የአባላት የክፍያዎች መዝገብ፣ ክፍያ መመዝገብ ወይም መሰረዝ"
             >
               <CreditCard className="w-4 h-4 text-[#FFD700]" />
@@ -399,7 +399,7 @@ export const MembersList: React.FC<MembersListProps> = ({
           )}
           <button
             onClick={onOpenAddMember}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors shadow-sm cursor-pointer"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#155544] hover:bg-[#417E38] text-white font-extrabold text-xs transition-colors shadow-sm cursor-pointer border border-[#1DAB61]/50 whitespace-nowrap shrink-0"
           >
             <UserPlus className="w-4 h-4 text-amber-300" />
             <span>አዲስ አባል መዝግብ (Add Member)</span>
@@ -409,8 +409,8 @@ export const MembersList: React.FC<MembersListProps> = ({
 
       {/* Deletion / Bulk Payment Toast / Notice */}
       {deleteNotice && (
-        <div className="bg-emerald-50 border border-emerald-300 text-emerald-900 px-4 py-3 rounded-2xl flex flex-wrap items-center justify-between gap-2 shadow-xs animate-in fade-in slide-in-from-top-2 duration-150">
-          <div className="flex items-center gap-2 text-xs font-bold">
+        <div className="bg-[#1DAB61]/15 border-2 border-[#417E38] text-neutral-950 px-4 py-3 rounded-2xl flex flex-wrap items-center justify-between gap-2 shadow-xs animate-in fade-in slide-in-from-top-2 duration-150">
+          <div className="flex items-center gap-2 text-xs font-extrabold">
             <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
             <span>{deleteNotice}</span>
           </div>
@@ -419,7 +419,7 @@ export const MembersList: React.FC<MembersListProps> = ({
               <button
                 type="button"
                 onClick={() => onDispatchTelegram(lastBulkTelegramPayload)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#229ED9] hover:bg-[#1d8cc1] text-white text-[11px] font-bold shadow-xs cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#517DA2] hover:bg-[#155544] text-white text-[11px] font-extrabold shadow-xs cursor-pointer whitespace-nowrap shrink-0"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>የጅምላ ክፍያ ሪፖርት በTelegram ላክ</span>
@@ -431,7 +431,7 @@ export const MembersList: React.FC<MembersListProps> = ({
                 setDeleteNotice(null);
                 setLastBulkTelegramPayload(null);
               }}
-              className="text-emerald-700 hover:text-emerald-900 p-1 rounded-lg hover:bg-emerald-100 transition-colors cursor-pointer"
+              className="text-neutral-900 hover:text-black p-1 rounded-lg hover:bg-[#1DAB61]/25 transition-colors cursor-pointer"
               aria-label="ዝጋ"
             >
               <X className="w-4 h-4" />
@@ -441,62 +441,62 @@ export const MembersList: React.FC<MembersListProps> = ({
       )}
 
       {/* Dedicated Category Headings / Tabs */}
-      <div className="flex flex-wrap items-center gap-2 bg-white p-2.5 rounded-2xl border border-neutral-200 shadow-2xs">
+      <div className="flex flex-wrap items-center gap-2 bg-white p-2.5 rounded-2xl border-2 border-[#5A8FBB]/40 shadow-2xs">
         <button
           onClick={() => setCategoryTab('all')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
             categoryTab === 'all'
-              ? 'bg-emerald-900 text-white shadow-xs'
-              : 'text-neutral-700 hover:bg-neutral-100'
+              ? 'bg-[#155544] text-white shadow-xs'
+              : 'text-neutral-900 bg-[#5A8FBB]/10 hover:bg-[#5A8FBB]/25 border border-[#5A8FBB]/30'
           }`}
         >
           <span>ሁሉም አባላት</span>
-          <span className="ml-1.5 px-1.5 py-0.2 rounded-full bg-black/20 text-[10px]">
+          <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-mono font-extrabold ${categoryTab === 'all' ? 'bg-[#1DAB61] text-[#042116]' : 'bg-[#517DA2] text-white'}`}>
             {members.length}
           </span>
         </button>
 
         <button
           onClick={() => setCategoryTab('minors')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
             categoryTab === 'minors'
-              ? 'bg-amber-800 text-white shadow-xs'
-              : 'text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-200'
+              ? 'bg-[#517DA2] text-white shadow-xs'
+              : 'text-[#0F2438] bg-[#5A8FBB]/15 hover:bg-[#5A8FBB]/30 border border-[#5A8FBB]/50'
           }`}
         >
           <Baby className="w-3.5 h-3.5" />
           <span>ከክፍያ ነፃ የሆኑ ልጆች (&lt;18 ዓመት)</span>
-          <span className="px-1.5 py-0.2 rounded-full bg-amber-400 text-amber-950 text-[10px] font-black">
+          <span className="px-1.5 py-0.5 rounded-full bg-[#1DAB61] text-[#042116] text-[10px] font-mono font-black">
             {minorCount}
           </span>
         </button>
 
         <button
           onClick={() => setCategoryTab('spouses')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
             categoryTab === 'spouses'
-              ? 'bg-purple-900 text-white shadow-xs'
-              : 'text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200'
+              ? 'bg-[#83257B] text-white shadow-xs'
+              : 'text-[#83257B] bg-[#83257B]/10 hover:bg-[#83257B]/20 border border-[#83257B]/35'
           }`}
         >
           <Heart className="w-3.5 h-3.5" />
           <span>የአባላት የትዳር አጋሮች (Spouses)</span>
-          <span className="px-1.5 py-0.2 rounded-full bg-purple-200 text-purple-900 text-[10px] font-black">
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-black ${categoryTab === 'spouses' ? 'bg-white text-[#83257B]' : 'bg-[#83257B] text-white'}`}>
             {spouseCount}
           </span>
         </button>
 
         <button
           onClick={() => setCategoryTab('heads')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
             categoryTab === 'heads'
-              ? 'bg-emerald-800 text-white shadow-xs'
-              : 'text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200'
+              ? 'bg-[#417E38] text-white shadow-xs'
+              : 'text-[#155544] bg-[#1DAB61]/15 hover:bg-[#1DAB61]/25 border border-[#417E38]/40'
           }`}
         >
           <Crown className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
           <span>የቤተሰብ ወኪሎች (25)</span>
-          <span className="px-1.5 py-0.2 rounded-full bg-emerald-200 text-emerald-900 text-[10px] font-black">
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-black ${categoryTab === 'heads' ? 'bg-[#1DAB61] text-[#042116]' : 'bg-[#155544] text-white'}`}>
             {headCount}
           </span>
         </button>
@@ -504,31 +504,31 @@ export const MembersList: React.FC<MembersListProps> = ({
 
       {/* Category Banner If Specific Tab is Selected */}
       {categoryTab === 'minors' && (
-        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 text-xs text-amber-950 space-y-1">
-          <div className="flex items-center gap-2 font-bold text-sm text-amber-900">
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-[#5A8FBB]/20 to-[#517DA2]/15 border-2 border-[#517DA2]/50 text-xs text-neutral-950 space-y-1">
+          <div className="flex items-center gap-2 font-extrabold text-sm text-[#0F2438]">
             <Baby className="w-5 h-5 text-amber-700" />
             <span>ከክፍያ ነጻ የሆኑ የ3ኛ ትውልድ 18 አመት ያልሞላቸው ልጆች (4ኛ ትውልድ - 39 ልጆች)</span>
           </div>
-          <p className="text-[11px] text-amber-800 leading-relaxed">
+          <p className="text-xs text-neutral-900 font-semibold leading-relaxed">
             4ኛ ትውልድ የ3ኛ ትውልድ ልጆች እድሜያቸው 18 ካልሞላ ከወርሃዊም ሆነ ከትውልድ መዋጮ ክፍያዎች 100% ነፃ (0 ብር) ናቸው። እነዚህ 39 ልጆች በFA019፣ FA021፣ FA022 እና FA024 ስር ተመዝግበው ይገኛሉ።
           </p>
         </div>
       )}
 
       {categoryTab === 'spouses' && (
-        <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-300 text-xs text-purple-950 space-y-1">
-          <div className="flex items-center gap-2 font-bold text-sm text-purple-900">
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-[#83257B]/15 to-[#5A8FBB]/15 border-2 border-[#83257B]/45 text-xs text-neutral-950 space-y-1">
+          <div className="flex items-center gap-2 font-extrabold text-sm text-[#83257B]">
             <Heart className="w-5 h-5 text-purple-700" />
             <span>የአባላት የትዳር አጋሮች (Spouses)</span>
           </div>
-          <p className="text-[11px] text-purple-800 leading-relaxed">
+          <p className="text-xs text-neutral-900 font-semibold leading-relaxed">
             የአባላት የትዳር አጋሮች ከትውልድ ክፍያ ነፃ (0 ብር) ሲሆኑ፤ ወርሃዊ ክፍያቸው 100 ብር ብቻ ነው።
           </p>
         </div>
       )}
 
       {/* Real-Time Search & Multi-Filter Control Center */}
-      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-neutral-200/80 shadow-xs space-y-3">
+      <div className="bg-white p-4 sm:p-5 rounded-2xl border-2 border-[#5A8FBB]/40 shadow-xs space-y-3">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           {/* Enhanced Real-Time Search Input */}
           <div className="relative flex-1 max-w-xl">
@@ -550,12 +550,12 @@ export const MembersList: React.FC<MembersListProps> = ({
                 setTimeout(() => setIsSearchFocused(false), 200);
               }}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full text-xs sm:text-sm pl-10 pr-28 py-2.5 bg-neutral-50 hover:bg-white focus:bg-white border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-700/40 focus:border-emerald-700 transition-all text-neutral-900 placeholder:text-neutral-400 shadow-2xs font-medium"
+              className="w-full text-xs sm:text-sm pl-10 pr-28 py-2.5 bg-[#5A8FBB]/10 hover:bg-white focus:bg-white border-2 border-[#5A8FBB]/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#155544]/30 focus:border-[#155544] transition-all text-neutral-950 placeholder:text-neutral-700 shadow-2xs font-bold"
             />
             <div className="absolute inset-y-0 right-0 pr-2 flex items-center gap-1.5">
               {searchQuery.trim() ? (
                 <>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-950 border border-amber-300/80 shadow-2xs font-mono">
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#1DAB61]/25 text-[#155544] border border-[#1DAB61] shadow-2xs font-mono">
                     {filteredMembers.length} ውጤት
                   </span>
                   <button
@@ -564,7 +564,7 @@ export const MembersList: React.FC<MembersListProps> = ({
                       setSearchQuery('');
                       searchInputRef.current?.focus();
                     }}
-                    className="p-1 rounded-lg text-neutral-400 hover:text-neutral-700 hover:bg-neutral-200 transition-colors"
+                    className="p-1 rounded-lg text-neutral-800 hover:text-black hover:bg-[#5A8FBB]/25 transition-colors"
                     title="ፍለጋውን አጽዳ (Escape)"
                   >
                     <X className="w-3.5 h-3.5" />
@@ -573,7 +573,7 @@ export const MembersList: React.FC<MembersListProps> = ({
               ) : (
                 <kbd
                   onClick={() => searchInputRef.current?.focus()}
-                  className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono font-semibold text-neutral-400 bg-neutral-200/60 border border-neutral-300 rounded cursor-pointer hover:bg-neutral-300"
+                  className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono font-extrabold text-[#155544] bg-[#5A8FBB]/20 border border-[#5A8FBB]/60 rounded cursor-pointer hover:bg-[#5A8FBB]/35"
                   title="ለመፈለግ '/' ይጫኑ"
                 >
                   /
@@ -583,17 +583,17 @@ export const MembersList: React.FC<MembersListProps> = ({
 
             {/* Instant Live Search Results Autocomplete Dropdown */}
             {isSearchFocused && searchQuery.trim() && (
-              <div className="absolute left-0 right-0 mt-1.5 bg-white rounded-2xl shadow-xl border border-neutral-200 py-2 z-50 animate-in fade-in zoom-in-95 max-h-72 overflow-y-auto">
-                <div className="px-3 py-1 text-[10px] font-bold text-neutral-400 uppercase tracking-wider flex items-center justify-between border-b border-neutral-100 mb-1">
-                  <span className="flex items-center gap-1 text-emerald-800">
+              <div className="absolute left-0 right-0 mt-1.5 bg-white rounded-2xl shadow-xl border-2 border-[#517DA2]/50 py-2 z-50 animate-in fade-in zoom-in-95 max-h-72 overflow-y-auto">
+                <div className="px-3 py-1.5 text-[10px] font-extrabold text-neutral-800 uppercase tracking-wider flex items-center justify-between border-b border-[#5A8FBB]/30 mb-1">
+                  <span className="flex items-center gap-1 text-[#155544]">
                     <Sparkles className="w-3 h-3 text-amber-500" />
                     የቅጽበታዊ ፍለጋ ውጤቶች ({filteredMembers.length})
                   </span>
-                  <span className="text-[9px] text-neutral-400">ስም እና ID ተደምቀዋል</span>
+                  <span className="text-[10px] text-[#517DA2] font-bold">ስም እና ID ተደምቀዋል</span>
                 </div>
 
                 {filteredMembers.length === 0 ? (
-                  <div className="px-4 py-3 text-center text-xs text-neutral-500">
+                  <div className="px-4 py-3 text-center text-xs text-neutral-800 font-bold">
                     «{searchQuery}» በሚል የተገኘ አባል የለም
                   </div>
                 ) : (
@@ -606,7 +606,7 @@ export const MembersList: React.FC<MembersListProps> = ({
                         setSearchQuery(m.fullName);
                         setIsSearchFocused(false);
                       }}
-                      className="w-full text-left px-3.5 py-2 hover:bg-emerald-50/70 flex items-center justify-between gap-2 transition-colors border-b border-neutral-50 last:border-0"
+                      className="w-full text-left px-3.5 py-2 hover:bg-[#1DAB61]/15 flex items-center justify-between gap-2 transition-colors border-b border-neutral-100 last:border-0"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-900 font-bold text-xs flex items-center justify-center shrink-0 border border-emerald-300">
@@ -617,20 +617,20 @@ export const MembersList: React.FC<MembersListProps> = ({
                           )}
                         </div>
                         <div className="truncate">
-                          <p className="text-xs font-bold text-neutral-900 truncate">
+                          <p className="text-xs font-extrabold text-neutral-950 truncate">
                             {highlightMatch(m.fullName || '', searchQuery)}
                           </p>
-                          <p className="text-[10px] text-neutral-500 truncate">
+                          <p className="text-[10px] text-neutral-800 font-semibold truncate">
                             {highlightMatch(m.familyName || '', searchQuery)} · {m.phone || 'ስልክ የለም'}
                           </p>
                         </div>
                       </div>
 
                       <div className="text-right shrink-0">
-                        <span className="font-mono text-xs font-bold text-neutral-700 block">
+                        <span className="font-mono text-xs font-extrabold text-[#155544] block">
                           {highlightMatch(m.id, searchQuery)}
                         </span>
-                        <span className="text-[9px] px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded font-bold">
+                        <span className="text-[9px] px-1.5 py-0.5 bg-[#83257B] text-white rounded font-extrabold">
                           {m.generation}ኛ
                         </span>
                       </div>
@@ -643,15 +643,15 @@ export const MembersList: React.FC<MembersListProps> = ({
 
           {/* Generation & Family Filters */}
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1 bg-neutral-100 p-1 rounded-xl shrink-0">
+            <div className="flex items-center gap-1 bg-[#5A8FBB]/15 p-1 rounded-xl border border-[#5A8FBB]/35 shrink-0">
               {['all', '3', '4', '5', '6'].map((val) => (
                 <button
                   key={val}
                   onClick={() => setSelectedGenFilter(val)}
-                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                  className={`px-2.5 py-1 text-xs font-extrabold rounded-lg transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                     selectedGenFilter === val
-                      ? 'bg-emerald-800 text-white shadow-2xs'
-                      : 'text-neutral-600 hover:text-neutral-900 hover:bg-white/60'
+                      ? 'bg-[#155544] text-white shadow-2xs'
+                      : 'text-neutral-900 hover:text-[#155544] hover:bg-white'
                   }`}
                 >
                   {val === 'all' ? 'ሁሉም' : `${val}ኛ`}
@@ -662,7 +662,7 @@ export const MembersList: React.FC<MembersListProps> = ({
             <select
               value={selectedFamilyFilter}
               onChange={(e) => setSelectedFamilyFilter(e.target.value)}
-              className="text-xs bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2 text-neutral-800 focus:outline-none focus:ring-1 focus:ring-emerald-700 shrink-0 font-medium"
+              className="text-xs bg-white border-2 border-[#517DA2]/50 rounded-xl px-3 py-2 text-neutral-950 focus:outline-none focus:ring-2 focus:ring-[#155544]/40 shrink-0 font-bold"
             >
               <option value="all">ሁሉም 25 ቤተሰቦች</option>
               {families.map((f) => (
@@ -675,22 +675,22 @@ export const MembersList: React.FC<MembersListProps> = ({
         </div>
 
         {/* Live Filter Summary / Status Bar */}
-        <div className="pt-2 border-t border-neutral-100 flex flex-wrap items-center justify-between gap-2 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-neutral-700">
+        <div className="pt-2.5 border-t border-[#5A8FBB]/25 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-bold text-neutral-900">
               የፍለጋ ውጤት፡{' '}
-              <strong className="text-emerald-900 font-mono font-bold text-sm">
+              <strong className="text-[#155544] font-mono font-extrabold text-sm tabular-nums">
                 {filteredMembers.length}
               </strong>{' '}
               አባላት (ከ {members.length})
             </span>
             {searchQuery && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-950 text-xs font-bold border border-amber-300 shadow-2xs">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#5A8FBB]/20 text-[#0F2438] text-xs font-extrabold border border-[#517DA2] shadow-2xs">
                 <Sparkles className="w-3.5 h-3.5 text-amber-600" />
                 <span>ፍለጋ፡ &quot;{searchQuery}&quot; ({filteredMembers.length} አባላት ተገኝተዋል)</span>
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="hover:text-red-700 font-bold ml-1 text-xs"
+                  className="hover:text-[#83257B] font-extrabold ml-1 text-xs"
                   title="ፍለጋውን አጽዳ"
                 >
                   ✕
@@ -702,7 +702,7 @@ export const MembersList: React.FC<MembersListProps> = ({
           {isFiltering && (
             <button
               onClick={handleClearAllFilters}
-              className="inline-flex items-center gap-1 text-[11px] text-red-600 hover:text-red-800 font-medium hover:underline cursor-pointer"
+              className="inline-flex items-center gap-1 text-xs text-[#83257B] hover:text-[#155544] font-extrabold hover:underline cursor-pointer"
             >
               <RotateCcw className="w-3 h-3" />
               <span>ሁሉንም አጽዳ (Reset Filters)</span>
@@ -712,15 +712,15 @@ export const MembersList: React.FC<MembersListProps> = ({
       </div>
 
       {/* Bulk Selection & Pay Selected Toolbar Above Table */}
-      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-emerald-900/15 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border-2 border-[#417E38]/40 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2.5">
           {/* Active Month Selector for Paid / Unpaid Status Column */}
-          <div className="flex items-center gap-1.5 bg-neutral-50 border border-neutral-200 rounded-xl px-2.5 py-1.5">
-            <span className="text-[11px] font-bold text-neutral-600">የክፍያ ወር፡</span>
+          <div className="flex items-center gap-1.5 bg-[#5A8FBB]/15 border border-[#517DA2]/50 rounded-xl px-2.5 py-1.5">
+            <span className="text-[11px] font-extrabold text-neutral-900">የክፍያ ወር፡</span>
             <select
               value={activeMonth}
               onChange={(e) => setActiveMonth(Number(e.target.value))}
-              className="text-xs font-bold text-[#1B5E20] bg-transparent outline-none cursor-pointer"
+              className="text-xs font-extrabold text-[#155544] bg-transparent outline-none cursor-pointer"
             >
               {ETHIOPIAN_MONTHS.map((m) => (
                 <option key={m.number} value={m.number}>
@@ -731,19 +731,17 @@ export const MembersList: React.FC<MembersListProps> = ({
             <select
               value={activeYear}
               onChange={(e) => setActiveYear(Number(e.target.value))}
-              className="text-xs font-mono font-bold text-neutral-700 bg-transparent outline-none cursor-pointer"
+              className="text-xs font-mono font-extrabold text-neutral-950 bg-transparent outline-none cursor-pointer"
             >
               <option value={2018}>2018</option>
               <option value={2019}>2019</option>
             </select>
           </div>
 
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-[11px] font-bold">
-            <span className="w-2 h-2 rounded-full bg-emerald-600" />
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#1DAB61]/20 text-[#155544] border border-[#417E38] text-[11px] font-extrabold">
             <span>Paid: {filteredPaidCount}</span>
           </span>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-100 text-red-700 border border-red-200 text-[11px] font-bold">
-            <span className="w-2 h-2 rounded-full bg-red-600" />
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#83257B]/15 text-[#83257B] border border-[#83257B]/50 text-[11px] font-extrabold">
             <span>Unpaid: {filteredUnpaidCount}</span>
           </span>
         </div>
@@ -752,7 +750,7 @@ export const MembersList: React.FC<MembersListProps> = ({
           <button
             type="button"
             onClick={handleSelectUnpaidFiltered}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-800 border border-red-200 text-xs font-bold transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#83257B]/10 hover:bg-[#83257B] hover:text-white text-[#83257B] border border-[#83257B]/45 text-xs font-extrabold transition-colors cursor-pointer whitespace-nowrap shrink-0"
             title="በዚህ ወር ያልከፈሉትን አባላት በሙሉ በአንድ ጊዜ ምረጥ"
           >
             <CheckSquare className="w-3.5 h-3.5 text-red-600" />
@@ -763,7 +761,7 @@ export const MembersList: React.FC<MembersListProps> = ({
             <button
               type="button"
               onClick={() => setSelectedMemberIds(new Set())}
-              className="inline-flex items-center gap-1 px-2.5 py-2 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-xs font-semibold transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 px-2.5 py-2 rounded-xl bg-[#5A8FBB]/20 hover:bg-[#517DA2] hover:text-white text-[#0F2438] text-xs font-extrabold transition-colors cursor-pointer whitespace-nowrap shrink-0"
             >
               <X className="w-3.5 h-3.5" />
               <span>ምርጫ አጽዳ</span>
@@ -780,10 +778,10 @@ export const MembersList: React.FC<MembersListProps> = ({
               }
               setIsBulkPayModalOpen(true);
             }}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold transition-all shadow-sm cursor-pointer ${
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold transition-all shadow-sm cursor-pointer whitespace-nowrap shrink-0 ${
               selectedMemberIds.size > 0
-                ? 'bg-[#1B5E20] hover:bg-[#154a19] text-white ring-2 ring-[#FFD700]'
-                : 'bg-emerald-800/80 hover:bg-emerald-800 text-white/90'
+                ? 'bg-[#155544] hover:bg-[#417E38] text-white ring-2 ring-[#1DAB61]'
+                : 'bg-[#517DA2] hover:bg-[#155544] text-white'
             }`}
             title="ለተመረጡት አባላት ከCredit Wallet ክፍያ ፈጽም"
           >
@@ -797,12 +795,12 @@ export const MembersList: React.FC<MembersListProps> = ({
       </div>
 
       {/* Table View */}
-      <div className="bg-white rounded-2xl border border-neutral-200/80 overflow-hidden shadow-xs">
+      <div className="bg-white rounded-2xl border-2 border-[#5A8FBB]/45 overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-neutral-50 text-neutral-700 font-semibold border-b border-neutral-200">
+            <thead className="bg-[#155544] text-white font-extrabold border-b-2 border-[#417E38]">
               <tr>
-                <th className="py-3 px-3 w-10 text-center">
+                <th className="py-3.5 px-3 w-10 text-center">
                   <input
                     ref={selectAllCheckboxRef}
                     type="checkbox"
@@ -810,21 +808,21 @@ export const MembersList: React.FC<MembersListProps> = ({
                     onChange={handleToggleSelectAllFiltered}
                     aria-label="ሁሉንም ምረጥ (Select All)"
                     title="ሁሉንም የሚታዩ አባላት ምረጥ / አንሳ"
-                    className="w-4 h-4 rounded border-neutral-300 accent-[#1B5E20] cursor-pointer"
+                    className="w-4 h-4 rounded border-white/60 accent-[#1DAB61] cursor-pointer"
                   />
                 </th>
-                <th className="py-3 px-3">የአባላት ID</th>
-                <th className="py-3 px-3">FullName (ሙሉ ስም)</th>
-                <th className="py-3 px-2">ትውልድ</th>
-                <th className="py-3 px-3">Family (ቤተሰብ)</th>
-                <th className="py-3 px-3">Phone (ስልክ ቁጥር)</th>
-                <th className="py-3 px-3">Telegram Account</th>
-                <th className="py-3 px-3 text-center">
+                <th className="py-3.5 px-3">የአባላት ID</th>
+                <th className="py-3.5 px-3">FullName (ሙሉ ስም)</th>
+                <th className="py-3.5 px-2">ትውልድ</th>
+                <th className="py-3.5 px-3">Family (ቤተሰብ)</th>
+                <th className="py-3.5 px-3">Phone (ስልክ ቁጥር)</th>
+                <th className="py-3.5 px-3">Telegram Account</th>
+                <th className="py-3.5 px-3 text-center">
                   የወሩ ሁኔታ ({activeMonthName} {activeYear})
                 </th>
-                <th className="py-3 px-3 text-center">የትውልድ መዋጮ (ሁኔታ & ቀሪ)</th>
-                <th className="py-3 px-2 text-center">QR & ሊንክ</th>
-                <th className="py-3 px-3 text-right">የአድሚን ኤዲት & ክፍያ</th>
+                <th className="py-3.5 px-3 text-center">የትውልድ መዋጮ (ሁኔታ & ቀሪ)</th>
+                <th className="py-3.5 px-2 text-center">QR & ሊንክ</th>
+                <th className="py-3.5 px-3 text-right">የአድሚን ኤዲት & ክፍያ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
@@ -836,10 +834,10 @@ export const MembersList: React.FC<MembersListProps> = ({
                         <div className="w-12 h-12 border-4 border-emerald-200 border-t-[#1B5E20] rounded-full animate-spin" />
                         <Loader2 className="w-5 h-5 text-[#1B5E20] animate-spin absolute" />
                       </div>
-                      <h4 className="font-bold text-[#1B5E20] text-sm">
+                      <h4 className="font-extrabold text-[#155544] text-sm">
                         የአባላት ዝርዝር ከFirestore በመጫን ላይ...
                       </h4>
-                      <p className="text-xs text-neutral-500 leading-relaxed">
+                      <p className="text-xs text-neutral-800 font-semibold leading-relaxed">
                         እባክዎ ትንሽ ይጠብቁ — የአባላት ዳታ እና የOffline መዝገብ ከሰርቨር ጋር በመመሳሰል ላይ ነው።
                       </p>
                     </div>
@@ -852,10 +850,10 @@ export const MembersList: React.FC<MembersListProps> = ({
                       <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center mx-auto border border-amber-200">
                         <Search className="w-6 h-6" />
                       </div>
-                      <h4 className="font-bold text-neutral-900 text-sm">
+                      <h4 className="font-extrabold text-neutral-950 text-sm">
                         የተፈለገው አባል አልተገኘም
                       </h4>
-                      <p className="text-xs text-neutral-500 leading-relaxed">
+                      <p className="text-xs text-neutral-800 font-semibold leading-relaxed">
                         {searchQuery
                           ? `«${searchQuery}» የሚል ስም፣ ስልክ ቁጥር ወይም የአባል ID አልተገኘም።`
                           : members.length === 0
@@ -866,7 +864,7 @@ export const MembersList: React.FC<MembersListProps> = ({
                         <button
                           type="button"
                           onClick={handleClearAllFilters}
-                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 text-xs font-bold transition-colors cursor-pointer"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#155544] hover:bg-[#417E38] text-white text-xs font-extrabold transition-colors cursor-pointer"
                         >
                           <RotateCcw className="w-3.5 h-3.5" />
                           <span>ሁሉንም ማጣሪያዎች አጽዳ (Reset Filters)</span>
@@ -890,13 +888,13 @@ export const MembersList: React.FC<MembersListProps> = ({
                   return (
                     <tr
                       key={member.id}
-                      className={`hover:bg-neutral-50/80 transition-colors ${
+                      className={`hover:bg-[#5A8FBB]/10 transition-colors ${
                         isSelected
-                          ? 'bg-emerald-50/70'
+                          ? 'bg-[#1DAB61]/15'
                           : member.isMinor
-                          ? 'bg-amber-50/20'
+                          ? 'bg-[#5A8FBB]/10'
                           : member.isSpouse
-                          ? 'bg-purple-50/20'
+                          ? 'bg-[#83257B]/5'
                           : ''
                       }`}
                     >
@@ -907,12 +905,12 @@ export const MembersList: React.FC<MembersListProps> = ({
                           checked={isSelected}
                           onChange={() => handleToggleMemberSelect(member.id)}
                           aria-label={`${member.fullName} ምረጥ`}
-                          className="w-4 h-4 rounded border-neutral-300 accent-[#1B5E20] cursor-pointer"
+                          className="w-4 h-4 rounded border-[#517DA2] accent-[#155544] cursor-pointer"
                         />
                       </td>
 
                       {/* Member ID */}
-                      <td className="py-3 px-3 font-mono font-bold text-emerald-950">
+                      <td className="py-3 px-3 font-mono font-extrabold text-[#155544] tabular-nums">
                         {highlightMatch(member.id, searchQuery)}
                       </td>
 
@@ -931,7 +929,7 @@ export const MembersList: React.FC<MembersListProps> = ({
                             )}
                           </div>
                           <div>
-                            <div className="font-bold text-neutral-900 flex items-center gap-1.5 flex-wrap">
+                            <div className="font-extrabold text-neutral-950 flex items-center gap-1.5 flex-wrap">
                               <span>{highlightMatch(member.fullName || '', searchQuery)}</span>
                               {member.isHead && (
                                 <span title="የቤተሰብ ወኪል" className="text-amber-600">
@@ -939,23 +937,23 @@ export const MembersList: React.FC<MembersListProps> = ({
                                 </span>
                               )}
                               {member.isMinor && (
-                                <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 font-bold text-[9px] border border-amber-300">
+                                <span className="px-1.5 py-0.5 rounded bg-[#5A8FBB]/25 text-[#0F2438] font-extrabold text-[10px] border border-[#517DA2]">
                                   👶 18 ያልሞላው (ከክፍያ ነጻ)
                                 </span>
                               )}
                               {member.isSpouse && (
-                                <span className="px-1.5 py-0.2 rounded bg-purple-100 text-purple-900 font-bold text-[9px] border border-purple-300">
+                                <span className="px-1.5 py-0.5 rounded bg-[#83257B]/15 text-[#83257B] font-extrabold text-[10px] border border-[#83257B]/40">
                                   💍 የትዳር አጋር
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-[10px] text-neutral-400">
+                            <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                              <span className="text-[11px] text-neutral-800 font-bold font-mono tabular-nums">
                                 ተመን፡ {monthlyRate} ብር/ወር
                               </span>
                               {(member.walletBalance || 0) > 0 && (
                                 <span
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-950 border border-amber-300 font-mono font-bold text-[10px]"
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[#1DAB61]/20 text-[#155544] border border-[#417E38] font-mono font-extrabold text-[10px] tabular-nums"
                                   title="የአባሉ ያልተከፋፈለ ቀሪ ሂሳብ (Credit Wallet)"
                                 >
                                   <Wallet className="w-2.5 h-2.5 text-amber-700" />
@@ -969,30 +967,30 @@ export const MembersList: React.FC<MembersListProps> = ({
 
                       {/* Generation */}
                       <td className="py-3 px-2">
-                        <span className="inline-block px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 font-bold text-[11px]">
+                        <span className="inline-block px-2 py-0.5 rounded bg-[#517DA2]/15 text-[#0F2438] border border-[#5A8FBB]/50 font-extrabold text-[11px] font-mono">
                           {member.generation}ኛ
                         </span>
                       </td>
 
                       {/* Family */}
-                      <td className="py-3 px-3 text-neutral-800 font-medium">
+                      <td className="py-3 px-3 text-neutral-950 font-bold">
                         <div>
                           <span>{highlightMatch(member.familyName || '', searchQuery)}</span>
-                          <span className="text-[10px] font-mono text-neutral-400 block">{member.familyId}</span>
+                          <span className="text-[10px] font-mono font-bold text-[#517DA2] block">{member.familyId}</span>
                         </div>
                       </td>
 
                       {/* Phone */}
-                      <td className="py-3 px-3 font-mono text-neutral-600">
+                      <td className="py-3 px-3 font-mono font-bold text-neutral-900">
                         {member.phone ? (
                           highlightMatch(member.phone, searchQuery)
                         ) : (
-                          <span className="text-neutral-300">—</span>
+                          <span className="text-neutral-500">—</span>
                         )}
                       </td>
 
                       {/* Telegram */}
-                      <td className="py-3 px-3 font-mono text-neutral-600">
+                      <td className="py-3 px-3 font-mono text-neutral-900">
                         {member.telegram ? (
                           <a
                             href={
@@ -1004,21 +1002,21 @@ export const MembersList: React.FC<MembersListProps> = ({
                             }
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[#229ED9] hover:text-[#1d82b4] hover:underline font-semibold"
+                            className="inline-flex items-center gap-1 text-[#517DA2] hover:text-[#155544] hover:underline font-extrabold"
                             title="በቴሌግራም አውራ"
                           >
                             <Send className="w-3 h-3 shrink-0" />
                             <span>{highlightMatch(member.telegram, searchQuery)}</span>
                           </a>
                         ) : (
-                          <span className="text-neutral-300">—</span>
+                          <span className="text-neutral-500">—</span>
                         )}
                       </td>
 
                       {/* Monthly Payment Status Badge (Paid / Pending / Unpaid) for Active Month */}
                       <td className="py-3 px-3 text-center">
                         {member.isMinor ? (
-                          <span className="inline-block px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 font-bold text-[10px] border border-emerald-200">
+                          <span className="inline-block px-2.5 py-1 rounded-full bg-[#5A8FBB]/20 text-[#0F2438] font-extrabold text-[10px] border border-[#517DA2]/50">
                             👶 ከክፍያ ነፃ
                           </span>
                         ) : isMonthlyPaid ? (
@@ -1027,7 +1025,7 @@ export const MembersList: React.FC<MembersListProps> = ({
                               type="button"
                               onClick={() => onToggleMonthlyStatus(member.id, activeMonth, activeYear, false)}
                               title={`${activeMonthName} ${activeYear} ተከፍሏል (Paid) - ለመቀየር ይጫኑ`}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 hover:bg-red-50 hover:text-red-700 hover:border-red-300 text-emerald-800 font-bold text-[11px] transition-all border border-emerald-300 group cursor-pointer shadow-2xs"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#1DAB61]/25 hover:bg-[#83257B] hover:text-white hover:border-[#83257B] text-[#155544] font-extrabold text-[11px] transition-all border border-[#417E38] group cursor-pointer shadow-2xs whitespace-nowrap"
                             >
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 group-hover:hidden" />
                               <X className="w-3.5 h-3.5 text-red-600 hidden group-hover:inline" />
@@ -1037,7 +1035,7 @@ export const MembersList: React.FC<MembersListProps> = ({
                           ) : (
                             <span
                               title={`${activeMonthName} ${activeYear} ተከፍሏል (የጸደቀ ክፍያ)`}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[11px] border border-emerald-300 shadow-2xs"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#1DAB61]/25 text-[#155544] font-extrabold text-[11px] border border-[#417E38] shadow-2xs whitespace-nowrap"
                             >
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                               <span>Paid · ተከፍሏል</span>
@@ -1049,7 +1047,7 @@ export const MembersList: React.FC<MembersListProps> = ({
                               type="button"
                               onClick={() => onToggleMonthlyStatus(member.id, activeMonth, activeYear, true)}
                               title={`${activeMonthName} ${activeYear} የዋና አድሚን ማረጋገጫ ይጠብቃል — ለማጽደቅ ይጫኑ`}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 hover:bg-emerald-100 hover:text-emerald-800 hover:border-emerald-300 text-amber-900 font-bold text-[11px] transition-all border border-amber-300 group cursor-pointer shadow-2xs"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#5A8FBB]/25 hover:bg-[#417E38] hover:text-white hover:border-[#417E38] text-[#0F2438] font-extrabold text-[11px] transition-all border border-[#517DA2] group cursor-pointer shadow-2xs whitespace-nowrap"
                             >
                               <Clock className="w-3.5 h-3.5 text-amber-700 group-hover:hidden" />
                               <Check className="w-3.5 h-3.5 text-emerald-600 hidden group-hover:inline" />
@@ -1059,7 +1057,7 @@ export const MembersList: React.FC<MembersListProps> = ({
                           ) : (
                             <span
                               title="የዋናው አስተዳዳሪ ማረጋገጫ በመጠባበቅ ላይ (Pending)"
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 font-bold text-[11px] border border-amber-300 shadow-2xs"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#5A8FBB]/25 text-[#0F2438] font-extrabold text-[11px] border border-[#517DA2] shadow-2xs whitespace-nowrap"
                             >
                               <Clock className="w-3.5 h-3.5 text-amber-700" />
                               <span>Pending · በመጠባበቅ</span>
@@ -1074,7 +1072,7 @@ export const MembersList: React.FC<MembersListProps> = ({
                                 ? `${activeMonthName} ${activeYear} አልተከፈለም (Unpaid) - ለመክፈል ይጫኑ`
                                 : `${activeMonthName} ${activeYear} አልተከፈለም - በPending ለመመዝገብ ይጫኑ`
                             }
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-100 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-300 text-red-700 font-bold text-[11px] transition-all border border-red-300 group cursor-pointer shadow-2xs"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#83257B]/15 hover:bg-[#417E38] hover:text-white hover:border-[#417E38] text-[#83257B] font-extrabold text-[11px] transition-all border border-[#83257B]/50 group cursor-pointer shadow-2xs whitespace-nowrap"
                           >
                             <AlertTriangle className="w-3.5 h-3.5 text-red-600 group-hover:hidden" />
                             <Check className="w-3.5 h-3.5 text-emerald-600 hidden group-hover:inline" />
@@ -1087,26 +1085,26 @@ export const MembersList: React.FC<MembersListProps> = ({
                       {/* Generation Contribution (Full/Partial/Paid/Remaining) */}
                       <td className="py-3 px-3 text-center">
                         {member.isMinor || member.isSpouse ? (
-                          <span className="inline-block px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 font-bold text-[10px] border border-emerald-200">
+                          <span className="inline-block px-2.5 py-1 rounded-full bg-[#5A8FBB]/20 text-[#0F2438] font-extrabold text-[10px] border border-[#517DA2]/50">
                             {member.isMinor ? '👶 ከክፍያ ነፃ' : '💍 ከትውልድ ነፃ'}
                           </span>
                         ) : genStats.status === 'ተከፍሏል (ሙሉ)' ? (
                           <div className="inline-flex flex-col items-center">
-                            <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[11px] border border-emerald-300 inline-flex items-center gap-1">
+                            <span className="px-2.5 py-0.5 rounded-full bg-[#1DAB61]/25 text-[#155544] font-extrabold text-[11px] border border-[#417E38] inline-flex items-center gap-1 whitespace-nowrap">
                               <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                               <span>ሙሉ ተከፍሏል ({genStats.paidSoFar.toLocaleString()} ብር)</span>
                             </span>
                           </div>
                         ) : genStats.status === 'ከፊል ክፍያ' ? (
                           <div className="inline-flex flex-col items-center gap-0.5">
-                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 font-bold text-[10px] border border-amber-300">
+                            <span className="px-2 py-0.5 rounded-full bg-[#5A8FBB]/25 text-[#0F2438] font-extrabold text-[10px] border border-[#517DA2] whitespace-nowrap">
                               ከፊል ({genStats.paidSoFar.toLocaleString()} ብር)
                             </span>
-                            <span className="text-[10px] text-red-700 font-mono font-bold">
+                            <span className="text-[11px] text-[#83257B] font-mono font-extrabold tabular-nums">
                               ቀሪ፡ {genStats.remainingBalance.toLocaleString()} ብር
                             </span>
                             {hasPendingGen && (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 text-[9px] font-bold border border-amber-300">
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#5A8FBB]/20 text-[#0F2438] text-[9px] font-extrabold border border-[#517DA2]">
                                 <Clock className="w-2.5 h-2.5" /> Pending
                               </span>
                             )}
@@ -1114,16 +1112,16 @@ export const MembersList: React.FC<MembersListProps> = ({
                         ) : (
                           <div className="inline-flex flex-col items-center gap-0.5">
                             {hasPendingGen ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 font-bold text-[10px] border border-amber-300">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#5A8FBB]/25 text-[#0F2438] font-extrabold text-[10px] border border-[#517DA2] whitespace-nowrap">
                                 <Clock className="w-3 h-3 text-amber-700" />
                                 <span>በመጠባበቅ (Pending)</span>
                               </span>
                             ) : (
-                              <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-700 font-bold text-[10px] border border-red-200">
+                              <span className="px-2 py-0.5 rounded-full bg-[#83257B]/15 text-[#83257B] font-extrabold text-[10px] border border-[#83257B]/45">
                                 አልተከፈለም
                               </span>
                             )}
-                            <span className="text-[10px] text-neutral-500 font-mono">
+                            <span className="text-[11px] text-neutral-900 font-mono font-bold tabular-nums">
                               ቀሪ፡ {genStats.remainingBalance.toLocaleString()} ብር
                             </span>
                           </div>
@@ -1135,7 +1133,7 @@ export const MembersList: React.FC<MembersListProps> = ({
                         <div className="inline-flex items-center gap-1">
                           <button
                             onClick={() => onOpenQR(member)}
-                            className="p-1.5 rounded-lg bg-emerald-50 text-emerald-800 hover:bg-emerald-100 transition-colors inline-flex items-center justify-center cursor-pointer"
+                            className="p-1.5 rounded-lg bg-[#1DAB61]/15 text-[#155544] hover:bg-[#1DAB61]/30 border border-[#417E38]/30 transition-colors inline-flex items-center justify-center cursor-pointer"
                             title="የQR መታወቂያ አሳይ"
                           >
                             <QrCode className="w-4 h-4" />
@@ -1156,7 +1154,7 @@ export const MembersList: React.FC<MembersListProps> = ({
                                 window.open(payload.url, '_blank');
                               }
                             }}
-                            className="p-1.5 rounded-lg bg-sky-50 text-[#229ED9] hover:bg-sky-100 transition-colors inline-flex items-center justify-center cursor-pointer"
+                            className="p-1.5 rounded-lg bg-[#5A8FBB]/20 text-[#517DA2] hover:bg-[#517DA2] hover:text-white border border-[#5A8FBB]/40 transition-colors inline-flex items-center justify-center cursor-pointer"
                             title="የአፑን ሊንክና የክፍያ ታሪክ ለዚህ አባል በTelegram / ስልክ ላክ"
                           >
                             <Send className="w-4 h-4" />
@@ -1169,7 +1167,7 @@ export const MembersList: React.FC<MembersListProps> = ({
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             onClick={() => setAdminEditingMember(member)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white font-bold text-[11px] transition-colors shadow-2xs cursor-pointer"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#155544] hover:bg-[#417E38] text-white font-extrabold text-[11px] transition-colors shadow-2xs cursor-pointer whitespace-nowrap"
                             title="የአባሉን ስም፣ ስልክ፣ ቴሌግራም እና የከፈለ/ያልከፈለ ሁኔታ አስተካክል (Admin Edit)"
                           >
                             <Edit2 className="w-3 h-3" />
@@ -1178,7 +1176,7 @@ export const MembersList: React.FC<MembersListProps> = ({
                           {onOpenPaymentManager && (
                             <button
                               onClick={() => onOpenPaymentManager(member.id, 'list')}
-                              className="px-2 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-950 font-bold text-[11px] transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                              className="px-2 py-1 rounded-lg bg-[#417E38]/15 hover:bg-[#417E38] hover:text-white text-[#155544] border border-[#417E38]/40 font-extrabold text-[11px] transition-colors cursor-pointer flex items-center gap-1 shadow-2xs whitespace-nowrap"
                               title="የዚህን አባል ክፍያዎች ተመልከት፣ ሰርዝ ወይም አዲስ መዝግብ"
                             >
                               <CreditCard className="w-3 h-3 text-emerald-800" />
@@ -1188,7 +1186,7 @@ export const MembersList: React.FC<MembersListProps> = ({
                           {onOpenBatchPayment && (
                             <button
                               onClick={() => onOpenBatchPayment(member.id)}
-                              className="px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 font-bold text-[11px] transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                              className="px-2 py-1 rounded-lg bg-[#5A8FBB]/20 hover:bg-[#517DA2] hover:text-white text-[#0F2438] border border-[#517DA2]/45 font-extrabold text-[11px] transition-colors cursor-pointer flex items-center gap-1 shadow-2xs whitespace-nowrap"
                               title="የጅምላ ደረሰኝ / ቀሪ ሂሳብ ክፍፍል (Batch & Wallet)"
                             >
                               <Wallet className="w-3 h-3 text-amber-800" />
@@ -1197,14 +1195,14 @@ export const MembersList: React.FC<MembersListProps> = ({
                           )}
                           <button
                             onClick={() => onRecordPayment(member.id)}
-                            className="px-2 py-1 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-semibold text-[11px] transition-colors cursor-pointer"
+                            className="px-2.5 py-1 rounded-lg bg-[#1DAB61]/25 hover:bg-[#1DAB61] text-[#042116] border border-[#417E38]/40 font-extrabold text-[11px] transition-colors cursor-pointer whitespace-nowrap"
                             title="ክፍያ መዝግብ"
                           >
                             መዝግብ
                           </button>
                           <button
                             onClick={() => setMemberToDelete(member)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 hover:border-red-300 font-bold text-[11px] transition-colors shadow-2xs cursor-pointer"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#83257B]/10 hover:bg-[#83257B] hover:text-white text-[#83257B] border border-[#83257B]/45 font-extrabold text-[11px] transition-colors shadow-2xs cursor-pointer whitespace-nowrap"
                             title="በስህተት የተመዘገበ አባል ሰርዝ (Delete Member)"
                           >
                             <Trash2 className="w-3 h-3 text-red-600" />
@@ -1241,53 +1239,53 @@ export const MembersList: React.FC<MembersListProps> = ({
       {/* Delete Member Confirmation Modal */}
       {memberToDelete && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-red-200 animate-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border-2 border-[#83257B]/50 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-[#5A8FBB]/30">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-red-100 border border-red-200 flex items-center justify-center text-red-600 shrink-0">
                   <Trash2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-neutral-900">አባል መሰረዝ (Delete Member)</h3>
-                  <p className="text-xs text-neutral-500">በስህተት የተመዘገበ አባልን ከሲስተም ማጥፋት</p>
+                  <h3 className="text-base font-extrabold text-neutral-950">አባል መሰረዝ (Delete Member)</h3>
+                  <p className="text-xs text-neutral-800 font-semibold">በስህተት የተመዘገበ አባልን ከሲስተም ማጥፋት</p>
                 </div>
               </div>
               <button
                 onClick={() => setMemberToDelete(null)}
-                className="p-1 rounded-lg text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition-colors cursor-pointer"
+                className="p-1 rounded-lg text-neutral-800 hover:text-black hover:bg-[#5A8FBB]/20 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="my-4 p-4 rounded-xl bg-neutral-50 border border-neutral-200 space-y-2 text-xs">
+            <div className="my-4 p-4 rounded-xl bg-[#5A8FBB]/10 border border-[#5A8FBB]/40 space-y-2 text-xs">
               <div className="flex justify-between">
-                <span className="text-neutral-500">የአባል ስም፦</span>
-                <span className="font-bold text-neutral-900">{memberToDelete.fullName}</span>
+                <span className="text-neutral-800 font-bold">የአባል ስም፦</span>
+                <span className="font-extrabold text-neutral-950">{memberToDelete.fullName}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-neutral-500">የአባል መለያ (ID)፦</span>
-                <span className="font-mono font-bold text-neutral-800">{memberToDelete.id}</span>
+                <span className="text-neutral-800 font-bold">የአባል መለያ (ID)፦</span>
+                <span className="font-mono font-extrabold text-[#155544]">{memberToDelete.id}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-neutral-500">ቤተሰብ፦</span>
-                <span className="font-medium text-neutral-800">
+                <span className="text-neutral-800 font-bold">ቤተሰብ፦</span>
+                <span className="font-bold text-neutral-950">
                   {memberToDelete.familyName} ({memberToDelete.familyId})
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-neutral-500">ትውልድ፦</span>
-                <span className="font-bold text-emerald-800">{memberToDelete.generation}ኛ ትውልድ</span>
+                <span className="text-neutral-800 font-bold">ትውልድ፦</span>
+                <span className="font-extrabold text-[#155544]">{memberToDelete.generation}ኛ ትውልድ</span>
               </div>
               {memberToDelete.phone && (
                 <div className="flex justify-between">
-                  <span className="text-neutral-500">ስልክ ቁጥር፦</span>
-                  <span className="font-mono text-neutral-800">{memberToDelete.phone}</span>
+                  <span className="text-neutral-800 font-bold">ስልክ ቁጥር፦</span>
+                  <span className="font-mono font-bold text-neutral-950">{memberToDelete.phone}</span>
                 </div>
               )}
             </div>
 
-            <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-800 flex items-start gap-2 mb-5">
+            <div className="p-3 rounded-xl bg-[#83257B]/10 border border-[#83257B]/40 text-xs text-neutral-950 font-semibold flex items-start gap-2 mb-5">
               <AlertTriangle className="w-4 h-4 shrink-0 text-red-600 mt-0.5" />
               <p>
                 ይህ አባል በስህተት የተመዘገበ ከሆነ <b>«አዎ፣ ሙሉ በሙሉ ሰርዝ»</b> የሚለውን ይጫኑ። አባሉ ከFirestore እና ከመተግበሪያው ሙሉ በሙሉ ይሰረዛል።
@@ -1298,7 +1296,7 @@ export const MembersList: React.FC<MembersListProps> = ({
               <button
                 type="button"
                 onClick={() => setMemberToDelete(null)}
-                className="px-4 py-2 rounded-xl border border-neutral-300 text-neutral-700 hover:bg-neutral-100 font-semibold text-xs transition-colors cursor-pointer"
+                className="px-4 py-2 rounded-xl border-2 border-[#517DA2]/60 text-[#0F2438] hover:bg-[#5A8FBB]/20 font-extrabold text-xs transition-colors cursor-pointer"
               >
                 ይቅር (Cancel)
               </button>
@@ -1310,7 +1308,7 @@ export const MembersList: React.FC<MembersListProps> = ({
                   setMemberToDelete(null);
                   setTimeout(() => setDeleteNotice(null), 4000);
                 }}
-                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-[#83257B] hover:bg-[#691c63] text-white font-extrabold text-xs transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
               >
                 <Trash2 className="w-4 h-4" />
                 <span>አዎ፣ ሙሉ በሙሉ ሰርዝ</span>

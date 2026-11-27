@@ -420,10 +420,10 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
     <div className="space-y-6">
       {/* 1. TOP SUMMARY CARD: Total Unpaid Monthly Contributions for the entire family with pulse animation */}
       <div
-        className={`p-6 rounded-3xl border transition-all ${
+        className={`p-6 rounded-3xl border-2 transition-all shadow-md ${
           totalMonthlyArrears > 0
-            ? 'bg-gradient-to-br from-red-50/90 via-amber-50/50 to-white border-red-300 shadow-md ring-2 ring-red-400/20'
-            : 'bg-gradient-to-br from-emerald-50/90 via-teal-50/40 to-white border-emerald-300 shadow-sm'
+            ? 'bg-gradient-to-br from-[#83257B]/12 via-[#5A8FBB]/15 to-white border-[#83257B] ring-2 ring-[#83257B]/20'
+            : 'bg-gradient-to-br from-[#1DAB61]/15 via-[#5A8FBB]/15 to-white border-[#417E38]'
         }`}
       >
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
@@ -437,15 +437,15 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
               ) : (
                 <CheckCircle2 className="w-5 h-5 text-emerald-600" />
               )}
-              <h3 className="text-sm font-extrabold uppercase tracking-wide text-neutral-800">
+              <h3 className="text-sm font-extrabold uppercase tracking-wide text-[#155544]">
                 የቤተሰቡ አጠቃላይ ያልተከፈለ ወርሃዊ መዋጮ ማጠቃለያ (Family Unpaid Monthly Summary)
               </h3>
               {totalMonthlyArrears > 0 ? (
-                <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-[11px] font-extrabold border border-red-200 animate-pulse">
+                <span className="px-2.5 py-0.5 rounded-full bg-[#83257B] text-white text-[11px] font-extrabold animate-pulse">
                   ⚠️ ክፍያ ይጠበቃል
                 </span>
               ) : (
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold border border-emerald-200">
+                <span className="px-2.5 py-0.5 rounded-full bg-[#417E38] text-white text-[11px] font-extrabold">
                   ✓ ሁሉም ተከፍሏል
                 </span>
               )}
@@ -454,25 +454,25 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
             <div className="flex flex-wrap items-baseline gap-3">
               <span
                 className={`text-3xl sm:text-4xl font-extrabold font-mono tracking-tight tabular-nums ${
-                  totalMonthlyArrears > 0 ? 'text-red-700 animate-pulse' : 'text-emerald-800'
+                  totalMonthlyArrears > 0 ? 'text-[#83257B] animate-pulse' : 'text-[#155544]'
                 }`}
               >
                 {totalMonthlyArrears.toLocaleString()} ብር
               </span>
-              <span className="text-xs font-semibold text-neutral-600">
+              <span className="text-xs font-extrabold text-neutral-900">
                 ({monthlyUnpaidMembers.length} ከ {familyMembers.length} አባላት አልከፈሉም · {monthlyPaidMembers.length} አባላት ከፍለዋል)
               </span>
             </div>
 
-            <p className="text-xs text-neutral-600 leading-relaxed max-w-2xl">
+            <p className="text-xs font-semibold text-neutral-900 leading-relaxed max-w-2xl">
               {totalMonthlyArrears > 0 ? (
                 <span>
                   የ{currentFamily.familyName} ቤተሰብ የ{currentMonthName} {selectedYear} ዓ.ም ያልተከፈለ ቀሪ እዳ ነው። እባክዎ በቀጥታ በ
-                  <strong className="text-neutral-900 mx-1">CBE ባንክ 1000778285146</strong>
+                  <strong className="text-[#155544] font-extrabold mx-1">CBE ባንክ 1000778285146</strong>
                   (Aida, Ibrahim and zebiba) ክፍያውን ፈጽመው የደረሰኝ ቁጥር ያስመዝግቡ።
                 </span>
               ) : (
-                <span className="text-emerald-800 font-semibold">
+                <span className="text-[#155544] font-extrabold">
                   እንኳን ደስ አሎት! የ{currentFamily.familyName} ቤተሰብ ሁሉም {familyMembers.length} አባላት የ{currentMonthName} {selectedYear} ዓ.ም ወርሃዊ መዋጮ በሙሉ በትክክል ከፍለዋል።
                 </span>
               )}
@@ -484,7 +484,7 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
             {totalMonthlyArrears > 0 && monthlyUnpaidMembers[0] && (
               <button
                 onClick={() => onRecordPayment(monthlyUnpaidMembers[0].id)}
-                className="px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-sm flex items-center gap-2 transition-transform active:scale-95"
+                className="px-4 py-2.5 rounded-xl bg-[#83257B] hover:bg-[#6E1D67] text-white font-extrabold text-xs shadow-sm flex items-center gap-2 transition-transform active:scale-95 cursor-pointer"
               >
                 <CreditCard className="w-4 h-4" />
                 <span>ያልተከፈለውን አሁን መዝግብ</span>
@@ -492,14 +492,14 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
             )}
             <button
               onClick={handleSendTelegramReport}
-              className="px-3.5 py-2.5 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              className="px-3.5 py-2.5 rounded-xl bg-[#517DA2] hover:bg-[#155544] text-white font-extrabold text-xs transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
             >
               <Send className="w-3.5 h-3.5 text-amber-300" />
               <span>ሪፖርት በቴሌግራም ላክ</span>
             </button>
             <button
               onClick={handleDownloadPdf}
-              className="px-3.5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-emerald-950 font-bold text-xs transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              className="px-3.5 py-2.5 rounded-xl bg-[#155544] hover:bg-[#417E38] text-white font-extrabold text-xs transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
               title="የቤተሰቡን ሪፖርት በPDF ቀይረህ ሴቭ አድርግ"
             >
               <Download className="w-3.5 h-3.5 text-emerald-950" />
@@ -509,49 +509,48 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
         </div>
       </div>
 
-      {/* 2. VERIFIED FAMILY HEAD BADGE & SECURITY VERIFICATION (የተረጋገጠ የግል መለያ ባጅ እና የደህንነት ማረጋገጫ) */}
-      <div className="bg-white p-5 rounded-2xl border border-neutral-200/80 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      {/* 2. VERIFIED FAMILY HEAD BADGE & SECURITY VERIFICATION */}
+      <div className="bg-white p-5 rounded-2xl border-2 border-[#5A8FBB]/50 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="px-3 py-1 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 text-emerald-950 text-xs font-extrabold flex items-center gap-1.5 shadow-xs">
+            <span className="px-3 py-1 rounded-full bg-[#155544] text-white text-xs font-extrabold flex items-center gap-1.5 shadow-xs">
               <ShieldCheck className="w-4 h-4 text-emerald-950" />
               የተረጋገጠ የቤተሰብ ወኪል ባጅ (VERIFIED HEAD)
             </span>
-            <span className="px-2.5 py-0.5 rounded-md bg-emerald-100 text-emerald-900 font-mono text-[11px] font-bold border border-emerald-300">
+            <span className="px-2.5 py-0.5 rounded-md bg-[#517DA2] text-white font-mono text-[11px] font-extrabold">
               ID: {currentFamily.id}
             </span>
-            <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 text-[10px] font-bold border border-emerald-200 flex items-center gap-1">
+            <span className="px-2.5 py-0.5 rounded-full bg-[#1DAB61]/20 text-[#155544] text-[10px] font-extrabold border border-[#417E38]/40 flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
               የደህንነት ማረጋገጫ፡ ጸድቋል (ACTIVE)
             </span>
           </div>
 
-          <h2 className="text-xl font-extrabold text-neutral-900 mt-2">
+          <h2 className="text-xl font-extrabold text-[#155544] mt-2">
             የ{currentFamily.familyName} ቤተሰብ ወኪል ገጽ
           </h2>
-          <p className="text-xs text-neutral-600 mt-0.5">
-            የተረጋገጡ ወኪል፡ <strong className="text-neutral-900 font-bold">{currentFamily.headName}</strong>
+          <p className="text-xs font-semibold text-neutral-900 mt-0.5">
+            የተረጋገጡ ወኪል፡ <strong className="text-neutral-950 font-extrabold">{currentFamily.headName}</strong>
             {currentFamily.coHeadName && (
-              <span> / <strong className="text-neutral-900 font-bold">{currentFamily.coHeadName}</strong></span>
+              <span> / <strong className="text-neutral-950 font-extrabold">{currentFamily.coHeadName}</strong></span>
             )}
-            <span className="mx-2 text-neutral-300">|</span>
-            <span>ጠቅላላ አባላት፡ <strong className="text-neutral-900">{familyMembers.length}</strong></span>
+            <span className="mx-2 text-[#5A8FBB]">|</span>
+            <span>ጠቅላላ አባላት፡ <strong className="text-[#83257B] font-extrabold">{familyMembers.length}</strong></span>
           </p>
         </div>
 
         {/* Month selector & Locked Switcher */}
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Family Switcher: Admin Only. Family Heads are locked to their own family */}
           {userRole === 'admin' ? (
-            <div className="flex items-center gap-1.5 bg-neutral-50 p-1.5 rounded-xl border border-neutral-200">
-              <label className="text-xs font-semibold text-neutral-600 whitespace-nowrap">ወኪል ይምረጡ፡</label>
+            <div className="flex items-center gap-1.5 bg-[#5A8FBB]/15 p-1.5 rounded-xl border border-[#517DA2]/40">
+              <label className="text-xs font-extrabold text-[#155544] whitespace-nowrap">ወኪል ይምረጡ፡</label>
               <select
                 value={selectedFamilyId}
                 onChange={(e) => {
                   onSelectFamily(e.target.value);
                   setIsEditingContact(false);
                 }}
-                className="text-xs font-semibold bg-white border border-neutral-300 rounded-lg px-2.5 py-1.5 text-neutral-800 focus:ring-2 focus:ring-emerald-700/40"
+                className="text-xs font-bold bg-white border border-[#517DA2]/50 rounded-lg px-2.5 py-1.5 text-neutral-950 focus:ring-2 focus:ring-[#1DAB61]"
               >
                 {families.map((f) => (
                   <option key={f.id} value={f.id}>
@@ -561,22 +560,22 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
               </select>
             </div>
           ) : (
-            <div className="flex items-center gap-2 bg-emerald-50/90 px-3.5 py-2 rounded-xl border border-emerald-300 text-xs font-bold text-emerald-950 shadow-2xs">
+            <div className="flex items-center gap-2 bg-[#1DAB61]/15 px-3.5 py-2 rounded-xl border border-[#417E38]/40 text-xs font-extrabold text-[#155544] shadow-2xs">
               <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
               <div>
-                <span className="text-[10px] text-emerald-800 uppercase block tracking-wider font-semibold">የተፈቀደው ቤተሰብ ብቻ</span>
-                <span className="text-xs font-extrabold text-neutral-900">የ{currentFamily.familyName} ቤተሰብ ({currentFamily.headName})</span>
+                <span className="text-[10px] text-[#417E38] uppercase block tracking-wider font-extrabold">የተፈቀደው ቤተሰብ ብቻ</span>
+                <span className="text-xs font-extrabold text-neutral-950">የ{currentFamily.familyName} ቤተሰብ ({currentFamily.headName})</span>
               </div>
             </div>
           )}
 
           {/* Month & Year selectors starting from Hamle 2018 */}
-          <div className="flex items-center gap-1.5 bg-neutral-50 p-1.5 rounded-xl border border-neutral-200">
+          <div className="flex items-center gap-1.5 bg-[#5A8FBB]/15 p-1.5 rounded-xl border border-[#517DA2]/40">
             <Calendar className="w-3.5 h-3.5 text-neutral-500 ml-1" />
             <select
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(Number(e.target.value))}
-              className="text-xs font-bold bg-white border border-neutral-300 rounded-lg px-2.5 py-1 text-neutral-800 font-mono"
+              className="text-xs font-extrabold bg-white border border-[#517DA2]/50 rounded-lg px-2.5 py-1 text-neutral-950 font-mono"
             >
               {ETHIOPIAN_MONTHS.map((m) => (
                 <option key={m.number} value={m.number}>
@@ -587,7 +586,7 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(Number(e.target.value))}
-              className="text-xs font-bold bg-white border border-neutral-300 rounded-lg px-2.5 py-1 text-neutral-800 font-mono"
+              className="text-xs font-extrabold bg-white border border-[#517DA2]/50 rounded-lg px-2.5 py-1 text-neutral-950 font-mono"
             >
               <option value={2018}>2018 ዓ.ም</option>
               <option value={2019}>2019 ዓ.ም</option>
@@ -595,11 +594,10 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
             </select>
           </div>
 
-          {/* New Member Registration for Family Head */}
           {onOpenAddMember && (
             <button
               onClick={() => onOpenAddMember(currentFamily.id)}
-              className="px-3.5 py-2 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs cursor-pointer hover:scale-[1.02]"
+              className="px-3.5 py-2 rounded-xl bg-[#417E38] hover:bg-[#155544] text-white font-extrabold text-xs flex items-center gap-1.5 transition-all shadow-xs cursor-pointer hover:scale-[1.02]"
               title="አዲስ የቤተሰብ አባል መዝግብ (Register New Member)"
             >
               <PlusCircle className="w-4 h-4 text-amber-300" />
@@ -610,52 +608,52 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
       </div>
 
       {sentNotice && (
-        <div className="p-4 bg-emerald-50 border border-emerald-300 text-emerald-900 rounded-2xl text-xs font-semibold flex items-center justify-between animate-in fade-in">
+        <div className="p-4 bg-[#1DAB61]/15 border-2 border-[#417E38] text-[#155544] rounded-2xl text-xs font-extrabold flex items-center justify-between animate-in fade-in">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>{sentNotice}</span>
           </div>
-          <button onClick={() => setSentNotice(null)} className="text-emerald-700 font-bold">✕</button>
+          <button onClick={() => setSentNotice(null)} className="text-[#155544] font-extrabold cursor-pointer">✕</button>
         </div>
       )}
 
       {/* 3. HEAD PROFILE, CBE BANK ACCOUNT & TELEGRAM CARD */}
-      <div className="bg-gradient-to-r from-emerald-950 via-emerald-900 to-neutral-900 text-white rounded-3xl p-6 shadow-md border border-emerald-800/40 relative overflow-hidden">
+      <div className="bg-gradient-to-r from-[#155544] via-[#517DA2] to-[#83257B] text-white rounded-3xl p-6 shadow-md border-2 border-[#5A8FBB] relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 rounded-2xl bg-amber-400 text-emerald-950 flex items-center justify-center font-extrabold text-2xl shadow-inner shrink-0 ring-4 ring-amber-400/30">
               {currentFamily.headName.charAt(0)}
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-800 text-amber-300 font-bold">
+                <span className="text-[11px] font-mono px-2.5 py-0.5 rounded bg-white text-[#155544] font-extrabold">
                   {currentFamily.id}
                 </span>
-                <h3 className="text-xl font-bold text-white tracking-tight">
+                <h3 className="text-xl font-extrabold text-white tracking-tight">
                   {currentFamily.headName}
                 </h3>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 font-bold border border-amber-400/40">
+                <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-[#1DAB61] text-[#042116] font-extrabold">
                   የተረጋገጠ ወኪል
                 </span>
               </div>
-              <p className="text-xs text-emerald-200">
+              <p className="text-xs font-bold text-white">
                 የ{currentFamily.familyName} ቤተሰብ ወኪል · {familyMembers.length} አባላት · የክፍያ መጀመሪያ፡ ሀምሌ 01፣ 2018 ዓ.ም
               </p>
 
               {/* Registered Phone & Telegram */}
               <div className="flex flex-wrap items-center gap-3 pt-1 text-xs">
-                <div className="flex items-center gap-1.5 text-emerald-200">
+                <div className="flex items-center gap-1.5 text-white font-bold">
                   <Phone className="w-3.5 h-3.5 text-amber-300" />
                   <span className="font-mono">{currentFamily.phone || 'ስልክ አልተመዘገበም'}</span>
                 </div>
-                <div className="flex items-center gap-1.5 text-emerald-200">
+                <div className="flex items-center gap-1.5 text-white font-bold">
                   <Send className="w-3.5 h-3.5 text-[#229ED9]" />
-                  <span className="font-mono bg-white/10 px-2 py-0.5 rounded text-amber-200">
+                  <span className="font-mono bg-[#155544]/85 px-2.5 py-0.5 rounded text-white border border-[#5A8FBB]">
                     {currentFamily.telegram || 'Telegram አልተመዘገበም'}
                   </span>
                 </div>
                 {dispatchedRecords[currentFamily.id] && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-emerald-800/90 text-amber-300 border border-amber-400/40 px-2 py-0.5 rounded-full">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-extrabold bg-[#417E38] text-white border border-[#1DAB61] px-2.5 py-0.5 rounded-full">
                     <CheckCircle2 className="w-3 h-3 text-amber-300" />
                     <span>የአፑ ሊንክ ተልኳል</span>
                   </span>
@@ -664,9 +662,9 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
 
               {/* CBE Bank Information Prominently Displayed */}
               <div className="pt-2 flex flex-wrap items-center gap-2 text-xs">
-                <span className="px-2.5 py-1 rounded-xl bg-amber-400/15 text-amber-200 border border-amber-400/30 font-semibold flex items-center gap-1.5">
+                <span className="px-3 py-1 rounded-xl bg-white text-[#155544] border border-[#1DAB61] font-extrabold flex items-center gap-1.5 shadow-xs">
                   <CreditCard className="w-3.5 h-3.5 text-amber-300" />
-                  <span>CBE፡ <strong>1000778285146</strong> (Aida, Ibrahim and zebiba)</span>
+                  <span>CBE፡ <strong className="font-mono text-[#83257B]">1000778285146</strong> (Aida, Ibrahim and zebiba)</span>
                 </span>
               </div>
             </div>
@@ -684,7 +682,7 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
                     particleCount: 50,
                     spread: 60,
                     origin: { y: 0.6 },
-                    colors: ['#047857', '#d97706', '#229ed9'],
+                    colors: ['#155544', '#1DAB61', '#5A8FBB'],
                   });
                 } catch {}
                 if (onDispatchTelegram) {
@@ -700,20 +698,19 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
                   window.open(payload.url, '_blank');
                 }
               }}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs transition-colors shadow-sm cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#417E38] hover:bg-[#155544] text-white font-extrabold text-xs transition-colors shadow-sm cursor-pointer"
               title="የአፑን ሊንክና የቤተሰብ ሪፖርት ለወኪሉ በTelegram / ስልክ ቁጥር ላክ"
             >
               <Send className="w-4 h-4 text-amber-300" />
               <span>የአፑን ሊንክ በTelegram ላክ</span>
             </button>
 
-            {/* Direct Telegram Profile Link if available */}
             {currentFamily.telegram && (
               <a
                 href={getFamilyHeadDirectChatUrl(currentFamily)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-[#229ED9]/80 hover:bg-[#229ED9] text-white font-semibold text-xs transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-[#5A8FBB] hover:bg-[#517DA2] text-[#071E33] hover:text-white font-extrabold text-xs transition-colors"
                 title="የወኪሉን የቴሌግራም አካውንት በቀጥታ ክፈት"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
@@ -723,7 +720,7 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
 
             <button
               onClick={handleSendTelegramReport}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#229ED9] hover:bg-[#1e8bc0] text-white font-bold text-xs transition-colors shadow-sm"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#517DA2] hover:bg-[#155544] text-white font-extrabold text-xs transition-colors shadow-sm cursor-pointer"
               title="በየወሩ መጨረሻ የቤተሰባቸውን የክፍያ ሪፖርት በቴሌግራም አካውንታቸው እንዲላክላቸው"
             >
               <Send className="w-4 h-4" />
@@ -732,7 +729,7 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
 
             <button
               onClick={handleCopyReport}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium text-xs border border-white/10 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white/95 hover:bg-white text-[#155544] font-extrabold text-xs border border-[#5A8FBB] transition-colors cursor-pointer"
             >
               {copiedReport ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
               <span>{copiedReport ? 'ተቀድቷል' : 'ሪፖርቱን ኮፒ አድርግ'}</span>
@@ -740,7 +737,7 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
 
             <button
               onClick={() => setIsEditingContact(!isEditingContact)}
-              className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-emerald-950 font-bold text-xs transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-[#83257B] hover:bg-[#6E1D67] text-white font-extrabold text-xs transition-colors cursor-pointer"
               title="የቴሌግራም አካውንታቸው በስልክ ቁጥራቸው እንዲመዘገብ"
             >
               <Edit3 className="w-3.5 h-3.5" />
@@ -753,28 +750,28 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
         {isEditingContact && (
           <form
             onSubmit={handleSaveContact}
-            className="mt-6 pt-5 border-t border-emerald-800/60 bg-white/5 p-4 rounded-2xl animate-in fade-in"
+            className="mt-6 pt-5 border-t border-white/25 bg-[#155544]/90 p-4 rounded-2xl animate-in fade-in"
           >
-            <h4 className="text-xs font-bold text-amber-300 mb-3 flex items-center gap-1.5">
+            <h4 className="text-xs font-extrabold text-white mb-3 flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5" />
               የወኪሉን ቴሌግራም አካውንት በስልክ ቁጥር ወይም በUser Name መመዝገቢያ
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-[11px] text-emerald-200 mb-1">ስልክ ቁጥር (Phone)</label>
+                <label className="block text-[11px] font-bold text-white mb-1">ስልክ ቁጥር (Phone)</label>
                 <input
                   type="tel"
                   inputMode="tel"
                   placeholder="0911234567 ወይም +966..."
                   value={editPhone}
                   onChange={(e) => setEditPhone(e.target.value)}
-                  className="w-full text-xs rounded-xl bg-white/10 border border-white/20 text-white px-3 py-2 font-mono"
+                  className="w-full text-xs font-bold rounded-xl bg-white border border-[#5A8FBB] text-neutral-950 px-3 py-2 font-mono"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] text-emerald-200 mb-1">
+                <label className="block text-[11px] font-bold text-white mb-1">
                   Telegram Account (ስልክ ቁጥር ወይም @username)
                 </label>
                 <input
@@ -782,7 +779,7 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
                   placeholder="+2519... ወይም @username"
                   value={editTelegram}
                   onChange={(e) => setEditTelegram(e.target.value)}
-                  className="w-full text-xs rounded-xl bg-white/10 border border-white/20 text-white px-3 py-2 font-mono"
+                  className="w-full text-xs font-bold rounded-xl bg-white border border-[#5A8FBB] text-neutral-950 px-3 py-2 font-mono"
                   required
                 />
               </div>
@@ -790,7 +787,7 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
               <div className="flex items-end gap-2">
                 <button
                   type="submit"
-                  className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5"
+                  className="flex-1 py-2 px-3 rounded-xl bg-[#417E38] hover:bg-[#1DAB61] hover:text-[#042418] text-white font-extrabold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Save className="w-3.5 h-3.5" />
                   <span>መዝግብ (Save)</span>
@@ -798,7 +795,7 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
                 <button
                   type="button"
                   onClick={() => setIsEditingContact(false)}
-                  className="py-2 px-3 rounded-xl bg-white/10 text-white hover:bg-white/20 text-xs"
+                  className="py-2 px-3 rounded-xl bg-white text-[#155544] font-extrabold hover:bg-[#5A8FBB] hover:text-white text-xs cursor-pointer"
                 >
                   ተመለስ
                 </button>
@@ -809,55 +806,54 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
       </div>
 
       {/* 4 Required Interactive Filter Blocks for Family Heads */}
-      <div className="bg-white rounded-2xl border border-neutral-200/80 p-5 shadow-xs space-y-5">
-        {/* Navigation Tabs between the 4 states requested */}
-        <div className="border-b border-neutral-200 pb-3">
+      <div className="bg-white rounded-2xl border-2 border-[#517DA2]/45 p-5 shadow-sm space-y-5">
+        <div className="border-b-2 border-[#5A8FBB]/25 pb-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h3 className="text-base font-bold text-neutral-900">
+              <h3 className="text-base font-extrabold text-[#155544]">
                 የቤተሰብ መዋጮ ክትትል (የ{currentFamily.familyName} ቤተሰብ)
               </h3>
-              <p className="text-xs text-neutral-500 mt-0.5">
+              <p className="text-xs font-semibold text-neutral-800 mt-0.5">
                 የ{currentMonthName} {selectedYear} ዓ.ም ወርሃዊ እና የትውልድ ክፍያዎች ዝርዝር
               </p>
             </div>
 
             {/* Quick KPI pills */}
             <div className="flex items-center gap-2 text-xs">
-              <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 font-semibold border border-emerald-200">
+              <span className="px-2.5 py-1 rounded-lg bg-[#1DAB61]/20 text-[#155544] font-extrabold border border-[#417E38]/40">
                 ወርሃዊ የተከፈለ፡ {totalMonthlyPaid.toLocaleString()} ብር
               </span>
-              <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 font-semibold border border-amber-200">
+              <span className="px-2.5 py-1 rounded-lg bg-[#83257B] text-white font-extrabold">
                 ቀሪ እዳ፡ {totalMonthlyArrears.toLocaleString()} ብር
               </span>
             </div>
           </div>
 
           {/* 4 Tab Buttons */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mt-4">
             {/* 1. የከፈሉ ዝርዝር */}
             <button
               onClick={() => setActiveSubTab('monthly-paid')}
-              className={`p-3 rounded-xl text-left border transition-all ${
+              className={`p-3 rounded-xl text-left border-2 transition-all cursor-pointer ${
                 activeSubTab === 'monthly-paid'
-                  ? 'bg-emerald-800 text-white border-emerald-800 shadow-sm'
-                  : 'bg-neutral-50 text-neutral-700 border-neutral-200 hover:bg-neutral-100'
+                  ? 'bg-[#155544] text-white border-[#1DAB61] shadow-sm'
+                  : 'bg-[#1DAB61]/10 text-neutral-950 border-[#417E38]/40 hover:bg-[#1DAB61]/20'
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold">1. ወርሃዊ የከፈሉ</span>
+                <span className="text-xs font-extrabold">1. ወርሃዊ የከፈሉ</span>
                 <CheckCircle2
                   className={`w-4 h-4 ${activeSubTab === 'monthly-paid' ? 'text-amber-300' : 'text-emerald-600'}`}
                 />
               </div>
               <p
                 className={`text-xl font-extrabold font-mono mt-1 ${
-                  activeSubTab === 'monthly-paid' ? 'text-amber-200' : 'text-emerald-900'
+                  activeSubTab === 'monthly-paid' ? 'text-white' : 'text-[#155544]'
                 }`}
               >
                 {monthlyPaidMembers.length} አባላት
               </p>
-              <p className={`text-[10px] mt-0.5 ${activeSubTab === 'monthly-paid' ? 'text-emerald-200' : 'text-neutral-500'}`}>
+              <p className={`text-[11px] font-bold mt-0.5 ${activeSubTab === 'monthly-paid' ? 'text-white' : 'text-neutral-800'}`}>
                 የ{currentMonthName} ወር የከፈሉ
               </p>
             </button>
@@ -865,26 +861,26 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
             {/* 2. ያልከፈሉ ዝርዝር */}
             <button
               onClick={() => setActiveSubTab('monthly-unpaid')}
-              className={`p-3 rounded-xl text-left border transition-all ${
+              className={`p-3 rounded-xl text-left border-2 transition-all cursor-pointer ${
                 activeSubTab === 'monthly-unpaid'
-                  ? 'bg-amber-900 text-white border-amber-900 shadow-sm'
-                  : 'bg-neutral-50 text-neutral-700 border-neutral-200 hover:bg-neutral-100'
+                  ? 'bg-[#83257B] text-white border-[#83257B] shadow-sm'
+                  : 'bg-[#83257B]/10 text-neutral-950 border-[#83257B]/40 hover:bg-[#83257B]/20'
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold">2. ወርሃዊ ያልከፈሉ</span>
+                <span className="text-xs font-extrabold">2. ወርሃዊ ያልከፈሉ</span>
                 <AlertTriangle
                   className={`w-4 h-4 ${activeSubTab === 'monthly-unpaid' ? 'text-amber-300' : 'text-amber-600'}`}
                 />
               </div>
               <p
                 className={`text-xl font-extrabold font-mono mt-1 ${
-                  activeSubTab === 'monthly-unpaid' ? 'text-amber-200' : 'text-amber-900'
+                  activeSubTab === 'monthly-unpaid' ? 'text-white' : 'text-[#83257B]'
                 }`}
               >
                 {monthlyUnpaidMembers.length} አባላት
               </p>
-              <p className={`text-[10px] mt-0.5 ${activeSubTab === 'monthly-unpaid' ? 'text-amber-200' : 'text-neutral-500'}`}>
+              <p className={`text-[11px] font-bold mt-0.5 ${activeSubTab === 'monthly-unpaid' ? 'text-white' : 'text-neutral-800'}`}>
                 ቀነ-ገደብ (ቀን 5) ያለፈባቸው
               </p>
             </button>
@@ -892,26 +888,26 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
             {/* 3. የትውልድ መዋጮ የከፈሉ */}
             <button
               onClick={() => setActiveSubTab('gen-paid')}
-              className={`p-3 rounded-xl text-left border transition-all ${
+              className={`p-3 rounded-xl text-left border-2 transition-all cursor-pointer ${
                 activeSubTab === 'gen-paid'
-                  ? 'bg-emerald-900 text-white border-emerald-900 shadow-sm'
-                  : 'bg-neutral-50 text-neutral-700 border-neutral-200 hover:bg-neutral-100'
+                  ? 'bg-[#417E38] text-white border-[#1DAB61] shadow-sm'
+                  : 'bg-[#417E38]/10 text-neutral-950 border-[#417E38]/40 hover:bg-[#417E38]/20'
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold">3. የትውልድ የከፈሉ</span>
+                <span className="text-xs font-extrabold">3. የትውልድ የከፈሉ</span>
                 <Award
                   className={`w-4 h-4 ${activeSubTab === 'gen-paid' ? 'text-amber-300' : 'text-emerald-700'}`}
                 />
               </div>
               <p
                 className={`text-xl font-extrabold font-mono mt-1 ${
-                  activeSubTab === 'gen-paid' ? 'text-amber-200' : 'text-emerald-900'
+                  activeSubTab === 'gen-paid' ? 'text-white' : 'text-[#417E38]'
                 }`}
               >
                 {genPaidMembers.length} አባላት
               </p>
-              <p className={`text-[10px] mt-0.5 ${activeSubTab === 'gen-paid' ? 'text-emerald-200' : 'text-neutral-500'}`}>
+              <p className={`text-[11px] font-bold mt-0.5 ${activeSubTab === 'gen-paid' ? 'text-white' : 'text-neutral-800'}`}>
                 የትውልድ ቋሚ መዋጮ
               </p>
             </button>
@@ -919,26 +915,26 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
             {/* 4. የትውልድ መዋጮ ያልከፈሉ */}
             <button
               onClick={() => setActiveSubTab('gen-unpaid')}
-              className={`p-3 rounded-xl text-left border transition-all ${
+              className={`p-3 rounded-xl text-left border-2 transition-all cursor-pointer ${
                 activeSubTab === 'gen-unpaid'
-                  ? 'bg-neutral-900 text-white border-neutral-900 shadow-sm'
-                  : 'bg-neutral-50 text-neutral-700 border-neutral-200 hover:bg-neutral-100'
+                  ? 'bg-[#517DA2] text-white border-[#5A8FBB] shadow-sm'
+                  : 'bg-[#5A8FBB]/15 text-neutral-950 border-[#5A8FBB]/50 hover:bg-[#5A8FBB]/25'
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold">4. የትውልድ ያልከፈሉ</span>
+                <span className="text-xs font-extrabold">4. የትውልድ ያልከፈሉ</span>
                 <Clock
                   className={`w-4 h-4 ${activeSubTab === 'gen-unpaid' ? 'text-amber-300' : 'text-neutral-600'}`}
                 />
               </div>
               <p
                 className={`text-xl font-extrabold font-mono mt-1 ${
-                  activeSubTab === 'gen-unpaid' ? 'text-amber-200' : 'text-neutral-900'
+                  activeSubTab === 'gen-unpaid' ? 'text-white' : 'text-[#0F2438]'
                 }`}
               >
                 {genUnpaidMembers.length} አባላት
               </p>
-              <p className={`text-[10px] mt-0.5 ${activeSubTab === 'gen-unpaid' ? 'text-neutral-300' : 'text-neutral-500'}`}>
+              <p className={`text-[11px] font-bold mt-0.5 ${activeSubTab === 'gen-unpaid' ? 'text-white' : 'text-neutral-800'}`}>
                 ቋሚ ክፍያ የቀራቸው
               </p>
             </button>
@@ -951,20 +947,20 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
           {activeSubTab === 'monthly-paid' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-900 flex items-center gap-1.5">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-[#155544] flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                   የ{currentMonthName} {selectedYear} ዓ.ም ወርሃዊ መዋጮ የከፈሉ የቤተሰብ አባላት ({monthlyPaidMembers.length})
                 </h4>
               </div>
 
               {monthlyPaidMembers.length === 0 ? (
-                <div className="p-8 text-center text-xs text-neutral-400 italic bg-neutral-50 rounded-xl border border-dashed border-neutral-200">
+                <div className="p-8 text-center text-xs font-bold text-neutral-700 bg-[#5A8FBB]/10 rounded-xl border-2 border-dashed border-[#5A8FBB]/50">
                   ለዚህ ወር እስካሁን ምንም ክፍያ አልተመዘገበም።
                 </div>
               ) : (
-                <div className="border border-neutral-200 rounded-xl overflow-hidden text-xs">
+                <div className="border-2 border-[#417E38]/40 rounded-xl overflow-hidden text-xs">
                   <table className="w-full text-left">
-                    <thead className="bg-neutral-50 text-neutral-700 font-semibold border-b border-neutral-200">
+                    <thead className="bg-[#155544] text-white font-extrabold border-b-2 border-[#417E38]">
                       <tr>
                         <th className="py-2.5 px-3">የአባል ID</th>
                         <th className="py-2.5 px-3">ሙሉ ስም</th>
@@ -975,28 +971,28 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
                         <th className="py-2.5 px-3 text-right">ሁኔታ</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-neutral-100">
+                    <tbody className="divide-y divide-[#5A8FBB]/25">
                       {monthlyPaidMembers.map((member) => {
                         const con = familyMonthlyCon.find((c) => c.memberId === member.id && isPaidStatus(c.status));
                         const rate = member.isSpouse ? (settings.spouseMonthlyRate || 100) : (settings.monthlyRate[member.generation] || 50);
                         return (
-                          <tr key={member.id} className="hover:bg-neutral-50/70">
-                            <td className="py-2.5 px-3 font-mono font-bold text-neutral-600">{member.id}</td>
-                            <td className="py-2.5 px-3 font-bold text-neutral-900">{member.fullName}</td>
+                          <tr key={member.id} className="hover:bg-[#1DAB61]/10">
+                            <td className="py-2.5 px-3 font-mono font-extrabold text-[#155544]">{member.id}</td>
+                            <td className="py-2.5 px-3 font-extrabold text-neutral-950">{member.fullName}</td>
                             <td className="py-2.5 px-3">
-                              <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 font-medium text-[11px]">
+                              <span className="px-2 py-0.5 rounded bg-[#5A8FBB]/20 text-[#0F2438] font-bold text-[11px]">
                                 {member.isSpouse ? 'የትዳር አጋር' : `${member.generation}ኛ ትውልድ`}
                               </span>
                             </td>
-                            <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-900 tabular-nums">
+                            <td className="py-2.5 px-3 text-right font-mono font-extrabold text-[#155544] tabular-nums">
                               {(con ? getContributionPaidAmount(con) : rate).toLocaleString()} ብር
                             </td>
-                            <td className="py-2.5 px-3 text-neutral-600">{con?.paymentMethod || 'የኢትዮጵያ ንግድ ባንክ (CBE)'}</td>
-                            <td className="py-2.5 px-3 font-mono text-[11px] text-neutral-500">
+                            <td className="py-2.5 px-3 font-bold text-neutral-900">{con?.paymentMethod || 'የኢትዮጵያ ንግድ ባንክ (CBE)'}</td>
+                            <td className="py-2.5 px-3 font-mono font-bold text-[11px] text-neutral-800">
                               {con?.receiptNumber || con?.transactionRef || 'REC-2018'}
                             </td>
                             <td className="py-2.5 px-3 text-right">
-                              <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                              <span className="px-2 py-0.5 rounded bg-[#417E38] text-white font-extrabold text-[10px]">
                                 ተከፍሏል
                               </span>
                             </td>
@@ -1014,20 +1010,20 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
           {activeSubTab === 'monthly-unpaid' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-[#83257B] flex items-center gap-1.5">
                   <AlertTriangle className="w-4 h-4 text-amber-600" />
                   የ{currentMonthName} {selectedYear} ዓ.ም ወርሃዊ መዋጮ ያልከፈሉ የቤተሰብ አባላት ({monthlyUnpaidMembers.length})
                 </h4>
               </div>
 
               {monthlyUnpaidMembers.length === 0 ? (
-                <div className="p-8 text-center text-xs text-emerald-800 font-semibold bg-emerald-50 rounded-xl border border-emerald-200">
+                <div className="p-8 text-center text-xs text-[#155544] font-extrabold bg-[#1DAB61]/15 rounded-xl border-2 border-[#417E38]/40">
                   🎉 እንኳን ደስ ያለዎት! የቤተሰብዎ አባላት በሙሉ የ{currentMonthName} ወር መዋጮ ከፍለዋል።
                 </div>
               ) : (
-                <div className="border border-neutral-200 rounded-xl overflow-hidden text-xs">
+                <div className="border-2 border-[#83257B]/40 rounded-xl overflow-hidden text-xs">
                   <table className="w-full text-left">
-                    <thead className="bg-neutral-50 text-neutral-700 font-semibold border-b border-neutral-200">
+                    <thead className="bg-[#83257B] text-white font-extrabold border-b-2 border-[#517DA2]">
                       <tr>
                         <th className="py-2.5 px-3">የአባል ID</th>
                         <th className="py-2.5 px-3">ሙሉ ስም</th>
@@ -1038,27 +1034,27 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
                         <th className="py-2.5 px-3 text-right">ተግባር</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-neutral-100">
+                    <tbody className="divide-y divide-[#5A8FBB]/25">
                       {monthlyUnpaidMembers.map((member) => {
                         const rate = settings.monthlyRate[member.generation] || 50;
                         const partial = monthlyPartialMap.get(member.id);
                         return (
-                          <tr key={member.id} className="hover:bg-amber-50/40">
-                            <td className="py-2.5 px-3 font-mono font-bold text-neutral-600">{member.id}</td>
-                            <td className="py-2.5 px-3 font-bold text-neutral-900">{member.fullName}</td>
+                          <tr key={member.id} className="hover:bg-[#83257B]/8">
+                            <td className="py-2.5 px-3 font-mono font-extrabold text-[#155544]">{member.id}</td>
+                            <td className="py-2.5 px-3 font-extrabold text-neutral-950">{member.fullName}</td>
                             <td className="py-2.5 px-3">
-                              <span className="px-2 py-0.5 rounded bg-neutral-100 text-neutral-800 font-medium text-[11px]">
+                              <span className="px-2 py-0.5 rounded bg-[#5A8FBB]/20 text-[#0F2438] font-bold text-[11px]">
                                 {member.generation}ኛ ትውልድ
                               </span>
                             </td>
-                            <td className="py-2.5 px-3 text-right font-mono font-bold text-amber-900 tabular-nums">
+                            <td className="py-2.5 px-3 text-right font-mono font-extrabold text-[#83257B] tabular-nums">
                               {rate} ብር
                             </td>
-                            <td className="py-2.5 px-3 font-mono text-neutral-500">{member.phone || '—'}</td>
+                            <td className="py-2.5 px-3 font-mono font-bold text-neutral-800">{member.phone || '—'}</td>
                             <td className="py-2.5 px-3">
                               <span
-                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                  partial ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'
+                                className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
+                                  partial ? 'bg-[#517DA2] text-white' : 'bg-[#83257B] text-white'
                                 }`}
                               >
                                 {partial ? 'ከፊል ተከፍሏል' : 'ያልተከፈለ'}
@@ -1068,12 +1064,12 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
                               {userRole === 'admin' ? (
                                 <button
                                   onClick={() => onRecordPayment(member.id)}
-                                  className="px-2.5 py-1 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white font-semibold text-[11px] transition-colors cursor-pointer"
+                                  className="px-2.5 py-1 rounded-lg bg-[#155544] hover:bg-[#417E38] text-white font-extrabold text-[11px] transition-colors cursor-pointer"
                                 >
                                   ክፍያ መዝግብ
                                 </button>
                               ) : (
-                                <span className="text-[11px] font-semibold text-neutral-500">
+                                <span className="text-[11px] font-bold text-[#517DA2]">
                                   የክትትል እይታ (Read-only)
                                 </span>
                               )}
@@ -1092,20 +1088,20 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
           {activeSubTab === 'gen-paid' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-900 flex items-center gap-1.5">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-[#417E38] flex items-center gap-1.5">
                   <Award className="w-4 h-4 text-emerald-600" />
                   የትውልድ ቋሚ መዋጮ የከፈሉ የቤተሰብ አባላት ({genPaidMembers.length})
                 </h4>
               </div>
 
               {genPaidMembers.length === 0 ? (
-                <div className="p-8 text-center text-xs text-neutral-400 italic bg-neutral-50 rounded-xl border border-dashed border-neutral-200">
+                <div className="p-8 text-center text-xs font-bold text-neutral-700 bg-[#5A8FBB]/10 rounded-xl border-2 border-dashed border-[#5A8FBB]/50">
                   እስካሁን የትውልድ መዋጮ የተመዘገበለት አባል የለም።
                 </div>
               ) : (
-                <div className="border border-neutral-200 rounded-xl overflow-hidden text-xs">
+                <div className="border-2 border-[#417E38]/40 rounded-xl overflow-hidden text-xs">
                   <table className="w-full text-left">
-                    <thead className="bg-neutral-50 text-neutral-700 font-semibold border-b border-neutral-200">
+                    <thead className="bg-[#417E38] text-white font-extrabold border-b-2 border-[#155544]">
                       <tr>
                         <th className="py-2.5 px-3">የአባል ID</th>
                         <th className="py-2.5 px-3">ሙሉ ስም</th>
@@ -1116,28 +1112,28 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
                         <th className="py-2.5 px-3 text-right">ሁኔታ</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-neutral-100">
+                    <tbody className="divide-y divide-[#5A8FBB]/25">
                       {genPaidMembers.map((member) => {
                         const genPayment = settings.generationPayment[member.generation] || 500;
                         const con = familyGenCon.find((c) => c.memberId === member.id && isPaidStatus(c.status));
                         return (
-                          <tr key={member.id} className="hover:bg-neutral-50/70">
-                            <td className="py-2.5 px-3 font-mono font-bold text-neutral-600">{member.id}</td>
-                            <td className="py-2.5 px-3 font-bold text-neutral-900">{member.fullName}</td>
+                          <tr key={member.id} className="hover:bg-[#1DAB61]/10">
+                            <td className="py-2.5 px-3 font-mono font-extrabold text-[#155544]">{member.id}</td>
+                            <td className="py-2.5 px-3 font-extrabold text-neutral-950">{member.fullName}</td>
                             <td className="py-2.5 px-3">
-                              <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 font-medium text-[11px]">
+                              <span className="px-2 py-0.5 rounded bg-[#5A8FBB]/20 text-[#0F2438] font-bold text-[11px]">
                                 {member.generation}ኛ ትውልድ
                               </span>
                             </td>
-                            <td className="py-2.5 px-3 text-right font-mono text-neutral-500 tabular-nums">
+                            <td className="py-2.5 px-3 text-right font-mono font-bold text-neutral-900 tabular-nums">
                               {genPayment} ብር
                             </td>
-                            <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-900 tabular-nums">
+                            <td className="py-2.5 px-3 text-right font-mono font-extrabold text-[#155544] tabular-nums">
                               {(con ? getContributionPaidAmount(con) : genPayment).toLocaleString()} ብር
                             </td>
-                            <td className="py-2.5 px-3 text-neutral-600">{con?.paymentMethod || 'CBE'}</td>
+                            <td className="py-2.5 px-3 font-bold text-neutral-900">{con?.paymentMethod || 'CBE'}</td>
                             <td className="py-2.5 px-3 text-right">
-                              <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                              <span className="px-2 py-0.5 rounded bg-[#417E38] text-white font-extrabold text-[10px]">
                                 ተከፍሏል
                               </span>
                             </td>
@@ -1155,20 +1151,20 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
           {activeSubTab === 'gen-unpaid' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-800 flex items-center gap-1.5">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-[#517DA2] flex items-center gap-1.5">
                   <Clock className="w-4 h-4 text-amber-600" />
                   የትውልድ ቋሚ መዋጮ ያልከፈሉ የቤተሰብ አባላት ({genUnpaidMembers.length})
                 </h4>
               </div>
 
               {genUnpaidMembers.length === 0 ? (
-                <div className="p-8 text-center text-xs text-emerald-800 font-semibold bg-emerald-50 rounded-xl border border-emerald-200">
+                <div className="p-8 text-center text-xs text-[#155544] font-extrabold bg-[#1DAB61]/15 rounded-xl border-2 border-[#417E38]/40">
                   🎉 ሁሉም የቤተሰብ አባላት የትውልድ መዋጮ ከፍለዋል!
                 </div>
               ) : (
-                <div className="border border-neutral-200 rounded-xl overflow-hidden text-xs">
+                <div className="border-2 border-[#517DA2]/45 rounded-xl overflow-hidden text-xs">
                   <table className="w-full text-left">
-                    <thead className="bg-neutral-50 text-neutral-700 font-semibold border-b border-neutral-200">
+                    <thead className="bg-[#517DA2] text-white font-extrabold border-b-2 border-[#155544]">
                       <tr>
                         <th className="py-2.5 px-3">የአባል ID</th>
                         <th className="py-2.5 px-3">ሙሉ ስም</th>
@@ -1179,27 +1175,27 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
                         <th className="py-2.5 px-3 text-right">ተግባር</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-neutral-100">
+                    <tbody className="divide-y divide-[#5A8FBB]/25">
                       {genUnpaidMembers.map((member) => {
                         const genPayment = settings.generationPayment[member.generation] || 500;
                         const partial = genPartialMap.get(member.id);
                         return (
-                          <tr key={member.id} className="hover:bg-neutral-50/70">
-                            <td className="py-2.5 px-3 font-mono font-bold text-neutral-600">{member.id}</td>
-                            <td className="py-2.5 px-3 font-bold text-neutral-900">{member.fullName}</td>
+                          <tr key={member.id} className="hover:bg-[#5A8FBB]/10">
+                            <td className="py-2.5 px-3 font-mono font-extrabold text-[#155544]">{member.id}</td>
+                            <td className="py-2.5 px-3 font-extrabold text-neutral-950">{member.fullName}</td>
                             <td className="py-2.5 px-3">
-                              <span className="px-2 py-0.5 rounded bg-neutral-100 text-neutral-800 font-medium text-[11px]">
+                              <span className="px-2 py-0.5 rounded bg-[#5A8FBB]/20 text-[#0F2438] font-bold text-[11px]">
                                 {member.generation}ኛ ትውልድ
                               </span>
                             </td>
-                            <td className="py-2.5 px-3 text-right font-mono font-bold text-neutral-900 tabular-nums">
+                            <td className="py-2.5 px-3 text-right font-mono font-extrabold text-[#83257B] tabular-nums">
                               {genPayment} ብር
                             </td>
-                            <td className="py-2.5 px-3 font-mono text-neutral-500">{member.phone || '—'}</td>
+                            <td className="py-2.5 px-3 font-mono font-bold text-neutral-800">{member.phone || '—'}</td>
                             <td className="py-2.5 px-3">
                               <span
-                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                  partial ? 'bg-amber-100 text-amber-800' : 'bg-neutral-200 text-neutral-800'
+                                className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
+                                  partial ? 'bg-[#517DA2] text-white' : 'bg-[#83257B] text-white'
                                 }`}
                               >
                                 {partial ? 'ከፊል ተከፍሏል' : 'ያልተከፈለ'}
@@ -1208,7 +1204,7 @@ ${unpaidGenGrouped || '• ሁሉም ከፍለዋል ✅'}
                             <td className="py-2.5 px-3 text-right">
                               <button
                                 onClick={() => onRecordPayment(member.id)}
-                                className="px-2.5 py-1 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white font-semibold text-[11px] transition-colors"
+                                className="px-2.5 py-1 rounded-lg bg-[#155544] hover:bg-[#417E38] text-white font-extrabold text-[11px] transition-colors cursor-pointer"
                               >
                                 ክፍያ መዝግብ
                               </button>

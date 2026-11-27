@@ -935,15 +935,15 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
   // If no member is active / authenticated
   if (!activeMember) {
     return (
-      <div className="max-w-md mx-auto my-12 p-8 bg-white rounded-3xl shadow-xl border-2 border-[#1B5E20]/20 space-y-6 text-center">
+      <div className="max-w-md mx-auto my-12 p-8 bg-white rounded-3xl shadow-xl border-2 border-[#517DA2]/50 space-y-6 text-center">
         <div className="w-16 h-16 rounded-full bg-emerald-50 text-[#1B5E20] flex items-center justify-center mx-auto border-2 border-[#1B5E20]/30 shadow-xs">
           <ShieldCheck className="w-8 h-8 text-[#1B5E20]" />
         </div>
         <div>
-          <h2 className="text-xl font-bold text-[#212121]">
+          <h2 className="text-xl font-extrabold text-neutral-950">
             {isEn ? 'Authentication Required' : 'የአባል ማረጋገጫ ያስፈልጋል'}
           </h2>
-          <p className="text-sm text-[#757575] mt-2">
+          <p className="text-sm font-semibold text-neutral-900 mt-2">
             {isEn
               ? 'Please sign in with your registered phone number and password to view your member card and contributions.'
               : 'የአባልነት መታወቂያዎን እና የክፍያ ዝርዝርዎን ለመመልከት እባክዎ በስልክ ቁጥርዎ እና በይለፍ ቃልዎ ይግቡ።'}
@@ -959,13 +959,13 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
               window.location.href = '/login';
             }
           }}
-          className="btn-primary w-full py-3.5 text-sm flex items-center justify-center gap-2 cursor-pointer shadow-md rounded-xl font-bold"
+          className="w-full py-3.5 px-4 bg-[#155544] hover:bg-[#417E38] text-white text-sm flex items-center justify-center gap-2 cursor-pointer shadow-md rounded-xl font-extrabold transition-colors"
         >
           <Lock className="w-4 h-4 text-[#FFD700]" />
           <span>{isEn ? 'Sign In to Member Portal' : 'ወደ አባል መግቢያ ገጽ ሂድ'}</span>
         </button>
 
-        <div className="pt-2 border-t border-[#E0E0E0] text-xs text-[#757575]">
+        <div className="pt-2 border-t border-[#5A8FBB]/40 text-xs font-bold text-neutral-800">
           {isEn
             ? 'Default password is the last 4 digits of your phone number.'
             : 'ነባሪ የይለፍ ቃልዎ የስልክ ቁጥርዎ የመጨረሻ 4 አሃዞች ናቸው።'}
@@ -985,7 +985,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
   return (
     <div className="space-y-4 pb-16 page-fade-in max-w-7xl mx-auto">
       {/* 1. MEMBER PROFILE & BANNER CARD */}
-      <div className="card-abarrus flex flex-col gap-3.5 border-l-4 border-l-[#1B5E20]">
+      <div className="rounded-2xl p-4 sm:p-5 bg-gradient-to-r from-[#155544] via-[#517DA2] to-[#83257B] text-white shadow-md border-2 border-[#1DAB61]/40 flex flex-col gap-3.5">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <div className="w-14 h-14 rounded-full bg-[#1B5E20] text-[#FFD700] font-black text-2xl flex items-center justify-center shrink-0 shadow-sm ring-2 ring-[#FFD700]/50">
@@ -993,31 +993,31 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-xl sm:text-2xl font-bold text-[#212121]">
+                <h2 className="text-xl sm:text-2xl font-extrabold text-white">
                   {activeMember.fullName}
                 </h2>
-                <span className="text-xs font-mono font-bold bg-[#1B5E20]/10 text-[#1B5E20] px-2 py-0.5 rounded">
+                <span className="text-xs font-mono font-extrabold bg-[#1DAB61] text-[#042116] px-2.5 py-0.5 rounded">
                   {activeMember.id}
                 </span>
                 {activeMember.isMinor && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-[#FFF9C4] text-[#FF9800] font-bold">
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-white text-[#155544] font-extrabold">
                     {isEn ? 'Minor (Free)' : '18- (ነፃ)'}
                   </span>
                 )}
                 {activeMember.isSpouse && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-bold">
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#83257B] border border-white/40 text-white font-extrabold">
                     {isEn ? 'Spouse' : 'የትዳር አጋር'}
                   </span>
                 )}
               </div>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <p className="text-sm text-[#757575]">
+                <p className="text-sm font-semibold text-white">
                   {isEn ? 'Family:' : 'ቤተሰብ፡'}{' '}
-                  <strong className="text-[#212121]">{activeMember.familyName || 'የአበሩስ ቤተሰብ'}</strong>{' '}
+                  <strong className="text-white font-extrabold">{activeMember.familyName || 'የአበሩስ ቤተሰብ'}</strong>{' '}
                   · {activeMember.generation}
                   {isEn ? 'th Gen' : 'ኛ ትውልድ'}
                 </p>
-                <div className="inline-flex items-center gap-1.5 bg-emerald-50 text-[#1B5E20] border border-[#1B5E20]/30 px-2.5 py-0.5 rounded-full text-xs font-bold shadow-2xs">
+                <div className="inline-flex items-center gap-1.5 bg-white text-[#155544] border border-white/50 px-2.5 py-0.5 rounded-full text-xs font-extrabold shadow-2xs">
                   <Phone className="w-3.5 h-3.5 text-[#1B5E20]" />
                   <span className="font-mono">{activeMember.phone || (isEn ? 'No phone' : 'ስልክ የለም')}</span>
                 </div>
@@ -1028,14 +1028,14 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
           {/* Action Switcher for Admin only, or Sub-tabs for Member */}
           <div className="flex items-center gap-2 self-start md:self-center flex-wrap">
             {userRole === 'admin' ? (
-              <div className="flex items-center gap-2 bg-[#F5F5F5] p-2 rounded-lg border border-[#E0E0E0]">
-                <label className="text-xs font-semibold text-[#757575] whitespace-nowrap">
+              <div className="flex items-center gap-2 bg-white/95 p-2 rounded-xl border border-white/40 shadow-xs">
+                <label className="text-xs font-extrabold text-[#155544] whitespace-nowrap">
                   {isEn ? 'Switch Member:' : 'አባል ቀይር፡'}
                 </label>
                 <select
                   value={activeMember.id}
                   onChange={(e) => onSelectMember(e.target.value)}
-                  className="text-xs font-semibold bg-white border border-[#E0E0E0] rounded-md px-2 py-1.5 text-[#212121] focus:ring-2 focus:ring-[#1B5E20]"
+                  className="text-xs font-extrabold bg-white border-2 border-[#5A8FBB]/50 rounded-lg px-2 py-1.5 text-neutral-950 focus:ring-2 focus:ring-[#155544]"
                 >
                   {members.map((m) => (
                     <option key={m.id} value={m.id}>
@@ -1054,7 +1054,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                       document.getElementById('change-password-section')?.scrollIntoView({ behavior: 'smooth' });
                     }, 50);
                   }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold shadow-xs transition-all cursor-pointer border border-emerald-600/30"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#417E38] hover:bg-[#155544] text-white text-xs font-extrabold shadow-xs transition-all cursor-pointer border border-white/25"
                   title={isEn ? 'Change Password' : 'የይለፍ ቃል ቀይር'}
                 >
                   <KeyRound className="w-3.5 h-3.5 text-[#FFD700]" />
@@ -1063,12 +1063,12 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsDigitalIdModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FFD700] hover:bg-[#ffea00] text-[#1B5E20] text-xs font-bold shadow-xs transition-all cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1DAB61] hover:bg-white text-[#042116] text-xs font-extrabold shadow-xs transition-all cursor-pointer"
                 >
                   <QrCode className="w-4 h-4" />
                   <span>{isEn ? 'Export Digital ID' : 'ዲጂታል መታወቂያ'}</span>
                 </button>
-                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1B5E20]/10 border border-[#1B5E20]/20 text-[#1B5E20] text-xs font-bold">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white text-[#155544] text-xs font-extrabold shadow-xs">
                   <ShieldCheck className="w-4 h-4 text-[#1B5E20]" />
                   <span>{isEn ? 'Verified Member' : 'የተረጋገጠ አባል'}</span>
                 </div>
@@ -1076,7 +1076,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                   <button
                     type="button"
                     onClick={onLogout}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#83257B] hover:bg-[#6a1d63] border border-white/30 text-white text-xs font-extrabold shadow-xs transition-all cursor-pointer"
                     title={isEn ? 'Sign Out' : 'ውጣ (Logout)'}
                   >
                     <LogOut className="w-3.5 h-3.5" />
@@ -1090,14 +1090,14 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
       </div>
 
       {/* SUB-VIEWS TAB NAVIGATION */}
-      <div className="flex items-center gap-1.5 p-1.5 bg-[#F5F5F5] rounded-2xl border border-[#E0E0E0] overflow-x-auto scrollbar-none shadow-xs">
+      <div className="flex items-center gap-1.5 p-1.5 bg-[#5A8FBB]/15 rounded-2xl border-2 border-[#5A8FBB]/45 overflow-x-auto scrollbar-none shadow-xs">
         <button
           type="button"
           onClick={() => setActiveTabSubView('overview')}
-          className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-all cursor-pointer ${
+          className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-extrabold flex items-center gap-2 whitespace-nowrap shrink-0 transition-all cursor-pointer ${
             activeTabSubView === 'overview'
-              ? 'bg-[#1B5E20] text-[#FFD700] shadow-sm'
-              : 'text-[#616161] hover:text-[#212121] hover:bg-neutral-200/60'
+              ? 'bg-[#155544] text-white shadow-sm'
+              : 'text-neutral-950 hover:bg-[#5A8FBB]/25'
           }`}
         >
           <User className="w-4 h-4" />
@@ -1107,20 +1107,20 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
         <button
           type="button"
           onClick={() => setActiveTabSubView('family')}
-          className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-all cursor-pointer ${
+          className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-extrabold flex items-center gap-2 whitespace-nowrap shrink-0 transition-all cursor-pointer ${
             activeTabSubView === 'family'
-              ? 'bg-[#1B5E20] text-[#FFD700] shadow-sm'
-              : 'text-[#616161] hover:text-[#212121] hover:bg-neutral-200/60'
+              ? 'bg-[#417E38] text-white shadow-sm'
+              : 'text-neutral-950 hover:bg-[#5A8FBB]/25'
           }`}
         >
           <Users className="w-4 h-4" />
           <span>{isEn ? 'Family Dashboard' : 'የእኔ ቤተሰብ'}</span>
           {familyMembersList.length > 0 && (
             <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+              className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-extrabold ${
                 activeTabSubView === 'family'
-                  ? 'bg-[#FFD700] text-[#1B5E20]'
-                  : 'bg-neutral-300 text-neutral-800'
+                  ? 'bg-[#1DAB61] text-[#042116]'
+                  : 'bg-[#155544] text-white'
               }`}
             >
               {familyMembersList.length}
@@ -1136,10 +1136,10 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
               document.getElementById('payment-claim-section')?.scrollIntoView({ behavior: 'smooth' });
             }, 50);
           }}
-          className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-all cursor-pointer ${
+          className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-extrabold flex items-center gap-2 whitespace-nowrap shrink-0 transition-all cursor-pointer ${
             activeTabSubView === 'receipt'
-              ? 'bg-[#1B5E20] text-[#FFD700] shadow-sm'
-              : 'text-[#616161] hover:text-[#212121] hover:bg-neutral-200/60'
+              ? 'bg-[#517DA2] text-white shadow-sm'
+              : 'text-neutral-950 hover:bg-[#5A8FBB]/25'
           }`}
         >
           <CreditCard className="w-4 h-4" />
@@ -1149,20 +1149,20 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
         <button
           type="button"
           onClick={() => setActiveTabSubView('proxyHistory')}
-          className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-all cursor-pointer ${
+          className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-extrabold flex items-center gap-2 whitespace-nowrap shrink-0 transition-all cursor-pointer ${
             activeTabSubView === 'proxyHistory'
-              ? 'bg-[#1B5E20] text-[#FFD700] shadow-sm'
-              : 'text-[#616161] hover:text-[#212121] hover:bg-neutral-200/60'
+              ? 'bg-[#83257B] text-white shadow-sm'
+              : 'text-neutral-950 hover:bg-[#5A8FBB]/25'
           }`}
         >
           <Heart className="w-4 h-4 text-rose-500" />
           <span>{isEn ? 'Payments for Others' : 'የተኪ ክፍያዎች ታሪክ'}</span>
           {myProxyPayments.length > 0 && (
             <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+              className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-extrabold ${
                 activeTabSubView === 'proxyHistory'
-                  ? 'bg-[#FFD700] text-[#1B5E20]'
-                  : 'bg-rose-100 text-rose-700'
+                  ? 'bg-white text-[#83257B]'
+                  : 'bg-[#83257B] text-white'
               }`}
             >
               {myProxyPayments.length}
@@ -1178,24 +1178,24 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
               document.getElementById('complaint-section')?.scrollIntoView({ behavior: 'smooth' });
             }, 50);
           }}
-          className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-all cursor-pointer ${
+          className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-extrabold flex items-center gap-2 whitespace-nowrap shrink-0 transition-all cursor-pointer ${
             activeTabSubView === 'complaint'
-              ? 'bg-[#1B5E20] text-[#FFD700] shadow-sm'
-              : 'text-[#616161] hover:text-[#212121] hover:bg-neutral-200/60'
+              ? 'bg-[#83257B] text-white shadow-sm'
+              : 'text-neutral-950 hover:bg-[#5A8FBB]/25'
           }`}
         >
           <MessageSquare className="w-4 h-4 text-amber-500" />
           <span>{isEn ? 'Complaints & Support' : 'ቅሬታና ድጋፍ'}</span>
           {repliedComplaintsCount > 0 ? (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-[#1DAB61] text-[#042116]">
               {repliedComplaintsCount} {isEn ? 'Reply' : 'መልስ'}
             </span>
           ) : myComplaints.length > 0 ? (
             <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+              className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-extrabold ${
                 activeTabSubView === 'complaint'
-                  ? 'bg-[#FFD700] text-[#1B5E20]'
-                  : 'bg-amber-100 text-amber-800'
+                  ? 'bg-white text-[#83257B]'
+                  : 'bg-[#517DA2] text-white'
               }`}
             >
               {myComplaints.length}
@@ -1212,10 +1212,10 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                 document.getElementById('change-password-section')?.scrollIntoView({ behavior: 'smooth' });
               }, 50);
             }}
-            className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-all cursor-pointer ${
+            className={`px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-extrabold flex items-center gap-2 whitespace-nowrap shrink-0 transition-all cursor-pointer ${
               activeTabSubView === 'password'
-                ? 'bg-[#1B5E20] text-[#FFD700] shadow-sm'
-                : 'text-[#616161] hover:text-[#212121] hover:bg-neutral-200/60'
+                ? 'bg-[#155544] text-white shadow-sm'
+                : 'text-neutral-950 hover:bg-[#5A8FBB]/25'
             }`}
           >
             <KeyRound className="w-4 h-4 text-[#FFD700]" />
@@ -1229,18 +1229,18 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
         <button
           type="button"
           onClick={() => setActiveTabSubView('family')}
-          className="p-3 bg-gradient-to-r from-emerald-900 to-[#1B5E20] hover:from-emerald-950 hover:to-[#144818] text-white rounded-xl font-bold text-xs sm:text-sm shadow-sm flex items-center justify-between transition-all cursor-pointer group border border-emerald-500/20"
+          className="p-3 bg-gradient-to-r from-[#155544] to-[#417E38] hover:from-[#104235] hover:to-[#34662c] text-white rounded-xl font-extrabold text-xs sm:text-sm shadow-sm flex items-center justify-between transition-all cursor-pointer group border border-[#1DAB61]/40"
         >
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-lg bg-[#FFD700] text-[#1B5E20] flex items-center justify-center font-bold shrink-0">
               <Users className="w-4 h-4" />
             </div>
             <div className="text-left">
-              <div className="text-[10px] text-[#FFD700] font-semibold">{isEn ? 'Family Group' : 'የእኔ ቤተሰብ'}</div>
-              <div className="font-bold text-xs truncate">{isEn ? 'Family Dashboard' : 'ቤተሰብ ዝርዝር'}</div>
+              <div className="text-[10px] text-white/95 font-bold">{isEn ? 'Family Group' : 'የእኔ ቤተሰብ'}</div>
+              <div className="font-extrabold text-xs text-white truncate">{isEn ? 'Family Dashboard' : 'ቤተሰብ ዝርዝር'}</div>
             </div>
           </div>
-          <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded text-white group-hover:bg-white/30 transition-colors">
+          <span className="text-[10px] font-mono font-extrabold bg-white/25 px-1.5 py-0.5 rounded text-white group-hover:bg-white/35 transition-colors">
             {familyMembersList.length}
           </span>
         </button>
@@ -1253,18 +1253,18 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
               document.getElementById('payment-claim-section')?.scrollIntoView({ behavior: 'smooth' });
             }, 50);
           }}
-          className="p-3 bg-gradient-to-r from-[#1B5E20] to-[#2E7D32] hover:from-[#154a19] hover:to-[#1B5E20] text-white rounded-xl font-bold text-xs sm:text-sm shadow-sm flex items-center justify-between transition-all cursor-pointer group"
+          className="p-3 bg-[#417E38] hover:bg-[#155544] text-white rounded-xl font-extrabold text-xs sm:text-sm shadow-sm flex items-center justify-between transition-all cursor-pointer group border border-[#1DAB61]/40"
         >
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-lg bg-[#FFD700] text-[#1B5E20] flex items-center justify-center font-bold shrink-0">
               <CreditCard className="w-4 h-4" />
             </div>
             <div className="text-left">
-              <div className="text-[10px] text-[#FFD700] font-semibold">{isEn ? 'Payment Slip' : 'ክፍያ መዝግብ'}</div>
-              <div className="font-bold text-xs truncate">{isEn ? 'Pay / Proxy Pay' : 'ክፍያ መዝግብ / ተኪ'}</div>
+              <div className="text-[10px] text-white/95 font-bold">{isEn ? 'Payment Slip' : 'ክፍያ መዝግብ'}</div>
+              <div className="font-extrabold text-xs text-white truncate">{isEn ? 'Pay / Proxy Pay' : 'ክፍያ መዝግብ / ተኪ'}</div>
             </div>
           </div>
-          <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded text-white group-hover:bg-white/30 transition-colors">
+          <span className="text-[10px] font-extrabold bg-white/25 px-1.5 py-0.5 rounded text-white group-hover:bg-white/35 transition-colors">
             ↓
           </span>
         </button>
@@ -1272,18 +1272,18 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
         <button
           type="button"
           onClick={() => setIsDigitalIdModalOpen(true)}
-          className="p-3 bg-gradient-to-r from-emerald-800 to-teal-800 hover:from-emerald-900 hover:to-teal-900 text-white rounded-xl font-bold text-xs sm:text-sm shadow-sm flex items-center justify-between transition-all cursor-pointer group border border-emerald-500/30"
+          className="p-3 bg-gradient-to-r from-[#517DA2] to-[#155544] hover:from-[#41688a] hover:to-[#104235] text-white rounded-xl font-extrabold text-xs sm:text-sm shadow-sm flex items-center justify-between transition-all cursor-pointer group border border-[#5A8FBB]/50"
         >
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-lg bg-[#FFD700] text-[#1B5E20] flex items-center justify-center font-bold shrink-0">
               <QrCode className="w-4 h-4" />
             </div>
             <div className="text-left">
-              <div className="text-[10px] text-[#FFD700] font-semibold">{isEn ? 'Digital Pass' : 'የአባልነት መታወቂያ'}</div>
-              <div className="font-bold text-xs truncate">{isEn ? 'Export ID' : 'ዲጂታል መታወቂያ'}</div>
+              <div className="text-[10px] text-white/95 font-bold">{isEn ? 'Digital Pass' : 'የአባልነት መታወቂያ'}</div>
+              <div className="font-extrabold text-xs text-white truncate">{isEn ? 'Export ID' : 'ዲጂታል መታወቂያ'}</div>
             </div>
           </div>
-          <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded text-white group-hover:bg-white/30 transition-colors">
+          <span className="text-[10px] bg-white/25 px-1.5 py-0.5 rounded text-white group-hover:bg-white/35 transition-colors">
             🪪
           </span>
         </button>
@@ -1296,15 +1296,15 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
               document.getElementById('complaint-section')?.scrollIntoView({ behavior: 'smooth' });
             }, 50);
           }}
-          className="p-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-700 hover:to-amber-600 text-white rounded-xl font-bold text-xs sm:text-sm shadow-sm flex items-center justify-between transition-all cursor-pointer group"
+          className="p-3 bg-[#83257B] hover:bg-[#6a1d63] text-white rounded-xl font-extrabold text-xs sm:text-sm shadow-sm flex items-center justify-between transition-all cursor-pointer group border border-[#83257B]"
         >
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-lg bg-white text-amber-600 flex items-center justify-center font-bold shrink-0">
               <MessageSquare className="w-4 h-4" />
             </div>
             <div className="text-left">
-              <div className="text-[10px] text-amber-100 font-semibold">{isEn ? 'Support' : 'ድጋፍና ማስተካከያ'}</div>
-              <div className="font-bold text-xs truncate">
+              <div className="text-[10px] text-white/95 font-bold">{isEn ? 'Support' : 'ድጋፍና ማስተካከያ'}</div>
+              <div className="font-extrabold text-xs text-white truncate">
                 {repliedComplaintsCount > 0
                   ? isEn
                     ? `Complaint (${repliedComplaintsCount} Reply)`
@@ -1315,7 +1315,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
               </div>
             </div>
           </div>
-          <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded text-white group-hover:bg-white/30 transition-colors">
+          <span className="text-[10px] font-mono font-extrabold bg-white/25 px-1.5 py-0.5 rounded text-white group-hover:bg-white/35 transition-colors">
             {myComplaints.length > 0 ? myComplaints.length : '↓'}
           </span>
         </button>
@@ -1323,15 +1323,15 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
 
       {/* PROXY NOTICE BANNER */}
       {proxyNoticeMessage && (
-        <div className="card-abarrus bg-amber-50 border-amber-300 text-amber-900 flex items-center justify-between gap-3 p-3.5 text-xs shadow-xs page-fade-in">
+        <div className="rounded-2xl bg-[#5A8FBB]/15 border-2 border-[#517DA2]/50 text-neutral-950 flex items-center justify-between gap-3 p-3.5 text-xs shadow-xs page-fade-in">
           <div className="flex items-center gap-2.5">
             <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
-            <span className="font-semibold">{proxyNoticeMessage}</span>
+            <span className="font-extrabold">{proxyNoticeMessage}</span>
           </div>
           <button
             type="button"
             onClick={() => setProxyNoticeMessage(null)}
-            className="text-amber-800 hover:text-black font-bold p-1 rounded-md hover:bg-amber-100 transition-colors cursor-pointer"
+            className="text-neutral-950 font-extrabold p-1 rounded-md hover:bg-[#5A8FBB]/25 transition-colors cursor-pointer"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -1340,49 +1340,49 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
 
       {/* CREDIT WALLET & MASTER RECEIPTS SUMMARY CARD */}
       {((activeMember.walletBalance || 0) > 0 || myMasterReceipts.length > 0) && (
-        <div className="card-abarrus bg-gradient-to-r from-amber-50 via-white to-emerald-50 border-2 border-amber-300 shadow-sm space-y-3">
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border-2 border-[#1DAB61]/55 shadow-sm space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-xl bg-amber-400 text-emerald-950 flex items-center justify-center shadow-xs shrink-0">
                 <Wallet className="w-6 h-6" />
               </div>
               <div>
-                <h4 className="font-extrabold text-sm text-[#212121]">
+                <h4 className="font-extrabold text-sm text-neutral-950">
                   {isEn ? 'Member Credit Wallet & Batch Receipts' : 'የአባል ቀሪ ሂሳብ (Credit Wallet) እና የጅምላ ደረሰኞች'}
                 </h4>
-                <p className="text-[11px] text-[#757575]">
+                <p className="text-[11px] font-semibold text-neutral-800">
                   {isEn
                     ? 'Unallocated credit from your lump-sum receipts stays safely in your balance.'
                     : 'ከትልቅ ደረሰኝዎ ያልተከፋፈለው ቀሪ ገንዘብ በቀጥታ በዚህ ሂሳብ ላይ ይጠበቃል።'}
                 </p>
               </div>
             </div>
-            <div className="px-4 py-2 rounded-xl bg-[#1B5E20] text-white flex items-center gap-3 shrink-0 shadow-xs">
-              <span className="text-[11px] text-[#FFD700] font-semibold">
+            <div className="px-4 py-2 rounded-xl bg-[#155544] text-white flex items-center gap-3 shrink-0 shadow-xs">
+              <span className="text-[11px] text-white font-bold">
                 {isEn ? 'Remaining Balance:' : 'ቀሪ ሂሳብ፡'}
               </span>
-              <span className="font-mono font-black text-lg text-[#FFD700] tabular-nums">
+              <span className="font-mono font-black text-lg text-[#1DAB61] tabular-nums">
                 {Number(activeMember.walletBalance || 0).toLocaleString()} ብር
               </span>
             </div>
           </div>
 
           {myMasterReceipts.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-2 border-t border-amber-200/80">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-2 border-t border-[#5A8FBB]/35">
               {myMasterReceipts.slice(0, 6).map((mr) => (
                 <div
                   key={mr.id}
-                  className="p-2.5 rounded-xl bg-white border border-amber-200 text-xs space-y-1 shadow-2xs"
+                  className="p-2.5 rounded-xl bg-[#5A8FBB]/10 border border-[#5A8FBB]/45 text-xs space-y-1 shadow-2xs"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono font-bold text-[#1B5E20]">{mr.receiptNumber || mr.id}</span>
+                    <span className="font-mono font-extrabold text-[#155544]">{mr.receiptNumber || mr.id}</span>
                     <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
                         mr.status === 'Fully Allocated'
-                          ? 'bg-emerald-100 text-emerald-800'
+                          ? 'bg-[#1DAB61]/25 text-[#155544]'
                           : mr.status === 'Pending'
-                          ? 'bg-amber-100 text-amber-800'
-                          : 'bg-blue-100 text-blue-800'
+                          ? 'bg-[#83257B]/15 text-[#83257B]'
+                          : 'bg-[#517DA2]/20 text-[#155544]'
                       }`}
                     >
                       {mr.status === 'Fully Allocated'
@@ -1394,12 +1394,12 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                         : 'በመጠባበቅ ላይ (Pending)'}
                     </span>
                   </div>
-                  <div className="flex justify-between text-[11px] text-[#616161]">
-                    <span>ጠቅላላ: <strong className="font-mono text-[#212121]">{mr.totalAmount.toLocaleString()} ብር</strong></span>
-                    <span>ቀሪ: <strong className="font-mono text-amber-800">{mr.remainingBalance.toLocaleString()} ብር</strong></span>
+                  <div className="flex justify-between text-[11px] font-bold text-neutral-900">
+                    <span>ጠቅላላ: <strong className="font-mono text-neutral-950">{mr.totalAmount.toLocaleString()} ብር</strong></span>
+                    <span>ቀሪ: <strong className="font-mono text-[#83257B]">{mr.remainingBalance.toLocaleString()} ብር</strong></span>
                   </div>
                   {mr.transactionRef && (
-                    <div className="text-[10px] font-mono text-[#757575] truncate">
+                    <div className="text-[10px] font-mono font-bold text-[#517DA2] truncate">
                       Ref: {mr.transactionRef}
                     </div>
                   )}
@@ -1414,7 +1414,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
       {activeTabSubView === 'family' && (
         <div className="space-y-4 page-fade-in">
           {/* Family Header Banner */}
-          <div className="card-abarrus bg-gradient-to-r from-emerald-950 via-[#1B5E20] to-emerald-900 text-white border-2 border-[#FFD700] shadow-lg">
+          <div className="rounded-2xl p-4 sm:p-5 bg-gradient-to-r from-[#155544] via-[#517DA2] to-[#83257B] text-white border-2 border-[#1DAB61]/40 shadow-lg">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3.5">
                 <div className="w-14 h-14 rounded-2xl bg-[#FFD700] text-[#1B5E20] flex items-center justify-center font-black text-2xl shadow-md shrink-0">
@@ -1422,17 +1422,17 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                 </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-bold uppercase tracking-wider text-[#FFD700]">
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-white bg-[#417E38] px-2.5 py-0.5 rounded-full">
                       {isEn ? 'Family Group' : 'የቤተሰብ ስብስብ'}
                     </span>
-                    <span className="text-[10px] font-mono bg-white/20 text-white px-2 py-0.5 rounded-full font-bold">
+                    <span className="text-[10px] font-mono bg-white/25 text-white px-2.5 py-0.5 rounded-full font-extrabold">
                       {activeMember.familyId || 'FA001'}
                     </span>
                   </div>
-                  <h3 className="text-xl sm:text-2xl font-black text-white mt-0.5">
+                  <h3 className="text-xl sm:text-2xl font-black text-white mt-1">
                     {activeMember.familyName || 'የአበሩስ ቤተሰብ'}
                   </h3>
-                  <p className="text-xs text-white/80 mt-1">
+                  <p className="text-xs font-semibold text-white/95 mt-1">
                     {isEn
                       ? `Viewing all registered members of "${activeMember.familyName || 'Abarrus'}" family and their dues status.`
                       : `በ "${activeMember.familyName || 'የአበሩስ ቤተሰብ'}" ስር የተመዘገቡ የቤተሰብ አባላት ዝርዝር፣ የወርሃዊና የትውልድ ክፍያ ሁኔታ።`}
@@ -1441,11 +1441,11 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
               </div>
 
               <div className="flex items-center gap-2 self-start sm:self-center">
-                <div className="px-4 py-2.5 rounded-xl bg-white/10 backdrop-blur-xs border border-white/20 text-center">
-                  <span className="text-[10px] text-white/70 block uppercase font-semibold">
+                <div className="px-4 py-2.5 rounded-xl bg-white/15 backdrop-blur-xs border border-white/30 text-center">
+                  <span className="text-[10px] text-white block uppercase font-extrabold">
                     {isEn ? 'Family Members' : 'የቤተሰብ አባላት'}
                   </span>
-                  <span className="text-xl font-mono font-black text-[#FFD700]">
+                  <span className="text-xl font-mono font-black text-white tabular-nums">
                     {familyMembersList.length}
                   </span>
                 </div>
@@ -1455,14 +1455,14 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
 
           {/* Family Loading State */}
           {isLoadingFamily && (
-            <div className="card-abarrus animate-pulse space-y-3">
-              <div className="h-6 bg-neutral-200 rounded w-1/4" />
+            <div className="bg-white rounded-2xl p-4 sm:p-5 border-2 border-[#5A8FBB]/45 animate-pulse space-y-3">
+              <div className="h-6 bg-[#5A8FBB]/20 rounded w-1/4" />
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                <div className="h-44 bg-neutral-200 rounded-2xl" />
-                <div className="h-44 bg-neutral-200 rounded-2xl" />
-                <div className="h-44 bg-neutral-200 rounded-2xl" />
+                <div className="h-44 bg-[#5A8FBB]/15 rounded-2xl" />
+                <div className="h-44 bg-[#5A8FBB]/15 rounded-2xl" />
+                <div className="h-44 bg-[#5A8FBB]/15 rounded-2xl" />
               </div>
-              <p className="text-xs text-[#757575] text-center flex items-center justify-center gap-1.5 pt-2">
+              <p className="text-xs font-bold text-neutral-900 text-center flex items-center justify-center gap-1.5 pt-2">
                 <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#1B5E20]" />
                 <span>{isEn ? 'Querying Firestore for family members...' : 'የቤተሰብ አባላት መረጃ ከFirestore እየተጫነ ነው...'}</span>
               </p>
@@ -1471,9 +1471,9 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
 
           {/* Empty Family State */}
           {!isLoadingFamily && familyMembersList.length === 0 && (
-            <div className="card-abarrus p-8 text-center text-xs text-[#757575] bg-[#F5F5F5] rounded-2xl border border-dashed border-[#E0E0E0] space-y-2">
+            <div className="p-8 text-center text-xs font-semibold text-neutral-900 bg-white rounded-2xl border-2 border-dashed border-[#5A8FBB]/50 space-y-2">
               <Users className="w-10 h-10 text-[#757575]/50 mx-auto" />
-              <p className="font-bold text-sm text-[#212121]">
+              <p className="font-extrabold text-sm text-neutral-950">
                 {isEn ? 'No family members found' : 'ምንም የቤተሰብ አባላት አልተገኙም'}
               </p>
               <p>
@@ -1493,8 +1493,8 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
               return (
                 <div
                   key={fMember.id}
-                  className={`card-abarrus flex flex-col justify-between border-2 transition-all hover:shadow-md ${
-                    isSelf ? 'border-[#1B5E20] bg-emerald-50/20' : 'border-[#E0E0E0] hover:border-[#1B5E20]/50'
+                  className={`bg-white rounded-2xl p-4 sm:p-5 flex flex-col justify-between border-2 transition-all hover:shadow-md ${
+                    isSelf ? 'border-[#155544] bg-[#1DAB61]/5' : 'border-[#5A8FBB]/45 hover:border-[#517DA2]'
                   }`}
                 >
                   <div className="space-y-3">
@@ -1512,17 +1512,17 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <h4 className="font-bold text-sm text-[#212121] truncate">
+                            <h4 className="font-extrabold text-sm text-neutral-950 truncate">
                               {fMember.fullName}
                             </h4>
                             {isSelf && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-[#1B5E20] text-white">
+                              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-[#155544] text-white">
                                 {isEn ? 'You' : 'እርስዎ'}
                               </span>
                             )}
                           </div>
-                          <div className="flex items-center gap-1.5 text-xs text-[#757575] mt-0.5">
-                            <span className="font-mono font-bold text-[#1B5E20] bg-[#1B5E20]/10 px-1.5 py-0.5 rounded text-[10px]">
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-neutral-900 mt-0.5">
+                            <span className="font-mono font-extrabold text-[#155544] bg-[#1DAB61]/20 px-1.5 py-0.5 rounded text-[10px]">
                               {fMember.id}
                             </span>
                             <span>· {fMember.generation}ኛ ትውልድ</span>
@@ -1532,12 +1532,12 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
 
                       <div className="shrink-0 flex flex-col items-end gap-1">
                         {fMember.isMinor && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#FFF9C4] text-[#FF9800] font-bold">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#5A8FBB]/20 text-[#071E33] font-extrabold">
                             18- (ነፃ)
                           </span>
                         )}
                         {fMember.isSpouse && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-bold">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#83257B]/15 text-[#83257B] font-extrabold">
                             የትዳር አጋር
                           </span>
                         )}
@@ -1545,44 +1545,44 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                     </div>
 
                     {/* Phone Number */}
-                    <div className="flex items-center gap-1.5 text-xs text-[#616161] bg-[#F5F5F5] px-2.5 py-1.5 rounded-lg border border-[#E0E0E0]">
+                    <div className="flex items-center gap-1.5 text-xs text-neutral-950 bg-[#5A8FBB]/10 px-2.5 py-1.5 rounded-lg border border-[#5A8FBB]/35">
                       <Phone className="w-3.5 h-3.5 text-[#1B5E20]" />
-                      <span className="font-mono text-xs font-semibold">
+                      <span className="font-mono text-xs font-extrabold">
                         {fMember.phone || (isEn ? 'No phone' : 'ስልክ አልተመዘገበም')}
                       </span>
                     </div>
 
                     {/* Monthly Payment Status */}
-                    <div className="space-y-1.5 pt-1 border-t border-[#E0E0E0]">
+                    <div className="space-y-1.5 pt-1 border-t border-[#5A8FBB]/30">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="font-semibold text-[#616161]">
+                        <span className="font-bold text-neutral-900">
                           {isEn ? 'Monthly Dues:' : 'የወርሃዊ መዋጮ ሁኔታ፡'}
                         </span>
-                        <strong className="font-mono font-bold text-[#1B5E20]">
+                        <strong className="font-mono font-extrabold text-[#155544] tabular-nums">
                           {fStatus.paidMonthsCount} / 12 {isEn ? 'Months' : 'ወራት'} ({fStatus.monthlyProgressPercent}%)
                         </strong>
                       </div>
                       {/* Visual progress bar */}
-                      <div className="w-full bg-[#E0E0E0] rounded-full h-2 overflow-hidden">
+                      <div className="w-full bg-[#5A8FBB]/20 rounded-full h-2.5 overflow-hidden">
                         <div
                           className={`h-full rounded-full transition-all duration-500 ${
                             fStatus.paidMonthsCount === 12
-                              ? 'bg-[#4CAF50]'
+                              ? 'bg-[#1DAB61]'
                               : fStatus.paidMonthsCount > 0
-                              ? 'bg-gradient-to-r from-amber-500 to-[#4CAF50]'
-                              : 'bg-red-400'
+                              ? 'bg-gradient-to-r from-[#517DA2] to-[#1DAB61]'
+                              : 'bg-[#83257B]'
                           }`}
                           style={{ width: `${fStatus.monthlyProgressPercent}%` }}
                         />
                       </div>
-                      <div className="flex justify-between items-center text-[10px] text-[#757575]">
+                      <div className="flex justify-between items-center text-[10px] font-bold text-neutral-900">
                         <span>{fStatus.monthlyRate} ብር/ወር</span>
                         {fStatus.paidMonthsCount < 12 ? (
-                          <span className="text-red-600 font-semibold">
+                          <span className="text-[#83257B] font-extrabold">
                             {12 - fStatus.paidMonthsCount} ወራት ቀሪ ({(12 - fStatus.paidMonthsCount) * fStatus.monthlyRate} ብር)
                           </span>
                         ) : (
-                          <span className="text-[#1B5E20] font-semibold flex items-center gap-0.5">
+                          <span className="text-[#417E38] font-extrabold flex items-center gap-0.5">
                             <Check className="w-3 h-3" /> ሙሉ በሙሉ ተከፍሏል
                           </span>
                         )}
@@ -1590,19 +1590,19 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                     </div>
 
                     {/* Birth Contribution Status */}
-                    <div className="space-y-1.5 pt-1 border-t border-[#E0E0E0]">
+                    <div className="space-y-1.5 pt-1 border-t border-[#5A8FBB]/30">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="font-semibold text-[#616161]">
+                        <span className="font-bold text-neutral-900">
                           {isEn ? 'Birth Contribution:' : 'የትውልድ መዋጮ፡'}
                         </span>
-                        <strong className="font-mono font-bold text-amber-700">
+                        <strong className="font-mono font-extrabold text-[#517DA2] tabular-nums">
                           {fStatus.totalGenPaid} / {fStatus.genPaymentRate} ብር ({fStatus.genProgressPercent}%)
                         </strong>
                       </div>
                       {/* Visual progress bar */}
-                      <div className="w-full bg-[#E0E0E0] rounded-full h-2 overflow-hidden">
+                      <div className="w-full bg-[#5A8FBB]/20 rounded-full h-2.5 overflow-hidden">
                         <div
-                          className="h-full bg-gradient-to-r from-amber-500 to-[#FFD700] rounded-full transition-all duration-500"
+                          className="h-full bg-gradient-to-r from-[#517DA2] to-[#83257B] rounded-full transition-all duration-500"
                           style={{ width: `${fStatus.genProgressPercent}%` }}
                         />
                       </div>
@@ -1610,14 +1610,14 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                   </div>
 
                   {/* PROXY PAYMENT BUTTON: "Pay For [Name]" */}
-                  <div className="pt-3 mt-3 border-t border-[#E0E0E0]">
+                  <div className="pt-3 mt-3 border-t border-[#5A8FBB]/30">
                     <button
                       type="button"
                       onClick={() => handleStartProxyPayment(fMember)}
-                      className={`w-full py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all shadow-xs ${
+                      className={`w-full py-2.5 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer transition-all shadow-xs ${
                         isSelf
-                          ? 'bg-[#1B5E20] hover:bg-[#144818] text-white'
-                          : 'bg-gradient-to-r from-emerald-700 to-[#1B5E20] hover:from-emerald-800 hover:to-[#144818] text-white'
+                          ? 'bg-[#155544] hover:bg-[#417E38] text-white'
+                          : 'bg-gradient-to-r from-[#517DA2] to-[#155544] hover:from-[#155544] hover:to-[#417E38] text-white'
                       }`}
                     >
                       <CreditCard className="w-4 h-4 text-[#FFD700]" />
@@ -1642,30 +1642,30 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
 
       {/* 2. PAYMENTS FOR OTHERS (PROXY HISTORY) TAB */}
       {activeTabSubView === 'proxyHistory' && (
-        <div className="card-abarrus space-y-4 page-fade-in">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-[#E0E0E0] gap-2">
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border-2 border-[#83257B]/45 shadow-sm space-y-4 page-fade-in">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b-2 border-[#5A8FBB]/30 gap-2">
             <div>
               <div className="flex items-center gap-2">
                 <Heart className="w-5 h-5 text-rose-500" />
-                <h3 className="text-lg font-bold text-[#212121]">
+                <h3 className="text-lg font-extrabold text-neutral-950">
                   {isEn ? 'Payments Made for Others (Proxy History)' : 'ለሌሎች አባላት የተከፈሉ ተኪ ክፍያዎች'}
                 </h3>
               </div>
-              <p className="text-xs text-[#757575] mt-0.5">
+              <p className="text-xs font-semibold text-neutral-800 mt-0.5">
                 {isEn
                   ? 'History of payments and dues you contributed on behalf of family members or others.'
                   : 'ለቤተሰብዎ ወይም ለሌሎች አባላት የከፈሏቸው መዋጮዎች እና የማረጋገጫ ሁኔታ።'}
               </p>
             </div>
-            <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200 self-start sm:self-center">
+            <span className="text-xs font-mono font-extrabold px-3 py-1 rounded-full bg-[#83257B] text-white self-start sm:self-center">
               {myProxyPayments.length} {isEn ? 'Records' : 'ደረሰኞች'}
             </span>
           </div>
 
           {myProxyPayments.length === 0 ? (
-            <div className="p-8 text-center text-xs text-[#757575] bg-[#F5F5F5] rounded-2xl border border-dashed border-[#E0E0E0] space-y-2">
+            <div className="p-8 text-center text-xs font-semibold text-neutral-900 bg-[#5A8FBB]/10 rounded-2xl border-2 border-dashed border-[#5A8FBB]/50 space-y-2">
               <Users className="w-8 h-8 text-[#757575]/60 mx-auto" />
-              <p className="font-bold text-sm text-[#212121]">
+              <p className="font-extrabold text-sm text-neutral-950">
                 {isEn ? 'No proxy payments recorded yet' : 'እስካሁን ለሌላ ሰው የተከፈለ ተኪ ክፍያ የለም'}
               </p>
               <p>
@@ -1676,70 +1676,70 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveTabSubView('family')}
-                className="btn-primary py-2 px-4 text-xs font-bold rounded-xl mt-2 inline-flex items-center gap-1.5 cursor-pointer"
+                className="bg-[#155544] hover:bg-[#417E38] text-white py-2 px-4 text-xs font-extrabold rounded-xl mt-2 inline-flex items-center gap-1.5 cursor-pointer transition-colors"
               >
                 <Users className="w-3.5 h-3.5" />
                 <span>{isEn ? 'Go to Family Dashboard' : 'ወደ ቤተሰብ ዳሽቦርድ ሂድ'}</span>
               </button>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-[#212121]">
-                <thead className="bg-[#F5F5F5] text-[#757575] uppercase text-[10px] tracking-wider">
+            <div className="overflow-x-auto rounded-xl border border-[#5A8FBB]/40">
+              <table className="w-full text-left text-xs text-neutral-950">
+                <thead className="bg-[#155544] text-white font-extrabold uppercase text-[10px] tracking-wider">
                   <tr>
-                    <th className="py-2.5 px-3">የተከፈለለት አባል (Beneficiary)</th>
-                    <th className="py-2.5 px-3">ዓይነት / ወር</th>
-                    <th className="py-2.5 px-3">የተከፈለ መጠን</th>
-                    <th className="py-2.5 px-3">ቀንና ሰዓት</th>
-                    <th className="py-2.5 px-3">የክፍያ ዘዴ</th>
-                    <th className="py-2.5 px-3">ማረጋገጫ Ref</th>
-                    <th className="py-2.5 px-3">የማረጋገጫ ሁኔታ</th>
+                    <th className="py-3 px-3">የተከፈለለት አባል (Beneficiary)</th>
+                    <th className="py-3 px-3">ዓይነት / ወር</th>
+                    <th className="py-3 px-3">የተከፈለ መጠን</th>
+                    <th className="py-3 px-3">ቀንና ሰዓት</th>
+                    <th className="py-3 px-3">የክፍያ ዘዴ</th>
+                    <th className="py-3 px-3">ማረጋገጫ Ref</th>
+                    <th className="py-3 px-3">የማረጋገጫ ሁኔታ</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#E0E0E0]">
+                <tbody className="divide-y divide-[#5A8FBB]/25">
                   {myProxyPayments.map((p, i) => (
-                    <tr key={`${p.id}-${i}`} className="hover:bg-[#F5F5F5]/60 transition-colors">
+                    <tr key={`${p.id}-${i}`} className={i % 2 === 0 ? 'bg-white hover:bg-[#5A8FBB]/10 transition-colors' : 'bg-[#5A8FBB]/5 hover:bg-[#5A8FBB]/15 transition-colors'}>
                       <td className="py-2.5 px-3">
-                        <div className="font-bold text-[#212121]">
+                        <div className="font-extrabold text-neutral-950">
                           {p.beneficiaryName || p.memberName || p.beneficiaryId || p.memberId}
                         </div>
-                        <span className="font-mono text-[10px] text-[#1B5E20] bg-emerald-50 px-1.5 py-0.2 rounded font-bold">
+                        <span className="font-mono text-[10px] text-[#155544] bg-[#1DAB61]/20 px-1.5 py-0.5 rounded font-extrabold">
                           {p.beneficiaryId || p.memberId}
                         </span>
                       </td>
                       <td className="py-2.5 px-3">
-                        <span className="font-semibold block">{p.type}</span>
-                        <span className="text-[10px] text-[#757575]">
+                        <span className="font-extrabold text-[#517DA2] block">{p.type}</span>
+                        <span className="text-[10px] font-bold text-neutral-900">
                           {p.ethiopianMonthName || p.ethiopianMonth} {p.ethiopianYear} ዓ.ም
                         </span>
                       </td>
-                      <td className="py-2.5 px-3 font-mono font-bold text-[#1B5E20]">
+                      <td className="py-2.5 px-3 font-mono font-extrabold text-[#155544] tabular-nums">
                         {p.paidAmount || p.amount} ብር
                       </td>
-                      <td className="py-2.5 px-3 font-mono text-[11px] text-[#616161]">
+                      <td className="py-2.5 px-3 font-mono font-bold text-[11px] text-neutral-900">
                         {formatDisplayPaymentDateTime(p.datePaid, p.paidAt)}
                       </td>
-                      <td className="py-2.5 px-3 text-[#757575]">{p.paymentMethod || 'CBE'}</td>
-                      <td className="py-2.5 px-3 font-mono text-[11px] text-[#757575]">
+                      <td className="py-2.5 px-3 font-bold text-neutral-900">{p.paymentMethod || 'CBE'}</td>
+                      <td className="py-2.5 px-3 font-mono font-bold text-[11px] text-[#517DA2]">
                         {p.transactionRef || p.receiptNumber || p.id}
                       </td>
                       <td className="py-2.5 px-3">
                         {isPendingStatus(p.status) ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#83257B]/15 text-[#83257B] border border-[#83257B]/40">
                             <Clock className="w-3 h-3" />
                             <span>በመጠባበቅ ላይ (Pending)</span>
                           </span>
                         ) : isPartialStatus(p.status) ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#517DA2]/20 text-[#071E33] border border-[#517DA2]/50">
                             <span>ከፊል (Partial)</span>
                           </span>
                         ) : isPaidStatus(p.status) ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#1DAB61]/25 text-[#155544] border border-[#1DAB61]">
                             <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                             <span>{p.status || 'ተከፍሏል'}</span>
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-700 border border-red-200">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#83257B] text-white">
                             <span>{p.status || 'ያልተከፈለ'}</span>
                           </span>
                         )}
@@ -1757,24 +1757,24 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
       {userRole !== 'admin' && (activeTabSubView === 'password' || activeTabSubView === 'overview') && (
         <div
           id="change-password-section"
-          className="card-abarrus scroll-mt-6 border-2 border-emerald-600/30 bg-white shadow-md relative overflow-hidden page-fade-in"
+          className="scroll-mt-6 rounded-2xl p-4 sm:p-5 border-2 border-[#517DA2]/50 bg-white shadow-md relative overflow-hidden page-fade-in"
         >
           {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-4 border-b border-[#E0E0E0] gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-4 border-b-2 border-[#5A8FBB]/30 gap-2">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-emerald-50 text-[#1B5E20] border border-[#1B5E20]/20 flex items-center justify-center font-bold shrink-0">
                 <KeyRound className="w-5 h-5 text-[#1B5E20]" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h4 className="font-bold text-base text-[#212121]">
+                  <h4 className="font-extrabold text-base text-neutral-950">
                     {isEn ? 'Change Password' : 'የይለፍ ቃል ቀይር'}
                   </h4>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-[#1B5E20] border border-emerald-300">
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#1DAB61]/20 text-[#155544] border border-[#1DAB61]">
                     {isEn ? 'Personal Account Security' : 'የአካውንት ደህንነት'}
                   </span>
                 </div>
-                <p className="text-xs text-[#757575] mt-0.5">
+                <p className="text-xs font-semibold text-neutral-800 mt-0.5">
                   {isEn
                     ? 'Update your personal member account login password.'
                     : 'የግል አባልነት መግቢያ የይለፍ ቃልዎን እዚህ ይቀይሩ።'}
@@ -1782,8 +1782,8 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
               </div>
             </div>
 
-            <div className="text-xs text-[#757575] self-start sm:self-center font-medium">
-              <span className="inline-flex items-center gap-1 text-[11px] bg-neutral-100 px-2 py-1 rounded-md text-neutral-600">
+            <div className="text-xs text-neutral-900 self-start sm:self-center font-bold">
+              <span className="inline-flex items-center gap-1 text-[11px] bg-[#5A8FBB]/15 px-2.5 py-1 rounded-md text-[#155544] font-extrabold">
                 <Lock className="w-3 h-3 text-[#1B5E20]" />
                 <span>{isEn ? 'Min. 6 characters' : 'ቢያንስ 6 ፊደላት/ቁጥሮች'}</span>
               </span>
@@ -1792,22 +1792,22 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
 
           {/* Success Toast / Notification */}
           {passwordSuccess && (
-            <div className="p-3.5 mb-4 bg-emerald-50 border border-emerald-500 text-[#1B5E20] rounded-xl text-xs flex items-center gap-2.5 shadow-xs animate-bounce">
+            <div className="p-3.5 mb-4 bg-[#1DAB61]/15 border-2 border-[#1DAB61] text-[#155544] rounded-xl text-xs flex items-center gap-2.5 shadow-xs">
               <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-              <div className="font-bold">{passwordSuccess}</div>
+              <div className="font-extrabold">{passwordSuccess}</div>
             </div>
           )}
 
           {/* Error / Recent Login Prompt */}
           {passwordError && (
-            <div className="p-3.5 mb-4 bg-red-50 border border-red-300 text-red-900 rounded-xl text-xs space-y-2 shadow-xs">
+            <div className="p-3.5 mb-4 bg-[#83257B]/10 border-2 border-[#83257B]/50 text-[#83257B] rounded-xl text-xs space-y-2 shadow-xs">
               <div className="flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-                <span className="font-semibold">{passwordError}</span>
+                <span className="font-extrabold">{passwordError}</span>
               </div>
               {requiresRecentLogin && onLogout && (
-                <div className="pt-2 border-t border-red-200 flex items-center justify-between gap-2 flex-wrap">
-                  <p className="text-[11px] text-red-700">
+                <div className="pt-2 border-t border-[#83257B]/30 flex items-center justify-between gap-2 flex-wrap">
+                  <p className="text-[11px] font-bold text-neutral-950">
                     {isEn
                       ? 'Please sign out and sign back in with your phone and password, then return here to update it.'
                       : 'እባክዎ አሁን ይውጡና በስልክዎ ገብተው የይለፍ ቃልዎን ይቀይሩ።'}
@@ -1815,7 +1815,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                   <button
                     type="button"
                     onClick={onLogout}
-                    className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs"
+                    className="px-3 py-1.5 bg-[#83257B] hover:bg-[#6a1d63] text-white rounded-lg text-xs font-extrabold transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs"
                   >
                     <LogOut className="w-3.5 h-3.5" />
                     <span>{isEn ? 'Log Out and Re-login' : 'ውጣና በድጋሚ ግባ'}</span>
@@ -1830,7 +1830,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               {/* Field 1: New Password */}
               <div>
-                <label className="text-xs font-bold text-[#212121] block mb-1">
+                <label className="text-xs font-extrabold text-neutral-950 block mb-1">
                   {isEn ? 'New Password:' : 'አዲስ የይለፍ ቃል (New Password)፡'}
                 </label>
                 <div className="relative">
@@ -1841,25 +1841,25 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                     placeholder={isEn ? 'At least 6 characters' : 'ቢያንስ 6 ፊደላት ወይም ቁጥሮች'}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full text-xs bg-[#F5F5F5] border border-[#E0E0E0] rounded-lg p-2.5 pr-9 text-[#212121] focus:ring-2 focus:ring-[#1B5E20] focus:bg-white transition-all font-mono"
+                    className="w-full text-xs font-bold bg-[#5A8FBB]/10 border-2 border-[#5A8FBB]/45 rounded-lg p-2.5 pr-9 text-neutral-950 focus:ring-2 focus:ring-[#155544] focus:bg-white transition-all font-mono"
                   />
                   <button
                     type="button"
                     onClick={() => setShowNewPassword((prev) => !prev)}
-                    className="absolute right-2.5 top-2.5 text-[#757575] hover:text-[#212121] cursor-pointer"
+                    className="absolute right-2.5 top-2.5 text-neutral-800 hover:text-neutral-950 cursor-pointer"
                     tabIndex={-1}
                   >
                     {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
-                <span className="text-[10px] text-[#757575] mt-1 block">
+                <span className="text-[10px] font-bold text-neutral-800 mt-1 block">
                   {isEn ? 'Must be 6+ characters' : 'ቢያንስ 6 አሃዞች/ፊደላት መሆን አለበት'}
                 </span>
               </div>
 
               {/* Field 2: Confirm New Password */}
               <div>
-                <label className="text-xs font-bold text-[#212121] block mb-1">
+                <label className="text-xs font-extrabold text-neutral-950 block mb-1">
                   {isEn ? 'Confirm New Password:' : 'አዲሱን የይለፍ ቃል ያረጋግጡ (Confirm)፡'}
                 </label>
                 <div className="relative">
@@ -1870,12 +1870,12 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                     placeholder={isEn ? 'Re-type new password' : 'አዲሱን የይለፍ ቃል ድጋሚ ይጻፉ'}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full text-xs bg-[#F5F5F5] border border-[#E0E0E0] rounded-lg p-2.5 pr-9 text-[#212121] focus:ring-2 focus:ring-[#1B5E20] focus:bg-white transition-all font-mono"
+                    className="w-full text-xs font-bold bg-[#5A8FBB]/10 border-2 border-[#5A8FBB]/45 rounded-lg p-2.5 pr-9 text-neutral-950 focus:ring-2 focus:ring-[#155544] focus:bg-white transition-all font-mono"
                   />
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword((prev) => !prev)}
-                    className="absolute right-2.5 top-2.5 text-[#757575] hover:text-[#212121] cursor-pointer"
+                    className="absolute right-2.5 top-2.5 text-neutral-800 hover:text-neutral-950 cursor-pointer"
                     tabIndex={-1}
                   >
                     {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -1883,8 +1883,8 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                 </div>
                 {confirmPassword && newPassword && (
                   <span
-                    className={`text-[10px] font-semibold mt-1 flex items-center gap-1 ${
-                      newPassword === confirmPassword ? 'text-[#1B5E20]' : 'text-red-500'
+                    className={`text-[10px] font-extrabold mt-1 flex items-center gap-1 ${
+                      newPassword === confirmPassword ? 'text-[#417E38]' : 'text-[#83257B]'
                     }`}
                   >
                     {newPassword === confirmPassword ? (
@@ -1907,7 +1907,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
               <button
                 type="submit"
                 disabled={isUpdatingPassword}
-                className="btn-primary py-2.5 px-6 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-sm disabled:opacity-50"
+                className="bg-[#155544] hover:bg-[#417E38] text-white rounded-xl py-2.5 px-6 text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer shadow-sm disabled:opacity-50 transition-colors"
               >
                 {isUpdatingPassword ? (
                   <RefreshCw className="w-4 h-4 animate-spin" />
@@ -1928,7 +1928,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                   setConfirmPassword('');
                   setPasswordError(null);
                 }}
-                className="py-2.5 px-4 rounded-xl text-xs font-semibold text-[#757575] hover:bg-neutral-100 transition-colors cursor-pointer"
+                className="py-2.5 px-4 rounded-xl text-xs font-extrabold text-neutral-900 border border-[#517DA2]/40 hover:bg-[#5A8FBB]/15 transition-colors cursor-pointer"
               >
                 {isEn ? 'Clear' : 'አጽዳ'}
               </button>
@@ -1939,14 +1939,14 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
 
       {/* STEP E: FIRESTORE LOADING & ERROR STATES */}
       {isLoading && (
-        <div className="card-abarrus animate-pulse space-y-3">
-          <div className="h-6 bg-neutral-200 rounded w-1/3" />
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border-2 border-[#5A8FBB]/45 animate-pulse space-y-3">
+          <div className="h-6 bg-[#5A8FBB]/20 rounded w-1/3" />
           <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-12 gap-2">
             {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className="h-20 bg-neutral-200 rounded-xl" />
+              <div key={i} className="h-20 bg-[#5A8FBB]/15 rounded-xl" />
             ))}
           </div>
-          <p className="text-xs text-[#757575] text-center mt-2 flex items-center justify-center gap-1.5">
+          <p className="text-xs font-bold text-neutral-900 text-center mt-2 flex items-center justify-center gap-1.5">
             <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#1B5E20]" />
             <span>{isEn ? 'Syncing live payment data from Firestore...' : 'የቀጥታ ክፍያ መረጃዎች ከFirestore እየተጫኑ ነው...'}</span>
           </p>
@@ -1954,26 +1954,26 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
       )}
 
       {firestoreError && (
-        <div className="card-abarrus bg-[#FFEBEE] border-[#F44336] text-[#F44336] flex items-center gap-3">
+        <div className="bg-[#83257B]/10 rounded-2xl p-4 border-2 border-[#83257B] text-[#83257B] flex items-center gap-3">
           <AlertCircle className="w-5 h-5 shrink-0" />
           <div className="text-sm">
-            <p className="font-bold">{isEn ? 'Database Query Notice' : 'የመረጃ መጫን ማስታወሻ'}</p>
-            <p className="text-xs text-[#212121]">{firestoreError}</p>
+            <p className="font-extrabold">{isEn ? 'Database Query Notice' : 'የመረጃ መጫን ማስታወሻ'}</p>
+            <p className="text-xs font-bold text-neutral-950">{firestoreError}</p>
           </div>
         </div>
       )}
 
       {/* 2. MONTHLY PAYMENT GRID (PART 1 & PART 2) */}
-      <div className="card-abarrus">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-4 border-b border-[#E0E0E0] gap-2">
+      <div className="bg-white rounded-2xl p-4 sm:p-5 border-2 border-[#5A8FBB]/45 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-4 border-b-2 border-[#5A8FBB]/30 gap-2">
           <div>
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-[#1B5E20]" />
-              <h3 className="text-lg font-bold text-[#212121]">
+              <span className="w-3 h-3 rounded-full bg-[#155544]" />
+              <h3 className="text-lg font-extrabold text-neutral-950">
                 {isEn ? 'Monthly Contributions Grid (Hamle 2018 - Current)' : 'የወርሃዊ መዋጮ ሁኔታ (ከሀምሌ 2018 ጀምሮ)'}
               </h3>
             </div>
-            <p className="text-xs text-[#757575] mt-0.5">
+            <p className="text-xs font-semibold text-neutral-800 mt-0.5">
               {isEn
                 ? 'All 12 Ethiopian months starting from Hamle 2018 (month 11, year 2018). Live from Firestore.'
                 : 'ከሀምሌ 01፣ 2018 ዓ.ም ጀምሮ ያሉ 12ቱ ወራት የቀጥታ የክፍያ ሁኔታ።'}
@@ -1981,18 +1981,18 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
           </div>
 
           {/* Summary Badges */}
-          <div className="flex items-center flex-wrap gap-2 text-xs font-bold">
-            <span className="px-2.5 py-1 rounded-md bg-[#4CAF50]/15 text-[#1B5E20] border border-[#4CAF50]/30 flex items-center gap-1">
+          <div className="flex items-center flex-wrap gap-2 text-xs font-extrabold">
+            <span className="px-2.5 py-1 rounded-md bg-[#1DAB61]/20 text-[#155544] border border-[#1DAB61] flex items-center gap-1">
               <CheckCircle2 className="w-3.5 h-3.5 text-[#4CAF50]" />
               <span>{paidMonthsCount} {isEn ? 'Paid' : 'ተከፍሏል'}</span>
             </span>
             {pendingMonthsCount > 0 && (
-              <span className="px-2.5 py-1 rounded-md bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
+              <span className="px-2.5 py-1 rounded-md bg-[#5A8FBB]/20 text-[#071E33] border border-[#517DA2]/50 flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5 text-amber-700" />
                 <span>{pendingMonthsCount} {isEn ? 'Pending' : 'በመጠባበቅ'}</span>
               </span>
             )}
-            <span className="px-2.5 py-1 rounded-md bg-[#FFEBEE] text-[#F44336] border border-[#F44336]/30 flex items-center gap-1">
+            <span className="px-2.5 py-1 rounded-md bg-[#83257B]/15 text-[#83257B] border border-[#83257B]/40 flex items-center gap-1">
               <XCircle className="w-3.5 h-3.5 text-[#F44336]" />
               <span>{unpaidMonthsCount} {isEn ? 'Unpaid' : 'ያልተከፈለ'}</span>
             </span>
@@ -2012,30 +2012,30 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                 key={`${item.year}-${item.month}`}
                 className={`month-cell rounded-xl p-2.5 flex flex-col items-center justify-between text-center relative aspect-square transition-all duration-300 ${
                   item.isCurrent
-                    ? 'border-2 border-[#FFD700] ring-2 ring-[#FFD700]/30'
-                    : 'border border-[#E0E0E0]'
+                    ? 'border-2 border-[#1DAB61] ring-2 ring-[#1DAB61]/35'
+                    : 'border'
                 } ${
                   isPaid
-                    ? 'bg-[#4CAF50] text-white shadow-xs'
+                    ? 'bg-[#417E38] text-white border-[#155544] shadow-xs'
                     : isPending
-                    ? 'bg-amber-100 text-amber-950 border-amber-400'
+                    ? 'bg-[#5A8FBB]/20 text-[#071E33] border-[#517DA2]'
                     : isPartial
-                    ? 'bg-[#FFF9C4] text-[#212121]'
-                    : 'bg-[#FFEBEE] text-[#212121]'
+                    ? 'bg-[#517DA2]/20 text-neutral-950 border-[#517DA2]'
+                    : 'bg-[#83257B]/15 text-neutral-950 border-[#83257B]/40'
                 }`}
               >
                 {/* Month Name Top */}
                 <div className="w-full">
                   <span
                     className={`block text-xs font-extrabold truncate ${
-                      isPaid ? 'text-white' : 'text-[#212121]'
+                      isPaid ? 'text-white' : 'text-neutral-950'
                     }`}
                   >
                     {isEn ? item.nameEn : item.nameAm}
                   </span>
                   <span
-                    className={`block text-[10px] font-mono leading-none ${
-                      isPaid ? 'text-white/80' : 'text-[#757575]'
+                    className={`block text-[10px] font-mono font-bold leading-none ${
+                      isPaid ? 'text-white/95' : 'text-neutral-900'
                     }`}
                   >
                     {item.year}
@@ -2069,14 +2069,14 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                 {/* Status Text & Amount Bottom */}
                 <div className="w-full">
                   <span
-                    className={`block text-[10px] font-bold uppercase tracking-tight truncate ${
+                    className={`block text-[10px] font-extrabold uppercase tracking-tight truncate ${
                       isPaid
                         ? 'text-white'
                         : isPending
-                        ? 'text-amber-900'
+                        ? 'text-[#071E33]'
                         : isPartial
-                        ? 'text-[#FF9800]'
-                        : 'text-[#F44336]'
+                        ? 'text-[#155544]'
+                        : 'text-[#83257B]'
                     }`}
                   >
                     {isPaid
@@ -2099,7 +2099,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
 
                 {/* Current Month Badge */}
                 {item.isCurrent && (
-                  <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-[#FFD700] rounded-full border border-white shadow-2xs" />
+                  <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-[#1DAB61] rounded-full border-2 border-white shadow-2xs" />
                 )}
               </div>
             );
@@ -2107,27 +2107,27 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
         </div>
 
         {/* Legend */}
-        <div className="flex items-center justify-center sm:justify-start gap-4 mt-4 pt-3 border-t border-[#E0E0E0] text-xs text-[#757575] flex-wrap">
+        <div className="flex items-center justify-center sm:justify-start gap-4 mt-4 pt-3 border-t border-[#5A8FBB]/35 text-xs font-bold text-neutral-950 flex-wrap">
           <div className="flex items-center gap-1.5">
-            <span className="w-3.5 h-3.5 rounded bg-[#4CAF50] text-white flex items-center justify-center text-[10px] font-bold">✓</span>
+            <span className="w-3.5 h-3.5 rounded bg-[#417E38] text-white flex items-center justify-center text-[10px] font-bold">✓</span>
             <span>{isEn ? 'Paid' : 'ተከፍሏል'}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-3.5 h-3.5 rounded bg-amber-100 text-amber-800 border border-amber-400 flex items-center justify-center">
+            <span className="w-3.5 h-3.5 rounded bg-[#5A8FBB]/25 text-amber-800 border border-[#517DA2] flex items-center justify-center">
               <Clock className="w-2.5 h-2.5" />
             </span>
             <span>{isEn ? 'Pending Approval' : 'በመጠባበቅ ላይ (Pending)'}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-3.5 h-3.5 rounded bg-[#FFF9C4] text-[#FF9800] border border-[#FF9800]/40 flex items-center justify-center text-[10px] font-bold">◐</span>
+            <span className="w-3.5 h-3.5 rounded bg-[#517DA2]/25 text-[#FF9800] border border-[#517DA2] flex items-center justify-center text-[10px] font-bold">◐</span>
             <span>{isEn ? 'Partial' : 'ከፊል የተከፈለ'}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-3.5 h-3.5 rounded bg-[#FFEBEE] text-[#F44336] border border-[#F44336]/40 flex items-center justify-center text-[10px] font-bold">✗</span>
+            <span className="w-3.5 h-3.5 rounded bg-[#83257B]/15 text-[#83257B] border border-[#83257B]/50 flex items-center justify-center text-[10px] font-bold">✗</span>
             <span>{isEn ? 'Unpaid' : 'ያልተከፈለ'}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-3.5 h-3.5 rounded border-2 border-[#FFD700] bg-white" />
+            <span className="w-3.5 h-3.5 rounded border-2 border-[#1DAB61] bg-white" />
             <span>{isEn ? 'Current Month' : 'የአሁኑ ወር'}</span>
           </div>
         </div>
@@ -2136,32 +2136,32 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
       {/* 3. PROGRESS BARS (PART 2) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* A. BIRTH CONTRIBUTION PROGRESS BAR (የትውልድ ቋሚ መዋጮ) */}
-        <div className="card-abarrus flex flex-col justify-between">
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border-2 border-[#5A8FBB]/45 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-[#757575]">
+              <span className="text-xs font-extrabold text-neutral-900">
                 {isEn ? 'Birth / Generation Contribution' : 'የትውልድ ቋሚ መዋጮ'}
               </span>
-              <span className="text-xs font-bold text-[#1B5E20]">
+              <span className="text-xs font-extrabold text-white bg-[#517DA2] px-2.5 py-0.5 rounded-full">
                 {activeMember.generation}{isEn ? 'th Generation' : 'ኛ ትውልድ'}
               </span>
             </div>
             <div className="flex items-baseline justify-between mt-2">
-              <p className="text-2xl font-bold font-mono text-[#212121] tabular-nums">
-                {totalGenPaid.toLocaleString()} <span className="text-sm font-normal text-[#757575]">ብር</span>
+              <p className="text-2xl font-extrabold font-mono text-neutral-950 tabular-nums">
+                {totalGenPaid.toLocaleString()} <span className="text-sm font-bold text-neutral-800">ብር</span>
               </p>
-              <span className="text-xs text-[#757575]">
+              <span className="text-xs font-bold text-neutral-900">
                 {isEn ? 'Target:' : 'ከሚፈለገው'} {genPaymentRate.toLocaleString()} ብር
               </span>
             </div>
 
-            {/* Rounded bar with green fill and gold gradient with percentage inside */}
-            <div className="w-full h-6 bg-[#E0E0E0] rounded-full overflow-hidden mt-3 relative p-0.5 shadow-inner">
+            {/* Rounded bar with 6-color emerald gradient with percentage inside */}
+            <div className="w-full h-6 bg-[#5A8FBB]/20 rounded-full overflow-hidden mt-3 relative p-0.5 shadow-inner">
               <div
                 className="h-full rounded-full transition-all duration-700 flex items-center justify-end pr-2"
                 style={{
                   width: `${Math.max(genProgressPercent, 8)}%`,
-                  background: 'linear-gradient(90deg, #1B5E20 0%, #4CAF50 60%, #FFD700 100%)',
+                  background: 'linear-gradient(90deg, #155544 0%, #417E38 60%, #1DAB61 100%)',
                 }}
               >
                 <span className="text-[11px] font-extrabold text-white drop-shadow-xs font-mono">
@@ -2171,28 +2171,28 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
             </div>
           </div>
 
-          <div className="mt-3 pt-2 border-t border-[#E0E0E0] text-xs text-[#757575] flex items-center justify-between">
+          <div className="mt-3 pt-2 border-t border-[#5A8FBB]/35 text-xs font-bold text-neutral-900 flex items-center justify-between">
             <span>{isEn ? 'Remaining Balance:' : 'የቀረ ቀሪ እዳ፡'}</span>
-            <strong className="text-[#F44336] font-mono tabular-nums">
+            <strong className="text-[#83257B] font-mono font-extrabold tabular-nums">
               {totalGenUnpaidAmount.toLocaleString()} ብር
             </strong>
           </div>
         </div>
 
         {/* B. MONTHLY CIRCULAR PROGRESS RING */}
-        <div className="card-abarrus flex items-center justify-between gap-4">
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border-2 border-[#517DA2]/45 shadow-sm flex items-center justify-between gap-4">
           <div className="space-y-1">
-            <span className="text-xs font-semibold text-[#757575]">
+            <span className="text-xs font-extrabold text-neutral-900">
               {isEn ? 'Annual Monthly Progress' : 'የዓመቱ ወርሃዊ መዋጮ ስኬት'}
             </span>
-            <p className="text-2xl font-bold font-mono text-[#212121] tabular-nums">
-              {(paidMonthsCount * monthlyRate).toLocaleString()} <span className="text-sm font-normal text-[#757575]">ብር</span>
+            <p className="text-2xl font-extrabold font-mono text-neutral-950 tabular-nums">
+              {(paidMonthsCount * monthlyRate).toLocaleString()} <span className="text-sm font-bold text-neutral-800">ብር</span>
             </p>
-            <p className="text-xs text-[#757575]">
+            <p className="text-xs font-bold text-neutral-900">
               {paidMonthsCount} / 12 {isEn ? 'months paid' : 'ወራት ተከፍለዋል'} (
               {monthlyRate} ብር/ወር)
             </p>
-            <p className="text-xs text-[#F44336] font-semibold mt-1">
+            <p className={`text-xs font-extrabold mt-1 ${totalMonthlyUnpaidAmount > 0 ? 'text-[#83257B]' : 'text-[#417E38]'}`}>
               {totalMonthlyUnpaidAmount > 0
                 ? `${totalMonthlyUnpaidAmount.toLocaleString()} ብር ያልተከፈለ ቀሪ እዳ`
                 : 'ሁሉም ወራት ተከፍለዋል! እናመሰግናለን።'}
@@ -2204,7 +2204,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
             <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
               {/* Background circle */}
               <path
-                className="text-[#E0E0E0]"
+                className="text-[#5A8FBB]/25"
                 strokeWidth="3.5"
                 stroke="currentColor"
                 fill="none"
@@ -2212,7 +2212,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
               />
               {/* Progress circle */}
               <path
-                className="text-[#1B5E20] transition-all duration-700 ease-out"
+                className="text-[#155544] transition-all duration-700 ease-out"
                 strokeDasharray={`${monthlyProgressPercent}, 100`}
                 strokeWidth="3.5"
                 strokeLinecap="round"
@@ -2222,10 +2222,10 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-              <span className="text-base font-extrabold text-[#1B5E20] font-mono leading-none">
+              <span className="text-base font-extrabold text-[#155544] font-mono leading-none">
                 {monthlyProgressPercent}%
               </span>
-              <span className="text-[10px] text-[#757575] font-semibold">
+              <span className="text-[10px] text-neutral-900 font-extrabold">
                 {paidMonthsCount}/12
               </span>
             </div>
@@ -2234,48 +2234,48 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
       </div>
 
       {/* 4. CBE BANK ACCOUNT CARD (OFFICIAL PAYMENT DETAILS) */}
-      <div className="card-abarrus bg-gradient-to-r from-[#1B5E20] to-[#144818] text-white border-2 border-[#FFD700]">
+      <div className="rounded-2xl p-4 sm:p-5 bg-gradient-to-r from-[#155544] via-[#517DA2] to-[#83257B] text-white border-2 border-[#1DAB61]/50 shadow-md">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <Building2 className="w-5 h-5 text-[#FFD700]" />
-              <span className="text-xs font-bold uppercase tracking-wider text-[#FFD700]">
+              <span className="text-xs font-extrabold uppercase tracking-wider text-white bg-[#417E38] px-2.5 py-0.5 rounded-full">
                 {isEn ? 'Official Association Bank Account' : 'የአበሩስ አንድነት ማህበር ይፋዊ የባንክ ሂሳብ'}
               </span>
             </div>
-            <h4 className="text-lg font-bold text-white">
+            <h4 className="text-lg font-extrabold text-white pt-0.5">
               {isEn ? 'Commercial Bank of Ethiopia (CBE)' : 'የኢትዮጵያ ንግድ ባንክ (CBE)'}
             </h4>
             <div className="flex items-center gap-3 pt-1">
               <div>
-                <span className="text-[11px] text-white/70 block">{isEn ? 'Account Number:' : 'የሂሳብ ቁጥር፡'}</span>
-                <p className="text-2xl font-mono font-extrabold text-[#FFD700] tracking-wider">
+                <span className="text-[11px] font-bold text-white/95 block">{isEn ? 'Account Number:' : 'የሂሳብ ቁጥር፡'}</span>
+                <p className="text-2xl font-mono font-extrabold text-white tracking-wider">
                   1000778285146
                 </p>
               </div>
               <button
                 onClick={() => handleCopy('1000778285146', 'account')}
-                className="mt-3 px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                className="mt-3 px-3 py-1.5 rounded-lg bg-[#1DAB61] hover:bg-white text-[#042116] text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
               >
                 {copiedBank === 'account' ? <Check className="w-4 h-4 text-[#FFD700]" /> : <Copy className="w-4 h-4" />}
                 <span>{copiedBank === 'account' ? (isEn ? 'Copied!' : 'ተቀድቷል!') : (isEn ? 'Copy' : 'ገልብጥ')}</span>
               </button>
             </div>
-            <p className="text-xs text-white/90 pt-1">
-              {isEn ? 'Account Holder:' : 'የሂሳብ ስም፡'} <strong>Aida, Ibrahim and zebiba</strong> · {isEn ? 'Start Date: Hamle 01, 2018' : 'የመጀመሪያ ቀን፡ ሀምሌ 01፣ 2018 ዓ.ም'}
+            <p className="text-xs font-semibold text-white/95 pt-1">
+              {isEn ? 'Account Holder:' : 'የሂሳብ ስም፡'} <strong className="font-extrabold">Aida, Ibrahim and zebiba</strong> · {isEn ? 'Start Date: Hamle 01, 2018' : 'የመጀመሪያ ቀን፡ ሀምሌ 01፣ 2018 ዓ.ም'}
             </p>
           </div>
 
           {/* QR Code for Member identification */}
-          <div className="bg-white p-2.5 rounded-xl shadow-inner text-center shrink-0 self-center md:self-auto min-w-[150px]">
+          <div className="bg-white p-2.5 rounded-xl shadow-inner text-center shrink-0 self-center md:self-auto min-w-[150px] border-2 border-white/60">
             <div dangerouslySetInnerHTML={{ __html: qrSvg }} className="flex justify-center" />
-            <span className="text-[10px] text-[#212121] font-mono font-bold block mt-1">
+            <span className="text-[10px] text-neutral-950 font-mono font-extrabold block mt-1">
               {activeMember.id}
             </span>
             <button
               type="button"
               onClick={() => setIsDigitalIdModalOpen(true)}
-              className="mt-2 w-full py-1.5 px-2 rounded-lg bg-[#1B5E20] hover:bg-[#144818] text-[#FFD700] text-[10px] font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+              className="mt-2 w-full py-1.5 px-2 rounded-lg bg-[#155544] hover:bg-[#417E38] text-white text-[10px] font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-xs"
             >
               <QrCode className="w-3.5 h-3.5" />
               <span>{isEn ? 'Export Digital ID' : 'ዲጂታል መታወቂያ'}</span>
@@ -2287,21 +2287,21 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
       {/* 5. SUB-VIEWS / ACTION SECTIONS: RECEIPT SUBMISSION & COMPLAINTS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* SECTION A: RECEIPT / PAYMENT CLAIM SUBMISSION */}
-        <div id="payment-claim-section" className="card-abarrus scroll-mt-6 border-2 border-transparent focus-within:border-[#1B5E20]/40 transition-colors">
-          <div className="flex items-center gap-2 pb-3 mb-3 border-b border-[#E0E0E0]">
+        <div id="payment-claim-section" className="bg-white rounded-2xl p-4 sm:p-5 scroll-mt-6 border-2 border-[#5A8FBB]/45 focus-within:border-[#155544] shadow-sm transition-colors">
+          <div className="flex items-center gap-2 pb-3 mb-3 border-b-2 border-[#5A8FBB]/30">
             <Upload className="w-5 h-5 text-[#1B5E20]" />
             <div>
-              <h4 className="font-bold text-base text-[#212121]">
+              <h4 className="font-extrabold text-base text-neutral-950">
                 {isEn ? 'Submit Bank Slip / Payment Record' : 'የክፍያ ደረሰኝ / ማረጋገጫ አስገባ'}
               </h4>
-              <p className="text-xs text-[#757575]">
+              <p className="text-xs font-semibold text-neutral-800">
                 {isEn ? 'Send CBE or Telebirr transaction confirmation' : 'የCBE ወይም የቴሌብር ክፍያ ማረጋገጫ ቁጥር እና ደረሰኝ ያስገቡ'}
               </p>
             </div>
           </div>
 
           {submittedAlert && (
-            <div className="p-3 mb-3 bg-amber-50 border border-amber-400 text-amber-950 rounded-lg text-xs flex items-center gap-2">
+            <div className="p-3 mb-3 bg-[#5A8FBB]/20 border-2 border-[#517DA2] text-[#071E33] font-bold rounded-xl text-xs flex items-center gap-2">
               <Clock className="w-4 h-4 text-amber-700 shrink-0" />
               <span>
                 {isEn
@@ -2312,7 +2312,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
           )}
 
           {submittedBatchAlert && (
-            <div className="p-3 mb-3 bg-amber-50 border border-amber-400 text-amber-950 rounded-lg text-xs flex items-center gap-2">
+            <div className="p-3 mb-3 bg-[#5A8FBB]/20 border-2 border-[#517DA2] text-[#071E33] font-bold rounded-xl text-xs flex items-center gap-2">
               <Wallet className="w-4 h-4 text-amber-700 shrink-0" />
               <span>
                 {isEn
@@ -2323,14 +2323,14 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
           )}
 
           {/* SINGLE PAYMENT VS BATCH / LUMP-SUM RECEIPT MODE SWITCH */}
-          <div className="grid grid-cols-2 gap-2 p-1 mb-3 bg-[#F5F5F5] rounded-xl border border-[#E0E0E0]">
+          <div className="grid grid-cols-2 gap-2 p-1 mb-3 bg-[#5A8FBB]/15 rounded-xl border border-[#5A8FBB]/45">
             <button
               type="button"
               onClick={() => setReceiptUploadMode('single')}
-              className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              className={`py-2 px-3 rounded-lg text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 receiptUploadMode === 'single'
-                  ? 'bg-[#1B5E20] text-white shadow-xs'
-                  : 'text-[#616161] hover:text-[#212121]'
+                  ? 'bg-[#155544] text-white shadow-xs'
+                  : 'text-neutral-950 hover:bg-[#5A8FBB]/25'
               }`}
             >
               <CreditCard className="w-3.5 h-3.5" />
@@ -2344,10 +2344,10 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                   setClaimAmount('');
                 }
               }}
-              className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              className={`py-2 px-3 rounded-lg text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 receiptUploadMode === 'batch'
-                  ? 'bg-amber-500 text-emerald-950 shadow-xs'
-                  : 'text-[#616161] hover:text-[#212121]'
+                  ? 'bg-[#83257B] text-white shadow-xs'
+                  : 'text-neutral-950 hover:bg-[#5A8FBB]/25'
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
@@ -2358,14 +2358,14 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
           {receiptUploadMode === 'single' && (
             <>
               {/* PROXY PAYMENT SELECTOR: PAYING FOR (ለማን እየከፈሉ ነው?) */}
-              <div className="p-3 mb-3 bg-[#F5F5F5] rounded-xl border border-[#E0E0E0] space-y-2.5">
+              <div className="p-3 mb-3 bg-[#5A8FBB]/10 rounded-xl border border-[#5A8FBB]/45 space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-[#212121] flex items-center gap-1.5">
+                  <label className="text-xs font-extrabold text-neutral-950 flex items-center gap-1.5">
                     <Users className="w-4 h-4 text-[#1B5E20]" />
                     <span>{isEn ? 'Paying For (ለማን እየከፈሉ ነው?):' : 'ለማን እየከፈሉ ነው? (Paying For):'}</span>
                   </label>
                   {isProxyPayment && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[#83257B] text-white">
                       ተኪ ክፍያ (Proxy)
                     </span>
                   )}
@@ -2380,10 +2380,10 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                       setClaimAmount(`${monthlyRate}`);
                       setProxyNoticeMessage(null);
                     }}
-                    className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    className={`py-2 px-3 rounded-lg text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                       !isProxyPayment
-                        ? 'bg-[#1B5E20] text-white shadow-xs'
-                        : 'bg-white border border-[#E0E0E0] text-[#616161] hover:bg-neutral-100'
+                        ? 'bg-[#155544] text-white shadow-xs'
+                        : 'bg-white border border-[#5A8FBB]/50 text-neutral-950 hover:bg-[#5A8FBB]/20'
                     }`}
                   >
                     <User className="w-3.5 h-3.5" />
@@ -2402,10 +2402,10 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                         setClaimAmount(`${targetRate}`);
                       }
                     }}
-                    className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    className={`py-2 px-3 rounded-lg text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                       isProxyPayment
-                        ? 'bg-[#1B5E20] text-white shadow-xs'
-                        : 'bg-white border border-[#E0E0E0] text-[#616161] hover:bg-neutral-100'
+                        ? 'bg-[#517DA2] text-white shadow-xs'
+                        : 'bg-white border border-[#5A8FBB]/50 text-neutral-950 hover:bg-[#5A8FBB]/20'
                     }`}
                   >
                     <Users className="w-3.5 h-3.5" />
@@ -2415,7 +2415,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
 
                 {/* When paying for someone else: Search & Dropdown Picker */}
                 {isProxyPayment && (
-                  <div className="space-y-2 pt-1 border-t border-[#E0E0E0]">
+                  <div className="space-y-2 pt-1 border-t border-[#5A8FBB]/35">
                     <div>
                       <div className="relative mb-2">
                         <Search className="w-3.5 h-3.5 text-[#757575] absolute left-2.5 top-2.5" />
@@ -2424,7 +2424,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                           placeholder={isEn ? 'Search by name or Member ID...' : 'በስም ወይም በአባል መለያ ፈልግ...'}
                           value={proxySearchQuery}
                           onChange={(e) => setProxySearchQuery(e.target.value)}
-                          className="w-full text-xs bg-white border border-[#E0E0E0] rounded-lg pl-8 pr-2 py-2 text-[#212121] focus:ring-2 focus:ring-[#1B5E20]"
+                          className="w-full text-xs font-bold bg-white border-2 border-[#5A8FBB]/50 rounded-lg pl-8 pr-2 py-2 text-neutral-950 focus:ring-2 focus:ring-[#155544]"
                         />
                       </div>
 
@@ -2443,7 +2443,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                             setClaimAmount(`${targetRate}`);
                           }
                         }}
-                        className="w-full text-xs bg-white border border-[#E0E0E0] rounded-lg p-2.5 text-[#212121] font-semibold focus:ring-2 focus:ring-[#1B5E20]"
+                        className="w-full text-xs bg-white border-2 border-[#5A8FBB]/50 rounded-lg p-2.5 text-neutral-950 font-extrabold focus:ring-2 focus:ring-[#155544]"
                       >
                         <optgroup label={isEn ? 'Family Members (የቤተሰብ አባላት)' : '👨‍👩‍👧‍👦 የቤተሰብ አባላት (Family Members)'}>
                           {familyMembersList
@@ -2479,14 +2479,14 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                     </div>
 
                     {activeBeneficiary && (
-                      <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-200 text-xs text-amber-900 space-y-1">
+                      <div className="p-2.5 bg-[#517DA2]/15 rounded-lg border border-[#517DA2]/45 text-xs text-neutral-950 space-y-1">
                         <div className="flex items-center justify-between">
-                          <span className="font-semibold">{isEn ? 'Beneficiary:' : 'ተጠቃሚ አባል፦'}</span>
-                          <strong className="font-bold text-[#1B5E20]">
+                          <span className="font-bold">{isEn ? 'Beneficiary:' : 'ተጠቃሚ አባል፦'}</span>
+                          <strong className="font-extrabold text-[#155544]">
                             {activeBeneficiary.fullName} ({activeBeneficiary.id})
                           </strong>
                         </div>
-                        <p className="text-[11px] text-amber-800 leading-relaxed">
+                        <p className="text-[11px] font-semibold text-neutral-900 leading-relaxed">
                           {isEn
                             ? `This proxy payment will be submitted as Payer: "${activeMember.fullName}" for Beneficiary: "${activeBeneficiary.fullName}" with status "Pending" for Admin verification.`
                             : `ይህ ተኪ ክፍያ በስምዎ (ከፋይ፦ "${activeMember.fullName}") ለ "${activeBeneficiary.fullName}" በ 'Pending' ሁኔታ ይላካል፤ አስተዳዳሪው ሲያጸድቀው የአባሉ መረጃ በቀጥታ ይዘመናል።`}
@@ -2498,17 +2498,17 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
               </div>
 
               {/* Type Toggle: Monthly vs Generation */}
-              <div className="flex items-center gap-2 mb-3 bg-[#F5F5F5] p-1 rounded-xl border border-[#E0E0E0]">
+              <div className="flex items-center gap-2 mb-3 bg-[#5A8FBB]/15 p-1 rounded-xl border border-[#5A8FBB]/45">
                 <button
                   type="button"
                   onClick={() => {
                     setPaymentType('ወርሃዊ');
                     setClaimAmount(`${targetMonthlyRate}`);
                   }}
-                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
                     paymentType === 'ወርሃዊ'
-                      ? 'bg-[#1B5E20] text-white shadow-xs'
-                      : 'text-[#757575] hover:text-[#212121]'
+                      ? 'bg-[#417E38] text-white shadow-xs'
+                      : 'text-neutral-950 hover:bg-[#5A8FBB]/20'
                   }`}
                 >
                   {isEn ? `Monthly Dues (${targetMonthlyRate} ETB)` : `ወርሃዊ መዋጮ (${targetMonthlyRate} ብር)`}
@@ -2519,10 +2519,10 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                     setPaymentType('ትውልድ');
                     setClaimAmount(`${targetGenPaymentRate}`);
                   }}
-                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
                     paymentType === 'ትውልድ'
-                      ? 'bg-[#1B5E20] text-white shadow-xs'
-                      : 'text-[#757575] hover:text-[#212121]'
+                      ? 'bg-[#417E38] text-white shadow-xs'
+                      : 'text-neutral-950 hover:bg-[#5A8FBB]/20'
                   }`}
                 >
                   {isEn ? `Generation Fund (${targetGenPaymentRate} ETB)` : `የትውልድ መዋጮ (${targetGenPaymentRate} ብር)`}
@@ -2534,12 +2534,12 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
           <form onSubmit={handleClaimSubmit} className="space-y-3">
             {receiptUploadMode === 'batch' ? (
               <div className="space-y-3">
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-950 space-y-1">
-                  <div className="font-bold flex items-center gap-1.5">
+                <div className="p-3 bg-[#83257B]/10 border border-[#83257B]/40 rounded-xl text-xs text-neutral-950 space-y-1">
+                  <div className="font-extrabold flex items-center gap-1.5 text-[#83257B]">
                     <Wallet className="w-4 h-4 text-amber-700" />
                     <span>{isEn ? 'Batch / Lump-Sum Deposit Receipt' : 'የጅምላ ክፍያ ደረሰኝ (ለብዙ አባላት የሚከፋፈል)'}</span>
                   </div>
-                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                  <p className="text-[11px] font-semibold text-neutral-900 leading-relaxed">
                     {isEn
                       ? 'Upload one bank receipt (e.g. 10,000 ETB) covering multiple family members or months. Admin will credit your wallet balance and allocate across selected members and dues types.'
                       : 'ትልቅ ክፍያ (ለምሳሌ 10,000 ብር) ለብዙ የቤተሰብ አባላት እና ለተለያዩ ወራት ወይም የትውልድ መዋጮ ለመክፈል ደረሰኙን እዚህ ይጫኑ። አስተዳዳሪው ሲያረጋግጠው በቀሪ ሂሳብዎ ላይ ተመዝግቦ ለተመረጡት አባላት ይከፋፈላል።'}
@@ -2547,7 +2547,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-[#212121] block mb-1">
+                  <label className="text-xs font-extrabold text-neutral-950 block mb-1">
                     {isEn ? 'Total Lump-Sum Paid Amount (ETB):' : 'ጠቅላላ የተከፈለ የብር መጠን (ETB)፡'}
                   </label>
                   <input
@@ -2558,12 +2558,12 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                     placeholder="ለምሳሌ፡ 10000"
                     value={claimAmount}
                     onChange={(e) => setClaimAmount(e.target.value)}
-                    className="w-full text-xs font-mono font-bold bg-[#F5F5F5] border border-[#E0E0E0] rounded-lg p-2.5 text-[#212121] focus:ring-2 focus:ring-amber-500"
+                    className="w-full text-xs font-mono font-extrabold bg-[#5A8FBB]/10 border-2 border-[#5A8FBB]/45 rounded-lg p-2.5 text-neutral-950 focus:ring-2 focus:ring-[#83257B]"
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-[#212121] block mb-1">
+                  <label className="text-xs font-extrabold text-neutral-950 block mb-1">
                     {isEn ? 'Allocation Note / Family Instructions (Optional):' : 'የክፍፍል መመሪያ / ማስታወሻ (አማራጭ)፡'}
                   </label>
                   <textarea
@@ -2571,20 +2571,20 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                     placeholder="ለምሳሌ፦ ለ10 የቤተሰብ አባላት ወርሃዊና የትውልድ መዋጮ ይከፋፈል..."
                     value={batchIntendedNotes}
                     onChange={(e) => setBatchIntendedNotes(e.target.value)}
-                    className="w-full text-xs bg-[#F5F5F5] border border-[#E0E0E0] rounded-lg p-2 text-[#212121] focus:ring-2 focus:ring-amber-500"
+                    className="w-full text-xs font-semibold bg-[#5A8FBB]/10 border-2 border-[#5A8FBB]/45 rounded-lg p-2 text-neutral-950 focus:ring-2 focus:ring-[#83257B]"
                   />
                 </div>
               </div>
             ) : paymentType === 'ወርሃዊ' ? (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-[#212121] block mb-1">
+                  <label className="text-xs font-extrabold text-neutral-950 block mb-1">
                     {isEn ? 'Payment Month:' : 'የክፍያ ወር፡'}
                   </label>
                   <select
                     value={selectedPayMonth}
                     onChange={(e) => setSelectedPayMonth(Number(e.target.value))}
-                    className="w-full text-xs bg-[#F5F5F5] border border-[#E0E0E0] rounded-lg p-2 text-[#212121] focus:ring-2 focus:ring-[#1B5E20]"
+                    className="w-full text-xs font-bold bg-[#5A8FBB]/10 border-2 border-[#5A8FBB]/45 rounded-lg p-2 text-neutral-950 focus:ring-2 focus:ring-[#155544]"
                   >
                     {twelveMonthsList.map((m) => (
                       <option key={m.month} value={m.month}>
@@ -2595,7 +2595,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-[#212121] block mb-1">
+                  <label className="text-xs font-extrabold text-neutral-950 block mb-1">
                     {isEn ? 'Amount (ETB):' : 'መጠን (ብር)፡'}
                   </label>
                   <input
@@ -2603,18 +2603,18 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                     placeholder={`${targetMonthlyRate}`}
                     value={claimAmount}
                     onChange={(e) => setClaimAmount(e.target.value)}
-                    className="w-full text-xs bg-[#F5F5F5] border border-[#E0E0E0] rounded-lg p-2 text-[#212121] focus:ring-2 focus:ring-[#1B5E20]"
+                    className="w-full text-xs font-mono font-bold bg-[#5A8FBB]/10 border-2 border-[#5A8FBB]/45 rounded-lg p-2 text-neutral-950 focus:ring-2 focus:ring-[#155544]"
                   />
                 </div>
               </div>
             ) : (
               <div className="space-y-2">
-                <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-200 text-xs text-amber-900 flex justify-between items-center">
+                <div className="p-2.5 bg-[#517DA2]/15 rounded-lg border border-[#517DA2]/45 text-xs text-neutral-950 flex justify-between items-center font-bold">
                   <span>{isEn ? 'Generation Fund Requirement:' : 'የሚጠበቅ የትውልድ መዋጮ፡'}</span>
-                  <strong className="font-bold">{targetGenPaymentRate} ብር</strong>
+                  <strong className="font-extrabold font-mono text-[#155544]">{targetGenPaymentRate} ብር</strong>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-[#212121] block mb-1">
+                  <label className="text-xs font-extrabold text-neutral-950 block mb-1">
                     {isEn ? 'Payment Amount (ETB):' : 'የሚከፍሉት መጠን (ብር)፡'}
                   </label>
                   <input
@@ -2622,20 +2622,20 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                     placeholder={`${targetGenPaymentRate}`}
                     value={claimAmount}
                     onChange={(e) => setClaimAmount(e.target.value)}
-                    className="w-full text-xs bg-[#F5F5F5] border border-[#E0E0E0] rounded-lg p-2 text-[#212121] focus:ring-2 focus:ring-[#1B5E20]"
+                    className="w-full text-xs font-mono font-bold bg-[#5A8FBB]/10 border-2 border-[#5A8FBB]/45 rounded-lg p-2 text-neutral-950 focus:ring-2 focus:ring-[#155544]"
                   />
                 </div>
               </div>
             )}
 
             <div>
-              <label className="text-xs font-semibold text-[#212121] block mb-1">
+              <label className="text-xs font-extrabold text-neutral-950 block mb-1">
                 {isEn ? 'Payment Method:' : 'የክፍያ ዘዴ፡'}
               </label>
               <select
                 value={claimedMethod}
                 onChange={(e) => setClaimedMethod(e.target.value)}
-                className="w-full text-xs bg-[#F5F5F5] border border-[#E0E0E0] rounded-lg p-2 text-[#212121] focus:ring-2 focus:ring-[#1B5E20]"
+                className="w-full text-xs font-bold bg-[#5A8FBB]/10 border-2 border-[#5A8FBB]/45 rounded-lg p-2 text-neutral-950 focus:ring-2 focus:ring-[#155544]"
               >
                 <option value="የኢትዮጵያ ንግድ ባንክ (CBE)">የኢትዮጵያ ንግድ ባንክ (CBE 1000778285146)</option>
                 <option value="ቴሌብር (Telebirr)">ቴሌብር (Telebirr)</option>
@@ -2644,7 +2644,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-[#212121] block mb-1">
+              <label className="text-xs font-extrabold text-neutral-950 block mb-1">
                 {isEn ? 'Bank Reference / Transaction ID:' : 'የባንክ ማረጋገጫ ቁጥር (Transaction Ref)፡'}
               </label>
               <input
@@ -2653,28 +2653,28 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                 placeholder="ለምሳሌ፡ FT24213XXXXX ወይም የCBE/ቴሌብር Ref"
                 value={claimedTxRef}
                 onChange={(e) => setClaimedTxRef(e.target.value)}
-                className="w-full text-xs bg-[#F5F5F5] border border-[#E0E0E0] rounded-lg p-2.5 text-[#212121] focus:ring-2 focus:ring-[#1B5E20]"
+                className="w-full text-xs font-mono font-bold bg-[#5A8FBB]/10 border-2 border-[#5A8FBB]/45 rounded-lg p-2.5 text-neutral-950 focus:ring-2 focus:ring-[#155544]"
               />
             </div>
 
             {/* Optional Slip Photo Upload */}
             <div>
-              <label className="text-xs font-semibold text-[#212121] block mb-1">
+              <label className="text-xs font-extrabold text-neutral-950 block mb-1">
                 {isEn ? 'Bank Slip / Screenshot Photo (Optional):' : 'የደረሰኝ ፎቶ ወይም ስክሪንሾት (አስፈላጊ ከሆነ)፡'}
               </label>
               {slipPhoto ? (
-                <div className="relative inline-block border border-[#E0E0E0] rounded-lg overflow-hidden">
+                <div className="relative inline-block border-2 border-[#517DA2]/50 rounded-lg overflow-hidden">
                   <img src={slipPhoto} alt="Slip Receipt" className="h-20 w-auto object-cover" />
                   <button
                     type="button"
                     onClick={() => setSlipPhoto(null)}
-                    className="absolute top-1 right-1 bg-black/60 hover:bg-black text-white p-1 rounded-full cursor-pointer"
+                    className="absolute top-1 right-1 bg-black/70 hover:bg-black text-white p-1 rounded-full cursor-pointer"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
               ) : (
-                <label className="flex items-center gap-2 p-2 border border-dashed border-[#BDBDBD] hover:border-[#1B5E20] rounded-lg bg-[#FAFAFA] cursor-pointer text-xs text-[#757575] hover:text-[#1B5E20] transition-colors">
+                <label className="flex items-center gap-2 p-2.5 border-2 border-dashed border-[#517DA2]/60 hover:border-[#155544] rounded-lg bg-[#5A8FBB]/10 cursor-pointer text-xs font-bold text-neutral-900 hover:text-[#155544] transition-colors">
                   <Image className="w-4 h-4 text-[#1B5E20]" />
                   <span>{isEn ? 'Attach receipt photo / screenshot' : 'የደረሰኝ ፎቶ ወይም የስክሪን ማረጋገጫ ይምረጡ'}</span>
                   <input
@@ -2699,7 +2699,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
             <button
               type="submit"
               disabled={isSubmittingPayment}
-              className="btn-primary w-full py-2.5 text-xs flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+              className="w-full py-3 px-4 bg-[#155544] hover:bg-[#417E38] text-white text-xs font-extrabold rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-sm transition-colors disabled:opacity-50"
             >
               {isSubmittingPayment ? (
                 <RefreshCw className="w-4 h-4 animate-spin" />
@@ -2724,21 +2724,21 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
         </div>
 
         {/* SECTION B: COMPLAINT & SUGGESTIONS PAGE */}
-        <div id="complaint-section" className="card-abarrus scroll-mt-6 border-2 border-transparent focus-within:border-amber-500/40 transition-colors">
-          <div className="flex items-center gap-2 pb-3 mb-3 border-b border-[#E0E0E0]">
+        <div id="complaint-section" className="bg-white rounded-2xl p-4 sm:p-5 scroll-mt-6 border-2 border-[#83257B]/45 focus-within:border-[#83257B] shadow-sm transition-colors">
+          <div className="flex items-center gap-2 pb-3 mb-3 border-b-2 border-[#5A8FBB]/30">
             <MessageSquare className="w-5 h-5 text-[#FF9800]" />
             <div>
-              <h4 className="font-bold text-base text-[#212121]">
+              <h4 className="font-extrabold text-base text-neutral-950">
                 {isEn ? 'Complaints & Inquiries' : 'ቅሬታ ወይም ጥያቄ ማቅረቢያ'}
               </h4>
-              <p className="text-xs text-[#757575]">
+              <p className="text-xs font-semibold text-neutral-800">
                 {isEn ? 'Direct message to association committee' : 'ለአበሩስ ማህበር አመራሮች ቀጥታ ጥያቄ ወይም ቅሬታ ያቅርቡ'}
               </p>
             </div>
           </div>
 
           {complaintSubmitted && (
-            <div className="p-3 mb-3 bg-[#4CAF50]/15 border border-[#4CAF50] text-[#1B5E20] rounded-lg text-xs flex items-center gap-2">
+            <div className="p-3 mb-3 bg-[#1DAB61]/15 border-2 border-[#1DAB61] text-[#155544] font-extrabold rounded-lg text-xs flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-[#4CAF50] shrink-0" />
               <span>
                 {isEn
@@ -2749,7 +2749,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
           )}
 
           {complaintError && (
-            <div className="p-3 mb-3 bg-red-50 border border-red-200 text-red-800 rounded-lg text-xs flex items-center gap-2">
+            <div className="p-3 mb-3 bg-[#83257B]/10 border-2 border-[#83257B]/50 text-[#83257B] font-extrabold rounded-lg text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
               <span>{complaintError}</span>
             </div>
@@ -2757,13 +2757,13 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
 
           <form onSubmit={handleComplaintSubmit} className="space-y-3">
             <div>
-              <label className="text-xs font-semibold text-[#212121] block mb-1">
+              <label className="text-xs font-extrabold text-neutral-950 block mb-1">
                 {isEn ? 'Category:' : 'የጉዳዩ ዓይነት፡'}
               </label>
               <select
                 value={complaintCategory}
                 onChange={(e) => setComplaintCategory(e.target.value)}
-                className="w-full text-xs bg-[#F5F5F5] border border-[#E0E0E0] rounded-lg p-2 text-[#212121] focus:ring-2 focus:ring-[#1B5E20]"
+                className="w-full text-xs font-bold bg-[#5A8FBB]/10 border-2 border-[#5A8FBB]/45 rounded-lg p-2 text-neutral-950 focus:ring-2 focus:ring-[#83257B]"
               >
                 <option value="የክፍያ ማስተካከያ">የክፍያ ማስተካከያ (ያልተመዘገበ ክፍያ አለኝ)</option>
                 <option value="የአባልነት መረጃ">የአባልነት መረጃ (ስም፣ ስልክ ወይም ቤተሰብ)</option>
@@ -2773,7 +2773,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-[#212121] block mb-1">
+              <label className="text-xs font-extrabold text-neutral-950 block mb-1">
                 {isEn ? 'Your Contact Phone:' : 'የእርስዎ ስልክ ቁጥር (ለመልስ)፡'}
               </label>
               <input
@@ -2782,12 +2782,12 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                 placeholder={activeMember.phone || '0911234567 ወይም +966...'}
                 value={complaintPhone}
                 onChange={(e) => setComplaintPhone(e.target.value)}
-                className="w-full text-xs bg-[#F5F5F5] border border-[#E0E0E0] rounded-lg p-2.5 text-[#212121] focus:ring-2 focus:ring-[#1B5E20]"
+                className="w-full text-xs font-bold bg-[#5A8FBB]/10 border-2 border-[#5A8FBB]/45 rounded-lg p-2.5 text-neutral-950 focus:ring-2 focus:ring-[#83257B]"
               />
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-[#212121] block mb-1">
+              <label className="text-xs font-extrabold text-neutral-950 block mb-1">
                 {isEn ? 'Message / Description:' : 'የቅሬታው ወይም የጥያቄው ዝርዝር፡'}
               </label>
               <textarea
@@ -2796,14 +2796,14 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                 placeholder="ቅሬታዎን ወይም ጥያቄዎን በዝርዝር እዚህ ይጻፉ..."
                 value={complaintText}
                 onChange={(e) => setComplaintText(e.target.value)}
-                className="w-full text-xs bg-[#F5F5F5] border border-[#E0E0E0] rounded-lg p-2.5 text-[#212121] focus:ring-2 focus:ring-[#1B5E20]"
+                className="w-full text-xs font-semibold bg-[#5A8FBB]/10 border-2 border-[#5A8FBB]/45 rounded-lg p-2.5 text-neutral-950 focus:ring-2 focus:ring-[#83257B]"
               />
             </div>
 
             <button
               type="submit"
               disabled={isSubmittingComplaint}
-              className="btn-secondary w-full py-2.5 text-xs flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+              className="w-full py-3 px-4 bg-[#83257B] hover:bg-[#6a1d63] text-white text-xs font-extrabold rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-sm transition-colors disabled:opacity-50"
             >
               {isSubmittingComplaint ? (
                 <RefreshCw className="w-4 h-4 animate-spin text-amber-600" />
@@ -2819,8 +2819,8 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
           </form>
 
           {myComplaints.length > 0 && (
-            <div className="mt-4 pt-3.5 border-t border-[#E0E0E0] space-y-2.5">
-              <h5 className="text-xs font-bold text-[#212121]">
+            <div className="mt-4 pt-3.5 border-t border-[#5A8FBB]/35 space-y-2.5">
+              <h5 className="text-xs font-extrabold text-neutral-950">
                 {isEn ? 'Your Submitted Complaints & Replies' : 'የላኳቸው ቅሬታዎች እና የአስተዳዳሪ ምላሾች'}
               </h5>
               <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
@@ -2829,34 +2829,34 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                   return (
                     <div
                       key={c.id}
-                      className="p-2.5 rounded-xl bg-[#F5F5F5] border border-[#E0E0E0] text-xs space-y-1.5"
+                      className="p-2.5 rounded-xl bg-[#5A8FBB]/10 border border-[#5A8FBB]/40 text-xs space-y-1.5"
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] text-[#757575]">
+                        <span className="text-[10px] font-bold text-neutral-800">
                           {c.createdAt ? new Date(c.createdAt).toLocaleString('am-ET') : ''}
                         </span>
                         <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
                             isResolved
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-amber-100 text-amber-800'
+                              ? 'bg-[#1DAB61]/25 text-[#155544]'
+                              : 'bg-[#83257B]/15 text-[#83257B]'
                           }`}
                         >
                           {isResolved ? 'ተመልሷል (Resolved)' : 'በመጠባበቅ ላይ (Open)'}
                         </span>
                       </div>
-                      <p className="text-[#212121] whitespace-pre-wrap">{c.complaintText}</p>
+                      <p className="text-neutral-950 font-semibold whitespace-pre-wrap">{c.complaintText}</p>
                       {c.adminResponse && (
-                        <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-[#1B5E20] space-y-1">
+                        <div className="p-2.5 rounded-lg bg-[#1DAB61]/15 border border-[#1DAB61]/60 text-[#155544] space-y-1">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="font-bold text-[11px]">የአስተዳዳሪ ምላሽ፦</span>
+                            <span className="font-extrabold text-[11px]">የአስተዳዳሪ ምላሽ፦</span>
                             {c.resolvedAt && (
-                              <span className="text-[10px] text-emerald-700 font-mono">
+                              <span className="text-[10px] text-[#417E38] font-bold font-mono">
                                 {new Date(c.resolvedAt).toLocaleString('am-ET')}
                               </span>
                             )}
                           </div>
-                          <p className="whitespace-pre-wrap">{c.adminResponse}</p>
+                          <p className="whitespace-pre-wrap font-bold">{c.adminResponse}</p>
                         </div>
                       )}
                     </div>
@@ -2869,70 +2869,70 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
       </div>
 
       {/* 6. RECENT PAYMENT RECEIPTS HISTORY */}
-      <div className="card-abarrus">
-        <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#E0E0E0]">
-          <h4 className="font-bold text-base text-[#212121] flex items-center gap-2">
+      <div className="bg-white rounded-2xl p-4 sm:p-5 border-2 border-[#5A8FBB]/45 shadow-sm">
+        <div className="flex items-center justify-between pb-3 mb-3 border-b-2 border-[#5A8FBB]/30">
+          <h4 className="font-extrabold text-base text-neutral-950 flex items-center gap-2">
             <History className="w-5 h-5 text-[#1B5E20]" />
             <span>{isEn ? 'Live Payment History' : 'የክፍያ ታሪክ መዝገብ'}</span>
           </h4>
-          <span className="text-xs font-mono font-bold text-[#757575]">
+          <span className="text-xs font-mono font-extrabold px-2.5 py-1 rounded-full bg-[#155544] text-white">
             {liveContributions.length} {isEn ? 'Records' : 'ደረሰኞች'}
           </span>
         </div>
 
         {liveContributions.length === 0 ? (
-          <div className="p-8 text-center text-xs text-[#757575] bg-[#F5F5F5] rounded-xl border border-dashed border-[#E0E0E0]">
+          <div className="p-8 text-center text-xs font-bold text-neutral-900 bg-[#5A8FBB]/10 rounded-xl border-2 border-dashed border-[#5A8FBB]/50">
             {isEn
               ? 'No payment records found yet. Use the CBE bank account above to make your contribution.'
               : 'እስካሁን የተመዘገበ የክፍያ ታሪክ የለም። ከላይ የተጠቀሰውን የCBE ባንክ ሂሳብ ተጠቅመው ክፍያ መፈጸም ይችላሉ።'}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-[#212121]">
-              <thead className="bg-[#F5F5F5] text-[#757575] uppercase text-[10px] tracking-wider">
+          <div className="overflow-x-auto rounded-xl border border-[#5A8FBB]/40">
+            <table className="w-full text-left text-xs text-neutral-950">
+              <thead className="bg-[#155544] text-white font-extrabold uppercase text-[10px] tracking-wider">
                 <tr>
-                  <th className="py-2.5 px-3">ወር / ዓመት</th>
-                  <th className="py-2.5 px-3">ዓይነት</th>
-                  <th className="py-2.5 px-3">የተከፈለ መጠን</th>
-                  <th className="py-2.5 px-3">ቀንና ሰዓት</th>
-                  <th className="py-2.5 px-3">የክፍያ ዘዴ</th>
-                  <th className="py-2.5 px-3">ማረጋገጫ Ref</th>
-                  <th className="py-2.5 px-3">ሁኔታ</th>
+                  <th className="py-3 px-3">ወር / ዓመት</th>
+                  <th className="py-3 px-3">ዓይነት</th>
+                  <th className="py-3 px-3">የተከፈለ መጠን</th>
+                  <th className="py-3 px-3">ቀንና ሰዓት</th>
+                  <th className="py-3 px-3">የክፍያ ዘዴ</th>
+                  <th className="py-3 px-3">ማረጋገጫ Ref</th>
+                  <th className="py-3 px-3">ሁኔታ</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#E0E0E0]">
+              <tbody className="divide-y divide-[#5A8FBB]/25">
                 {liveContributions.map((c, i) => (
-                  <tr key={`${c.id}-${i}`} className="hover:bg-[#F5F5F5]/60 transition-colors">
-                    <td className="py-2.5 px-3 font-bold">
+                  <tr key={`${c.id}-${i}`} className={i % 2 === 0 ? 'bg-white hover:bg-[#5A8FBB]/10 transition-colors' : 'bg-[#5A8FBB]/5 hover:bg-[#5A8FBB]/15 transition-colors'}>
+                    <td className="py-2.5 px-3 font-extrabold text-neutral-950">
                       {c.ethiopianMonthName || c.ethiopianMonth} {c.ethiopianYear} ዓ.ም
                     </td>
-                    <td className="py-2.5 px-3">{c.type}</td>
-                    <td className="py-2.5 px-3 font-mono font-bold text-[#1B5E20]">
+                    <td className="py-2.5 px-3 font-bold text-[#517DA2]">{c.type}</td>
+                    <td className="py-2.5 px-3 font-mono font-extrabold text-[#155544] tabular-nums">
                       {c.paidAmount || c.amount} ብር
                     </td>
-                    <td className="py-2.5 px-3 font-mono text-[11px] text-[#616161]">
+                    <td className="py-2.5 px-3 font-mono font-bold text-[11px] text-neutral-900">
                       {formatDisplayPaymentDateTime(c.datePaid, c.paidAt)}
                     </td>
-                    <td className="py-2.5 px-3 text-[#757575]">{c.paymentMethod || 'CBE'}</td>
-                    <td className="py-2.5 px-3 font-mono text-[11px] text-[#757575]">
+                    <td className="py-2.5 px-3 font-bold text-neutral-900">{c.paymentMethod || 'CBE'}</td>
+                    <td className="py-2.5 px-3 font-mono font-bold text-[11px] text-[#517DA2]">
                       {c.transactionRef || c.receiptNumber || c.id}
                     </td>
                     <td className="py-2.5 px-3">
                       {isPendingStatus(c.status) ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#5A8FBB]/25 text-[#071E33] border border-[#517DA2]">
                           <Clock className="w-3 h-3" />
                           <span>በመጠባበቅ ላይ (Pending)</span>
                         </span>
                       ) : isPartialStatus(c.status) ? (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#517DA2]/20 text-[#155544] border border-[#517DA2]">
                           ከፊል (Partial)
                         </span>
                       ) : isPaidStatus(c.status) ? (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#4CAF50]/15 text-[#1B5E20] border border-[#4CAF50]/30">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#1DAB61]/25 text-[#155544] border border-[#1DAB61]">
                           ✓ {c.status || 'ተከፍሏል'}
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-700 border border-red-200">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#83257B]/15 text-[#83257B] border border-[#83257B]/40">
                           {c.status || 'ያልተከፈለ'}
                         </span>
                       )}
@@ -2948,55 +2948,55 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
       {/* 7. DIGITAL MEMBER ID MODAL (PRINTABLE / DOWNLOADABLE SUMMARY CARD) */}
       {isDigitalIdModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
-          <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl border border-neutral-200 overflow-hidden my-6">
+          <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl border-2 border-[#155544]/60 overflow-hidden my-6">
             {/* Modal Top Bar */}
-            <div className="px-5 py-3.5 bg-neutral-900 text-white flex items-center justify-between border-b border-neutral-800">
+            <div className="px-5 py-3.5 bg-[#155544] text-white flex items-center justify-between border-b border-[#1DAB61]/40">
               <div className="flex items-center gap-2">
                 <BadgeCheck className="w-5 h-5 text-[#FFD700]" />
-                <span className="font-bold text-sm tracking-wide">
+                <span className="font-extrabold text-sm tracking-wide">
                   {isEn ? 'Official Digital Member ID' : 'ይፋዊ ዲጂታል መታወቂያ ካርድ'}
                 </span>
               </div>
               <button
                 type="button"
                 onClick={() => setIsDigitalIdModalOpen(false)}
-                className="p-1 rounded-full text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer"
+                className="p-1 rounded-full text-white/90 hover:text-white hover:bg-white/20 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Scrollable Card Container */}
-            <div className="p-4 sm:p-6 bg-neutral-100 flex justify-center">
+            <div className="p-4 sm:p-6 bg-[#5A8FBB]/15 flex justify-center">
               {/* THE PRINTABLE / DOWNLOADABLE DIGITAL ID CARD ELEMENT */}
               <div
                 id="digital-id-card-element"
-                className="w-full max-w-[420px] rounded-3xl shadow-xl overflow-hidden bg-gradient-to-br from-[#0c3311] via-[#1B5E20] to-[#08220c] text-white border-2 border-[#FFD700] relative"
+                className="w-full max-w-[420px] rounded-3xl shadow-xl overflow-hidden bg-gradient-to-br from-[#155544] via-[#517DA2] to-[#83257B] text-white border-2 border-[#1DAB61] relative"
               >
                 {/* Decorative Background Elements */}
-                <div className="absolute -top-12 -right-12 w-44 h-44 rounded-full bg-[#FFD700]/10 blur-xl pointer-events-none" />
-                <div className="absolute -bottom-12 -left-12 w-44 h-44 rounded-full bg-emerald-400/10 blur-xl pointer-events-none" />
+                <div className="absolute -top-12 -right-12 w-44 h-44 rounded-full bg-[#1DAB61]/20 blur-xl pointer-events-none" />
+                <div className="absolute -bottom-12 -left-12 w-44 h-44 rounded-full bg-[#5A8FBB]/20 blur-xl pointer-events-none" />
 
                 {/* Card Header */}
-                <div className="p-4 sm:p-5 border-b border-[#FFD700]/30 bg-black/25 flex items-center justify-between gap-3">
+                <div className="p-4 sm:p-5 border-b border-white/25 bg-black/20 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5">
                     <div className="w-10 h-10 rounded-xl bg-[#FFD700] text-[#1B5E20] flex items-center justify-center font-black text-xl shadow-md shrink-0">
                       🏛️
                     </div>
                     <div>
-                      <h3 className="font-black text-base text-[#FFD700] leading-tight">
+                      <h3 className="font-black text-base text-white leading-tight">
                         የአበሩስ አንድነት ማህበር
                       </h3>
-                      <p className="text-[10px] text-white/80 font-mono tracking-wider uppercase">
+                      <p className="text-[10px] text-white/95 font-mono font-bold tracking-wider uppercase">
                         Abarrus Unity Association
                       </p>
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <span className="text-[9px] uppercase tracking-widest font-mono font-bold bg-[#FFD700] text-[#1B5E20] px-2 py-0.5 rounded-full block text-center">
+                    <span className="text-[9px] uppercase tracking-widest font-mono font-extrabold bg-[#1DAB61] text-[#042116] px-2.5 py-0.5 rounded-full block text-center">
                       VERIFIED
                     </span>
-                    <span className="text-[9px] text-[#FFD700] font-mono block mt-0.5 font-bold">
+                    <span className="text-[9px] text-white font-mono block mt-0.5 font-extrabold">
                       2018 ዓ.ም
                     </span>
                   </div>
@@ -3016,42 +3016,42 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                         </h4>
                       </div>
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-[11px] font-mono font-bold bg-[#FFD700] text-[#1B5E20] px-2 py-0.5 rounded">
+                        <span className="text-[11px] font-mono font-extrabold bg-[#1DAB61] text-[#042116] px-2 py-0.5 rounded">
                           {activeMember.id}
                         </span>
-                        <span className="text-[10px] font-mono text-emerald-200 bg-white/10 px-2 py-0.5 rounded">
+                        <span className="text-[10px] font-mono font-bold text-white bg-white/20 px-2 py-0.5 rounded">
                           {activeMember.familyId}
                         </span>
                       </div>
-                      <p className="text-xs text-emerald-100/90 mt-1 truncate">
+                      <p className="text-xs font-semibold text-white/95 mt-1 truncate">
                         {activeMember.familyName || 'የአበሩስ ቤተሰብ'}
                       </p>
                     </div>
                   </div>
 
                   {/* Attribute Grid */}
-                  <div className="grid grid-cols-2 gap-2 p-3 rounded-2xl bg-black/30 border border-white/10 text-xs">
+                  <div className="grid grid-cols-2 gap-2 p-3 rounded-2xl bg-black/25 border border-white/20 text-xs">
                     <div>
-                      <span className="text-[10px] text-white/60 block">ትውልድ (Generation)</span>
-                      <strong className="text-white font-bold">{activeMember.generation}ኛ ትውልድ</strong>
+                      <span className="text-[10px] font-bold text-white/90 block">ትውልድ (Generation)</span>
+                      <strong className="text-white font-extrabold">{activeMember.generation}ኛ ትውልድ</strong>
                     </div>
                     <div>
-                      <span className="text-[10px] text-white/60 block">ስልክ (Phone)</span>
-                      <strong className="text-white font-mono">{activeMember.phone || 'N/A'}</strong>
+                      <span className="text-[10px] font-bold text-white/90 block">ስልክ (Phone)</span>
+                      <strong className="text-white font-mono font-extrabold">{activeMember.phone || 'N/A'}</strong>
                     </div>
                     <div>
-                      <span className="text-[10px] text-white/60 block">ወርሃዊ መዋጮ</span>
-                      <strong className="text-[#FFD700] font-bold">{monthlyRate} ብር / ወር</strong>
+                      <span className="text-[10px] font-bold text-white/90 block">ወርሃዊ መዋጮ</span>
+                      <strong className="text-[#1DAB61] font-extrabold">{monthlyRate} ብር / ወር</strong>
                     </div>
                     <div>
-                      <span className="text-[10px] text-white/60 block">የትውልድ መዋጮ</span>
-                      <strong className="text-[#FFD700] font-bold">{genPaymentRate} ብር</strong>
+                      <span className="text-[10px] font-bold text-white/90 block">የትውልድ መዋጮ</span>
+                      <strong className="text-[#1DAB61] font-extrabold">{genPaymentRate} ብር</strong>
                     </div>
                   </div>
 
                   {/* QR Code Verification Section */}
-                  <div className="p-3 rounded-2xl bg-white text-[#212121] flex items-center justify-between gap-3 shadow-md">
-                    <div className="flex justify-center p-1 bg-white rounded-lg border border-neutral-200 shrink-0">
+                  <div className="p-3 rounded-2xl bg-white text-neutral-950 flex items-center justify-between gap-3 shadow-md">
+                    <div className="flex justify-center p-1 bg-white rounded-lg border border-[#5A8FBB]/45 shrink-0">
                       <div
                         dangerouslySetInnerHTML={{
                           __html: generateSvgQRCode(
@@ -3064,34 +3064,34 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
                       />
                     </div>
                     <div className="text-left space-y-1 min-w-0 flex-1">
-                      <div className="inline-flex items-center gap-1 text-[10px] font-bold text-[#1B5E20] bg-emerald-50 px-2 py-0.5 rounded">
+                      <div className="inline-flex items-center gap-1 text-[10px] font-extrabold text-[#155544] bg-[#1DAB61]/20 px-2 py-0.5 rounded">
                         <CheckCircle2 className="w-3 h-3 text-[#1B5E20]" />
                         <span>ይፋዊ የተረጋገጠ አባል</span>
                       </div>
-                      <p className="text-[11px] font-semibold text-[#212121] leading-tight">
+                      <p className="text-[11px] font-bold text-neutral-950 leading-tight">
                         ይህን QR ኮድ በስልክዎ ስካን በማድረግ የአባልነት ዝርዝርዎን መክፈት ይችላሉ።
                       </p>
-                      <p className="text-[9px] font-mono text-[#757575] truncate">
+                      <p className="text-[9px] font-mono font-bold text-[#517DA2] truncate">
                         ID: {activeMember.id} · ABR-PASS
                       </p>
                     </div>
                   </div>
 
                   {/* Footer Security Stamp */}
-                  <div className="flex items-center justify-between pt-1 text-[10px] text-white/70 font-mono border-t border-white/10">
+                  <div className="flex items-center justify-between pt-1 text-[10px] text-white/90 font-mono font-bold border-t border-white/20">
                     <span>SECURITY: AES-VERIFIED</span>
-                    <span className="text-[#FFD700]">ASYA MESUD APP</span>
+                    <span className="text-white">ASYA MESUD APP</span>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Modal Bottom Action Controls */}
-            <div className="p-4 bg-white border-t border-neutral-200 flex items-center justify-between gap-3 flex-wrap">
+            <div className="p-4 bg-white border-t border-[#5A8FBB]/35 flex items-center justify-between gap-3 flex-wrap">
               <button
                 type="button"
                 onClick={handlePrintDigitalId}
-                className="btn-primary flex-1 py-2.5 px-4 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                className="flex-1 py-2.5 px-4 bg-[#155544] hover:bg-[#417E38] text-white rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer shadow-sm transition-colors"
               >
                 <Printer className="w-4 h-4" />
                 <span>{isEn ? 'Print ID Card' : 'ካርዱን አትም (Print)'}</span>
@@ -3100,7 +3100,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
               <button
                 type="button"
                 onClick={handleDownloadDigitalId}
-                className="btn-secondary flex-1 py-2.5 px-4 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                className="flex-1 py-2.5 px-4 bg-[#517DA2] hover:bg-[#83257B] text-white rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer shadow-sm transition-colors"
               >
                 <Download className="w-4 h-4" />
                 <span>{isEn ? 'Download Card' : 'ካርዱን አውርድ (Save)'}</span>
@@ -3109,7 +3109,7 @@ export const MemberPortal: React.FC<MemberPortalProps> = ({
               <button
                 type="button"
                 onClick={() => setIsDigitalIdModalOpen(false)}
-                className="py-2.5 px-4 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                className="py-2.5 px-4 bg-white border-2 border-[#5A8FBB]/50 hover:bg-[#5A8FBB]/15 text-neutral-950 text-xs font-extrabold rounded-xl transition-colors cursor-pointer"
               >
                 {isEn ? 'Close' : 'ዝጋ'}
               </button>
